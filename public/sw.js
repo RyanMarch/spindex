@@ -1,9 +1,15 @@
-const CACHE_NAME = 'app-cache-v1';
+const CACHE_NAME = 'crate-cache-v1';
 const ASSETS = [
   '/',
   '/index.html',
   '/css/style.css',
   '/js/app.js',
+  '/js/db.js',
+  '/js/sync.js',
+  '/js/crate.js',
+  '/js/notes.js',
+  '/js/mock-data.js',
+  '/js/audio.js',
   '/manifest.webmanifest'
 ];
 
