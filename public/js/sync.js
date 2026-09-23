@@ -1,12 +1,279 @@
 // sync.js - Discogs syncing and iTunes art enrichment
-import { upsertRecords, updateRecord } from './db.js';
+import { upsertRecords, updateRecord, getAllRecords } from './db.js';
+
+// Known band names or entities that shouldn't be split into "Last, First"
+const KNOWN_BANDS = new Set([
+  'fleetwood mac',
+  'daft punk',
+  'talking heads',
+  'aphex twin',
+  'radiohead',
+  'portishead',
+  'yellowcard',
+  'pink floyd',
+  'led zeppelin',
+  'deep purple',
+  'black sabbath',
+  'iron maiden',
+  'judas priest',
+  'motorhead',
+  'motörhead',
+  'pearl jam',
+  'soundgarden',
+  'alice in chains',
+  'stone temple pilots',
+  'smashing pumpkins',
+  'red hot chili peppers',
+  'foo fighters',
+  'green day',
+  'blink-182',
+  'weezer',
+  'depeche mode',
+  'new order',
+  'joy division',
+  'massive attack',
+  'boards of canada',
+  'chemical brothers',
+  'gorillaz',
+  'arcade fire',
+  'tame impala',
+  'vampire weekend',
+  'modest mouse',
+  'death cab for cutie',
+  'sonic youth',
+  'pixies',
+  'kraftwerk',
+  'tangerine dream',
+  'velvet underground',
+  'beach boys',
+  'kinks',
+  'who',
+  'doors',
+  'rolling stones',
+  'grateful dead',
+  'genesis',
+  'yes',
+  'rush',
+  'police',
+  'clash',
+  'smiths',
+  'cure',
+  'oasis',
+  'blur',
+  'pulp',
+  'strokes',
+  'white stripes',
+  'arctic monkeys',
+  'cocteau twins',
+  'slowdive',
+  'my bloody valentine',
+  'fugazi',
+  'bad brains',
+  'dead kennedys',
+  'ramones',
+  'misfits',
+  'blondie',
+  'steely dan',
+  'wu-tang clan',
+  'a tribe called quest',
+  'outkast',
+  'public enemy',
+  'beastie boys',
+  'run-dmc',
+  'cypress hill',
+  'gang starr',
+  'fugees',
+  'roots',
+  'minus the bear',
+  'jimmy eat world',
+  'men at work',
+  'american war',
+  'american football',
+  'beach house',
+  'animal collective',
+  'grizzly bear',
+  'fleet foxes',
+  'bright eyes',
+  'brand new',
+  'real estate',
+  'built to spill',
+  'broken social scene',
+  'broken bells',
+  'modern english',
+  'simple minds',
+  'tears for fears',
+  'neutral milk hotel',
+  'guided by voices',
+  'sunny day real estate',
+  'saves the day',
+  'circa survive',
+  'manchester orchestra',
+  'tokyo police club',
+  'british sea power',
+  'russian circles',
+  'japanese breakfast',
+  'taking back sunday',
+  'coheed and cambria',
+  'thrice',
+  'thursday',
+  'the the',
+]);
+
+// Connecting words that indicate a phrase/band rather than a person middle name
+const BAND_CONNECTORS = new Set([
+  'the', 'for', 'of', 'and', 'a', 'an', 'to', 'in', 'on', 'at', 'by', 'from',
+  'with', 'without', 'vs', 'versus', 'meets', 'against', 'under', 'over', 'into',
+  'eat', 'eats', 'play', 'plays', 'like', 'likes', 'love', 'loves', 'hate', 'hates',
+  'kill', 'kills', 'save', 'saves', 'run', 'runs', 'walk', 'walks', 'talk', 'talks',
+]);
+
+// Initial words that strongly signify bands/projects rather than personal first names
+const BAND_START_WORDS = new Set([
+  'american', 'british', 'japanese', 'french', 'german', 'irish', 'scottish', 'russian',
+  'canadian', 'italian', 'spanish', 'australian', 'modern', 'simple', 'cold', 'black',
+  'white', 'pink', 'deep', 'red', 'green', 'blue', 'bad', 'dead', 'holy', 'dark',
+  'bright', 'sweet', 'wild', 'little', 'big', 'new', 'young', 'raw', 'pure', 'silent',
+  'velvet', 'sonic', 'electric', 'atomic', 'cosmic', 'minus', 'tame', 'arcade',
+  'vampire', 'modest', 'death', 'iron', 'pearl', 'stone', 'smashing', 'beach', 'rolling',
+  'grateful', 'cage', 'tokyo', 'men', 'women', 'boy', 'boys', 'girl', 'girls', 'kids',
+  'brothers', 'sisters', 'band', 'orchestra', 'trio', 'quartet', 'quintet', 'collective',
+  'ensemble', 'project', 'sound', 'sounds', 'system', 'choir', 'society', 'club',
+  'syndicate', 'all-stars', 'all stars', 'dirty', 'heavy', 'royal', 'national', 'public',
+  'war',
+]);
+
+// Common personal given names to distinguish solo artists from multi-word band names
+const COMMON_FIRST_NAMES = new Set([
+  'aaron', 'abigail', 'adam', 'adele', 'adrian', 'alan', 'albert', 'alec', 'alex', 'alexa',
+  'alexander', 'alexis', 'alice', 'alicia', 'alison', 'alyssa', 'amanda', 'amber', 'amy',
+  'andre', 'andrew', 'andy', 'angela', 'ann', 'anna', 'anne', 'anthony', 'antonio', 'aretha',
+  'arthur', 'ashley', 'barry', 'ben', 'benjamin', 'beth', 'betty', 'bill', 'billie', 'billy',
+  'bjork', 'björk', 'bob', 'bobby', 'bonnie', 'brad', 'brandon', 'brenda', 'brian', 'brittany',
+  'bruce', 'bryan', 'cameron', 'carl', 'carlos', 'carly', 'carol', 'carole', 'caroline', 'carter',
+  'casey', 'cat', 'catherine', 'cathy', 'chad', 'charles', 'charlie', 'chelsea', 'chloe', 'chris',
+  'christian', 'christina', 'christine', 'christopher', 'clara', 'clare', 'clark', 'cody', 'colin',
+  'connor', 'courtney', 'craig', 'curtis', 'dan', 'dana', 'daniel', 'danielle', 'danny', 'dave',
+  'david', 'dean', 'debbie', 'deborah', 'dennis', 'derek', 'diana', 'diane', 'donald', 'donna',
+  'doug', 'douglas', 'dustin', 'dylan', 'earl', 'eddie', 'edgar', 'edward', 'eleanor', 'eli',
+  'elijah', 'elisabeth', 'elizabeth', 'ella', 'ellen', 'ellie', 'elliott', 'elton', 'elvis', 'emily',
+  'emma', 'eric', 'erik', 'erykah', 'ethan', 'eva', 'evan', 'evelyn', 'fiona', 'frank',
+  'franklin', 'fred', 'freddie', 'gabriel', 'garrett', 'garth', 'gary', 'geoffrey', 'george',
+  'georgia', 'gerald', 'glen', 'glenn', 'gordon', 'grace', 'grant', 'greg', 'gregory', 'hank',
+  'hannah', 'harold', 'harry', 'harvey', 'hayley', 'heather', 'helen', 'henry', 'howard', 'hugh',
+  'ian', 'isaac', 'isabel', 'jack', 'jackson', 'jacob', 'jacqueline', 'james', 'jamie', 'jane',
+  'janet', 'janice', 'janis', 'jared', 'jason', 'jay', 'jean', 'jeff', 'jeffrey', 'jennifer',
+  'jenny', 'jeremy', 'jerry', 'jesse', 'jessica', 'jessie', 'jimi', 'jimmy', 'joan', 'joanna',
+  'joe', 'joel', 'john', 'johnny', 'jon', 'jonathan', 'joni', 'jordan', 'joseph', 'josh',
+  'joshua', 'joy', 'joyce', 'judith', 'judy', 'julia', 'julian', 'julie', 'julien', 'justin',
+  'kacey', 'karen', 'karl', 'kate', 'katherine', 'kathleen', 'kathy', 'katie', 'keith', 'kelly',
+  'ken', 'kenneth', 'kenny', 'kevin', 'kim', 'kimberly', 'kirk', 'kurt', 'kyle', 'lana',
+  'larry', 'laura', 'lauren', 'laurie', 'lawrence', 'lee', 'leo', 'leon', 'leonard', 'leslie',
+  'lewis', 'liam', 'linda', 'lindsay', 'lisa', 'liz', 'lizzie', 'logan', 'lori', 'lou',
+  'louis', 'lucas', 'lucy', 'luke', 'lynn', 'mac', 'maggie', 'malcolm', 'marc', 'marcus',
+  'margaret', 'maria', 'marian', 'marie', 'marilyn', 'mark', 'marsha', 'marshall', 'martha',
+  'martin', 'marvin', 'mary', 'mason', 'matt', 'matthew', 'maurice', 'max', 'megan', 'melanie',
+  'melissa', 'michael', 'michelle', 'mike', 'miles', 'miranda', 'mitchell', 'molly', 'morgan',
+  'morris', 'nancy', 'natalie', 'nathan', 'neil', 'nicholas', 'nick', 'nicole', 'nina', 'noah',
+  'nora', 'norman', 'oliver', 'olivia', 'otis', 'owen', 'pamela', 'patricia', 'patrick', 'paul',
+  'paula', 'peggy', 'penny', 'pete', 'peter', 'phil', 'philip', 'phillip', 'phoebe', 'rachel',
+  'ralph', 'randy', 'ray', 'raymond', 'rebecca', 'regina', 'rex', 'rhonda', 'richard', 'rick',
+  'ricky', 'rita', 'rob', 'robbie', 'robert', 'robin', 'roger', 'roland', 'ron', 'ronald',
+  'ronnie', 'rose', 'ross', 'roy', 'russell', 'ruth', 'ryan', 'sam', 'samantha', 'samia',
+  'samuel', 'sandra', 'sara', 'sarah', 'scott', 'sean', 'seth', 'sharon', 'shawn', 'sheila',
+  'shirley', 'simon', 'stan', 'stanley', 'stefan', 'stephanie', 'stephen', 'steve', 'steven',
+  'stevie', 'stewart', 'stuart', 'sue', 'sufjan', 'susan', 'susanne', 'suzanne', 'sydney',
+  'sylvia', 'taylor', 'ted', 'teddy', 'teresa', 'terry', 'theodore', 'theresa', 'thomas',
+  'tim', 'timothy', 'tina', 'todd', 'tom', 'tommy', 'tony', 'tracey', 'tracy', 'travis',
+  'trevor', 'tyler', 'valerie', 'vanessa', 'vernon', 'victor', 'victoria', 'vincent', 'virginia',
+  'walter', 'warren', 'wayne', 'wendy', 'wesley', 'whitney', 'will', 'william', 'willie',
+  'zach', 'zachary'
+]);
 
 export function parseSortArtist(rawArtist = '') {
   // Strip trailing discogs numeric disambiguations, such as "Duran Duran (2)" -> "Duran Duran"
-  const cleaned = rawArtist.replace(/\s\(\d+\)$/, '').trim();
-  if (cleaned.toLowerCase().startsWith('the ')) {
-    return `${cleaned.slice(4)}, The`;
+  let cleaned = rawArtist.replace(/\s\(\d+\)$/, '').trim();
+  if (!cleaned) return '';
+
+  // Handle leading English articles
+  if (/^the\s+/i.test(cleaned)) {
+    return `${cleaned.slice(4).trim()}, The`;
   }
+  if (/^a\s+/i.test(cleaned)) {
+    return `${cleaned.slice(2).trim()}, A`;
+  }
+  if (/^an\s+/i.test(cleaned)) {
+    return `${cleaned.slice(3).trim()}, An`;
+  }
+
+  // If already formatted as "Last, First", keep it
+  if (cleaned.includes(',')) {
+    return cleaned;
+  }
+
+  const lower = cleaned.toLowerCase();
+  if (KNOWN_BANDS.has(lower)) {
+    return cleaned;
+  }
+
+  // Handle collaboration joiners / multi-artist strings
+  if (/\s(?:&|and|feat\.?|featuring|vs\.?|x)\s/i.test(cleaned)) {
+    return cleaned;
+  }
+
+  const parts = cleaned.split(/\s+/);
+
+  // Single word names (e.g. Sade, Prince, Madonna, Cher, Yellowcard)
+  if (parts.length <= 1) {
+    return cleaned;
+  }
+
+  const firstLower = parts[0].toLowerCase();
+
+  // If the initial word is a known band descriptor/adjective, keep natural order
+  if (BAND_START_WORDS.has(firstLower)) {
+    return cleaned;
+  }
+
+  // Band names containing internal articles, prepositions, or phrase verbs
+  if (parts.slice(1, -1).some((p) => BAND_CONNECTORS.has(p.toLowerCase()))) {
+    return cleaned;
+  }
+
+  // Names with 4 or more words are almost always bands or ensembles
+  if (parts.length > 3) {
+    return cleaned;
+  }
+
+  // Repeated words (e.g. Duran Duran, Talk Talk)
+  if (parts.length === 2 && parts[0].toLowerCase() === parts[1].toLowerCase()) {
+    return cleaned;
+  }
+
+  // Surnames with generational suffixes (Jr., Sr., III, etc.)
+  const suffixes = ['jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv'];
+  const lastPart = parts[parts.length - 1].toLowerCase();
+  if (suffixes.includes(lastPart) && parts.length >= 3) {
+    if (COMMON_FIRST_NAMES.has(firstLower)) {
+      const suffix = parts.pop();
+      const lastName = parts.pop();
+      return `${lastName}, ${parts.join(' ')} ${suffix}`;
+    }
+    return cleaned;
+  }
+
+  // For 2-word and 3-word names, only invert if the first token is a recognized given name
+  // and the remaining tokens do not indicate band nouns/adjectives
+  if (COMMON_FIRST_NAMES.has(firstLower)) {
+    const lastLower = parts[parts.length - 1].toLowerCase();
+    if (BAND_START_WORDS.has(lastLower)) {
+      return cleaned;
+    }
+    const lastName = parts.pop();
+    const firstNames = parts.join(' ');
+    return `${lastName}, ${firstNames}`;
+  }
+
+  // If not recognized as a personal name, preserve natural band order
   return cleaned;
 }
 
@@ -76,11 +343,66 @@ export function groupTracksBySide(tracks) {
   });
 }
 
+export function calculateTotalDuration(tracks) {
+  if (!tracks || !Array.isArray(tracks) || tracks.length === 0) {
+    return null;
+  }
+
+  let totalSeconds = 0;
+  let parsedCount = 0;
+
+  for (const track of tracks) {
+    const raw = (track.duration || '').trim();
+    if (!raw) continue;
+
+    const parts = raw.split(':').map((p) => parseInt(p, 10));
+    if (parts.some(isNaN)) continue;
+
+    if (parts.length === 2) {
+      totalSeconds += parts[0] * 60 + parts[1];
+      parsedCount++;
+    } else if (parts.length === 3) {
+      totalSeconds += parts[0] * 3600 + parts[1] * 60 + parts[2];
+      parsedCount++;
+    }
+  }
+
+  const totalTracks = tracks.length;
+
+  // If at least half the tracks have duration, estimate the remainder using average or ~4 min
+  if (parsedCount > 0 && parsedCount < totalTracks && parsedCount / totalTracks >= 0.5) {
+    const avgSeconds = Math.round(totalSeconds / parsedCount);
+    const fallbackPerTrack = (avgSeconds >= 120 && avgSeconds <= 420) ? avgSeconds : 240;
+    const missingCount = totalTracks - parsedCount;
+    totalSeconds += missingCount * fallbackPerTrack;
+    parsedCount = totalTracks;
+  }
+
+  if (parsedCount === 0 || totalSeconds <= 0) {
+    return null;
+  }
+
+  // Round to nearest minute
+  const totalMinutes = Math.round(totalSeconds / 60);
+  if (totalMinutes <= 0) return null;
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0) {
+    return minutes > 0 ? `${hours} hr ${minutes} min` : `${hours} hr`;
+  }
+  return `${minutes} min`;
+}
+
 export async function syncDiscogsCollection(username, token, onProgress) {
   let page = 1;
   let totalPages = 1;
   const perPage = 100;
   const fetchedRecords = [];
+
+  const existingRecords = await getAllRecords();
+  const existingMap = new Map(existingRecords.map((r) => [r.id, r]));
 
   while (page <= totalPages) {
     const res = await fetch(
@@ -107,27 +429,57 @@ export async function syncDiscogsCollection(username, token, onProgress) {
       const artistName = basic.artists && basic.artists.length > 0
         ? basic.artists[0].name
         : 'Unknown Artist';
+      const recordId = `discogs_${item.id}`;
+      const existing = existingMap.get(recordId);
+
+      const existingTracklist = existing?.tracklist && existing.tracklist.length > 0
+        ? existing.tracklist
+        : [];
+
+      const discogsArtwork = {
+        thumbnail: basic.thumb || '',
+        highRes: basic.cover_image || '',
+        source: 'discogs',
+      };
+
+      // Reset to authentic Discogs artwork on sync. enrichArtInBackground will safely enrich only validated iTunes matches.
+      const existingArtwork = discogsArtwork;
+
+      const isEditionTitle = (t) =>
+        /\b2\.0\b/i.test(t) ||
+        /\b\d+(?:th)?\s+anniversary\b/i.test(t) ||
+        /\bdeluxe\b/i.test(t) ||
+        /\bexpanded\b/i.test(t);
+
+      const titleStr = basic.title || 'Untitled';
+      const isExpandedEdition = isEditionTitle(titleStr);
+      const chosenYear = (isExpandedEdition && basic.year)
+        ? basic.year
+        : (existing?.year || existing?.originalYear || basic.master_year || existing?.masterYear || basic.year || 0);
 
       return {
-        id: `discogs_${item.id}`,
+        id: recordId,
         discogsId: item.id,
-        masterId: basic.master_id || null,
-        title: basic.title || 'Untitled',
+        masterId: basic.master_id || existing?.masterId || null,
+        title: titleStr,
         artist: artistName.replace(/\s\(\d+\)$/, '').trim(),
         sortArtist: parseSortArtist(artistName),
-        year: basic.year || 0,
+        year: chosenYear,
+        masterYear: basic.master_year || existing?.masterYear || null,
+        originalYear: isExpandedEdition && basic.year
+          ? basic.year
+          : (existing?.originalYear || basic.master_year || existing?.masterYear || null),
+        pressingYear: basic.year || existing?.pressingYear || null,
+        releaseDate: existing?.releaseDate || null,
         genres: basic.genres || [],
         styles: basic.styles || [],
         format: basic.formats ? basic.formats.map((f) => f.name) : ['Vinyl'],
         dateAdded: item.date_added || new Date().toISOString(),
         notes: item.notes && item.notes[0]?.value ? item.notes[0].value : '',
-        tracklist: [],
-        artwork: {
-          thumbnail: basic.thumb || '',
-          highRes: basic.cover_image || '',
-          source: 'discogs',
-        },
-        context: null,
+        tracklist: existingTracklist,
+        artwork: existingArtwork,
+        discogsArtwork,
+        context: existing?.context || null,
       };
     });
 
@@ -145,30 +497,214 @@ export async function syncDiscogsCollection(username, token, onProgress) {
 }
 
 export async function enrichTracklistsInBackground(records, token) {
-  // The collection endpoint doesn't include tracklists, so fetch each release's detail
+  // Fetch release tracklist, and if durations are missing, match by title against master release
+  // Respect Discogs API rate limits: max 60 requests/minute (~1 req/second)
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
   for (const record of records) {
-    if (!record.discogsId || (record.tracklist && record.tracklist.length > 0)) continue;
+    const hasFullDurations = record.tracklist && record.tracklist.length > 0 &&
+      record.tracklist.every((t) => Boolean(t.duration));
+
+    if (!record.discogsId || hasFullDurations) continue;
 
     try {
-      const res = await fetch(`https://api.discogs.com/releases/${record.discogsId}`, {
-        headers: {
-          'User-Agent': 'VinylCrate/1.0',
-          Authorization: `Discogs token=${token}`,
-        },
-      });
-      if (!res.ok) continue;
+      let currentTracklist = record.tracklist || [];
 
-      const data = await res.json();
-      const tracklist = (data.tracklist || [])
-        .filter((t) => t.type_ === 'track')
-        .map((t) => ({
-          position: t.position || '',
-          title: t.title || '',
-          duration: t.duration || '',
-        }));
+      // 1. Fetch release details if not already fetched
+      if (currentTracklist.length === 0) {
+        let res = null;
+        try {
+          res = await fetch(`https://api.discogs.com/releases/${record.discogsId}`, {
+            headers: {
+              'User-Agent': 'VinylCrate/1.0',
+              Authorization: `Discogs token=${token}`,
+            },
+          });
+        } catch {
+          // Network / CORS / preflight failure
+          continue;
+        }
 
-      if (tracklist.length > 0) {
-        await updateRecord(record.id, { tracklist });
+        if (res.status === 429) {
+          // Throttled by Discogs - pause for 60 seconds and stop this background cycle
+          console.warn('Discogs rate limit reached (429). Pausing background tracklist enrichment.');
+          await delay(60000);
+          break;
+        }
+
+        if (res.ok) {
+          const data = await res.json();
+          currentTracklist = (data.tracklist || [])
+            .filter((t) => (!t.type_ || t.type_ === 'track') && t.title)
+            .map((t, idx) => ({
+              position: t.position || String(idx + 1),
+              title: t.title || '',
+              duration: t.duration || '',
+            }));
+          if (!record.masterId && data.master_id) {
+            record.masterId = data.master_id;
+            await updateRecord(record.id, { masterId: data.master_id });
+          }
+        }
+
+        // Throttle ~1.1s between Discogs API calls to stay comfortably under 60 req/min
+        await delay(1100);
+      }
+
+      // If Discogs returned no tracks or was rate-limited / unavailable, attempt iTunes fallback for full tracklist
+      if (currentTracklist.length === 0) {
+        try {
+          const query = encodeURIComponent(`${record.artist} ${record.title}`);
+          const itunesRes = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=50`);
+          if (itunesRes.ok) {
+            const itunesData = await itunesRes.json();
+            const songs = (itunesData.results || []).filter((s) => s.trackName);
+            if (songs.length > 0) {
+              // Sort songs by trackNumber if available
+              songs.sort((a, b) => (a.trackNumber || 0) - (b.trackNumber || 0));
+              currentTracklist = songs.map((s, idx) => {
+                let dur = '';
+                if (s.trackTimeMillis) {
+                  const totalSec = Math.round(s.trackTimeMillis / 1000);
+                  const m = Math.floor(totalSec / 60);
+                  const sec = String(totalSec % 60).padStart(2, '0');
+                  dur = `${m}:${sec}`;
+                }
+                return {
+                  position: s.trackNumber ? String(s.trackNumber) : String(idx + 1),
+                  title: s.trackName || '',
+                  duration: dur,
+                };
+              });
+            }
+          }
+        } catch {
+          // Ignore iTunes search errors
+        }
+      }
+
+      if (currentTracklist.length === 0) continue;
+
+      // 2. Check if we need duration enrichment
+      const missingDurations = currentTracklist.some((t) => !t.duration);
+
+      if (missingDurations && record.masterId) {
+        try {
+          const masterRes = await fetch(`https://api.discogs.com/masters/${record.masterId}`, {
+            headers: {
+              'User-Agent': 'VinylCrate/1.0',
+              Authorization: `Discogs token=${token}`,
+            },
+          });
+
+          if (masterRes.status === 429) {
+            console.warn('Discogs rate limit reached (429). Pausing background tracklist enrichment.');
+            await delay(60000);
+            break;
+          }
+
+          if (masterRes.ok) {
+            const masterData = await masterRes.json();
+            const masterTracks = (masterData.tracklist || []).filter((t) => (!t.type_ || t.type_ === 'track') && t.duration);
+
+            if (masterData.year) {
+              record.masterYear = masterData.year;
+
+              // Check if release title diverges significantly from master title (e.g. "Millennium 2.0" vs "Millennium")
+              const clean = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+              const normRel = clean(record.title);
+              const normMas = clean(masterData.title);
+              const isDivergent = normRel !== normMas && (
+                /\b2\.0\b/i.test(record.title) ||
+                /\b\d+(?:th)?\s+anniversary\b/i.test(record.title) ||
+                /\bdeluxe\b/i.test(record.title) ||
+                /\bexpanded\b/i.test(record.title) ||
+                (normRel.startsWith(normMas) && normRel.length >= normMas.length + 2)
+              );
+
+              if (isDivergent && record.pressingYear) {
+                // Keep the edition release year as primary
+                record.originalYear = record.pressingYear;
+                record.year = record.pressingYear;
+              } else {
+                record.originalYear = masterData.year;
+                record.year = masterData.year;
+              }
+
+              await updateRecord(record.id, {
+                masterYear: record.masterYear,
+                originalYear: record.originalYear,
+                year: record.year,
+              });
+            }
+
+            const normalizeTitle = (str) =>
+              str.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            const masterLookup = new Map();
+            for (const mt of masterTracks) {
+              const norm = normalizeTitle(mt.title);
+              if (norm && mt.duration) {
+                masterLookup.set(norm, mt.duration);
+              }
+            }
+
+            for (const t of currentTracklist) {
+              if (!t.duration) {
+                const norm = normalizeTitle(t.title);
+                if (masterLookup.has(norm)) {
+                  t.duration = masterLookup.get(norm);
+                }
+              }
+            }
+          }
+        } catch {
+          // If master lookup fails, continue with whatever durations we have
+        }
+
+        // Throttle ~1.1s between Discogs API calls
+        await delay(1100);
+      }
+
+      // 3. Fallback: For any tracks still missing durations, try matching against iTunes album tracks
+      const stillMissing = currentTracklist.some((t) => !t.duration);
+      if (stillMissing) {
+        try {
+          const query = encodeURIComponent(`${record.artist} ${record.title}`);
+          const itunesRes = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=50`);
+          if (itunesRes.ok) {
+            const itunesData = await itunesRes.json();
+            const normalizeTitle = (str) =>
+              str.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            const itunesLookup = new Map();
+            for (const song of itunesData.results || []) {
+              if (song.trackName && song.trackTimeMillis) {
+                const norm = normalizeTitle(song.trackName);
+                const totalSec = Math.round(song.trackTimeMillis / 1000);
+                const m = Math.floor(totalSec / 60);
+                const s = String(totalSec % 60).padStart(2, '0');
+                itunesLookup.set(norm, `${m}:${s}`);
+              }
+            }
+
+            for (const t of currentTracklist) {
+              if (!t.duration) {
+                const norm = normalizeTitle(t.title);
+                if (itunesLookup.has(norm)) {
+                  t.duration = itunesLookup.get(norm);
+                }
+              }
+            }
+          }
+        } catch {
+          // Ignore iTunes search errors
+        }
+      }
+
+      // Only write to database if we obtained tracks (never wipe out a tracklist)
+      if (currentTracklist.length > 0) {
+        await updateRecord(record.id, { tracklist: currentTracklist });
       }
     } catch {
       // Continue to next album if fetch fails
@@ -176,23 +712,97 @@ export async function enrichTracklistsInBackground(records, token) {
   }
 }
 
+function cleanAlphaNum(str) {
+  return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function scoreAlbumMatch(recordArtist, recordTitle, itunesArtist, itunesAlbum) {
+  const rArtist = cleanAlphaNum(recordArtist);
+  const rTitle = cleanAlphaNum(recordTitle);
+  const iArtist = cleanAlphaNum(itunesArtist);
+  const iAlbum = cleanAlphaNum(itunesAlbum);
+
+  if (!rTitle || !iAlbum) return -1;
+
+  let titleScore = -1;
+  if (rTitle === iAlbum) {
+    titleScore = 100;
+  } else if (iAlbum.startsWith(rTitle)) {
+    const suffix = iAlbum.slice(rTitle.length);
+    // Disqualify distinct follow-ups, companion releases, side b, part 2, vol 2 unless original title explicitly has them
+    if (/(sideb|sided|part\d|vol\d|volume\d|chapter\d)/.test(suffix)) {
+      titleScore = -1;
+    } else if (/^(deluxe|expanded|anniversary|legacy|remaster|remastered|edition|special|version|\d+th)/.test(suffix)) {
+      titleScore = 80;
+    } else {
+      titleScore = 40;
+    }
+  } else if (rTitle.startsWith(iAlbum)) {
+    const suffix = rTitle.slice(iAlbum.length);
+    if (/(sideb|sided|part\d|vol\d|volume\d|chapter\d)/.test(suffix)) {
+      titleScore = -1;
+    } else {
+      titleScore = 70;
+    }
+  }
+
+  let artistScore = -1;
+  if (rArtist === iArtist) {
+    artistScore = 100;
+  } else if (iArtist && rArtist && (iArtist.includes(rArtist) || rArtist.includes(iArtist))) {
+    artistScore = 60;
+  }
+
+  if (titleScore < 60 || artistScore < 60) return -1;
+  return titleScore + artistScore;
+}
+
 export async function enrichArtInBackground(records) {
   for (const record of records) {
     try {
       const query = encodeURIComponent(`${record.artist} ${record.title}`);
-      const res = await fetch(`https://itunes.apple.com/search?term=${query}&entity=album&limit=1`);
+      const res = await fetch(`https://itunes.apple.com/search?term=${query}&entity=album&limit=10`);
       if (!res.ok) continue;
 
       const data = await res.json();
-      if (data.resultCount > 0 && data.results[0]?.artworkUrl100) {
-        const highRes = data.results[0].artworkUrl100.replace('100x100bb.jpg', '1200x1200bb.jpg');
-        await updateRecord(record.id, {
+      const scoredCandidates = (data.results || [])
+        .map((item) => ({
+          item,
+          score: scoreAlbumMatch(record.artist, record.title, item.artistName, item.collectionName),
+        }))
+        .filter((c) => c.score > 0)
+        .sort((a, b) => b.score - a.score);
+
+      const best = scoredCandidates[0]?.item;
+
+      if (best && best.artworkUrl100) {
+        const highRes = best.artworkUrl100.replace('100x100bb.jpg', '1200x1200bb.jpg');
+        const updates = {
           artwork: {
-            thumbnail: data.results[0].artworkUrl100,
+            thumbnail: best.artworkUrl100,
             highRes,
             source: 'itunes',
           },
-        });
+        };
+
+        if (best.releaseDate) {
+          updates.releaseDate = best.releaseDate;
+          const itunesYear = parseInt(String(best.releaseDate).slice(0, 4), 10);
+          if (itunesYear && !record.masterYear) {
+            updates.originalYear = itunesYear;
+            if (!record.year || record.year === record.pressingYear) {
+              updates.year = itunesYear;
+            }
+          }
+        }
+        await updateRecord(record.id, updates);
+      } else {
+        // If iTunes has no valid match, revert to original Discogs artwork if currently set to iTunes
+        if (record.artwork?.source === 'itunes' && record.discogsArtwork?.highRes) {
+          await updateRecord(record.id, {
+            artwork: record.discogsArtwork,
+          });
+        }
       }
     } catch {
       // Continue to next album if fetch fails

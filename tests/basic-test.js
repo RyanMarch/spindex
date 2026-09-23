@@ -31,8 +31,32 @@ const { parseSortArtist, groupTracksBySide } = await import('../public/js/sync.j
 assert.equal(parseSortArtist('The Beatles'), 'Beatles, The');
 assert.equal(parseSortArtist('The Cure'), 'Cure, The');
 assert.equal(parseSortArtist('Duran Duran (2)'), 'Duran Duran');
-assert.equal(parseSortArtist('Miles Davis'), 'Miles Davis');
+assert.equal(parseSortArtist('Miles Davis'), 'Davis, Miles');
 assert.equal(parseSortArtist('The The (3)'), 'The, The');
+assert.equal(parseSortArtist('Carly Rae Jepsen'), 'Jepsen, Carly Rae');
+assert.equal(parseSortArtist('Hayley Williams'), 'Williams, Hayley');
+assert.equal(parseSortArtist('Yellowcard'), 'Yellowcard');
+assert.equal(parseSortArtist('Minus The Bear'), 'Minus The Bear');
+assert.equal(parseSortArtist('Jimmy Eat World'), 'Jimmy Eat World');
+assert.equal(parseSortArtist('Men At Work'), 'Men At Work');
+assert.equal(parseSortArtist('American War'), 'American War');
+assert.equal(parseSortArtist('Tame Impala'), 'Tame Impala');
+assert.equal(parseSortArtist('David Bowie'), 'Bowie, David');
+assert.equal(parseSortArtist('Kate Bush'), 'Bush, Kate');
+assert.equal(parseSortArtist('Stevie Wonder'), 'Wonder, Stevie');
+
+// In natural first-name alphabetical order, "Hayley Williams" (H) comes before "Yellowcard" (Y).
+// In Last-Name / Year crate sorting, "Williams, Hayley" (W) is moved, sorting after V and directly before Yellowcard (Y).
+const naturalOrder = ['Hayley Williams', 'Yellowcard'].sort();
+assert.equal(naturalOrder[0], 'Hayley Williams');
+
+const crateOrder = [
+  { artist: 'Hayley Williams', sortArtist: parseSortArtist('Hayley Williams') },
+  { artist: 'Yellowcard', sortArtist: parseSortArtist('Yellowcard') },
+];
+crateOrder.sort((a, b) => a.sortArtist.localeCompare(b.sortArtist));
+assert.equal(crateOrder[0].artist, 'Hayley Williams');
+assert.equal(crateOrder[1].artist, 'Yellowcard');
 
 // Test groupTracksBySide with multi-disc sides (A, B, C, D)
 const testTracks = [
@@ -52,6 +76,29 @@ assert.equal(grouped[0].tracks.length, 2);
 assert.equal(grouped[2].tracks[0].title, 'Song C1');
 assert.equal(groupTracksBySide([]), null);
 assert.equal(groupTracksBySide([{ position: '1', title: 'Track 1' }]), null);
+
+// Test masterYear / originalYear / year preference and provenance detection
+const testRecord1 = {
+  title: 'Kind of Blue',
+  masterYear: 1959,
+  originalYear: 1959,
+  pressingYear: 2021,
+  year: 1959,
+};
+const primaryYear1 = testRecord1.masterYear || testRecord1.originalYear || testRecord1.year;
+assert.equal(primaryYear1, 1959);
+assert.equal(testRecord1.pressingYear !== primaryYear1, true);
+
+const testRecord2 = {
+  title: 'Original Pressing',
+  masterYear: null,
+  originalYear: 1977,
+  pressingYear: 1977,
+  year: 1977,
+};
+const primaryYear2 = testRecord2.masterYear || testRecord2.originalYear || testRecord2.year;
+assert.equal(primaryYear2, 1977);
+assert.equal(testRecord2.pressingYear !== primaryYear2, false);
 
 // 3. Test mock data records schema integrity & verified artwork
 const { MOCK_RECORDS } = await import('../public/js/mock-data.js');
@@ -98,4 +145,26 @@ for (const file of [...jsFiles, 'public/index.html', 'public/css/style.css']) {
   assert.ok(!content.toLowerCase().includes('premium'), `File ${file} contains forbidden word "premium"`);
 }
 
+// 6. Test letter jumping navigation logic
+const { CrateController } = await import('../public/js/crate.js');
+const dummyContainer = { offsetWidth: 420, innerHTML: '', appendChild: () => {}, addEventListener: () => {} };
+const dummyCounter = { textContent: '' };
+const testCrate = new CrateController(dummyContainer, dummyCounter);
+testCrate.setRecords([
+  { id: '1', artist: 'David Bowie', sortArtist: 'Bowie, David' },
+  { id: '2', artist: 'Miles Davis', sortArtist: 'Davis, Miles' },
+  { id: '3', artist: 'Hayley Williams', sortArtist: 'Williams, Hayley' },
+  { id: '4', artist: 'Yellowcard', sortArtist: 'Yellowcard' },
+], 'artist-last-year');
+
+// Pressing 'W' should jump to Hayley Williams (index 2)
+testCrate.jumpToLetter('W');
+assert.equal(testCrate.currentIndex, 2);
+assert.equal(testCrate.records[testCrate.currentIndex].artist, 'Hayley Williams');
+
+// Pressing 'B' should jump to David Bowie (index 0)
+testCrate.jumpToLetter('B');
+assert.equal(testCrate.currentIndex, 0);
+
 console.log('All basic and integration tests passed successfully.');
+

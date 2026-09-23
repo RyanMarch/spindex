@@ -48,7 +48,8 @@
         <div class="sort-selector-wrap">
           <label for="sort-select" class="sr-only">Sort crate by</label>
           <select id="sort-select" class="sort-select" aria-label="Sort collection">
-            <option value="artist">Artist (A–Z)</option>
+            <option value="artist-last-year" selected>Artist / Year / Title</option>
+            <option value="artist-first">Artist (A–Z First Name)</option>
             <option value="year">Release Year</option>
             <option value="added">Recently Added</option>
             <option value="genre">Genre</option>
@@ -98,6 +99,7 @@
           <p class="meta-artist" id="meta-artist">—</p>
           <div class="meta-details-row">
             <span class="meta-year" id="meta-year">—</span>
+            <span class="meta-duration" id="meta-duration"></span>
             <span class="meta-genres" id="meta-genres"></span>
           </div>
 
@@ -155,7 +157,8 @@
             <div class="gatefold-header">
               <h2 class="gatefold-title" id="gatefold-title"></h2>
               <p class="gatefold-artist" id="gatefold-artist"></p>
-              <span class="gatefold-year" id="gatefold-year"></span>
+              <div class="gatefold-year" id="gatefold-year"></div>
+              <div class="gatefold-provenance" id="gatefold-provenance"></div>
             </div>
 
             <div class="gatefold-tracklist-area">
@@ -281,6 +284,6 @@
     </div>
   </aside>
 
-  <script type="module" src="/js/app.js"></script>
+  <script type="module" src="/js/app.js?v=10"></script>
 </body>
 </html>

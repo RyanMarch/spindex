@@ -637,6 +637,19 @@ body {
   letter-spacing: 0.04em;
 }
 
+.meta-duration {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.meta-duration::before {
+  content: '·';
+  margin-right: 0.5rem;
+  color: rgba(255, 255, 255, 0.25);
+}
+
 .meta-genres {
   display: flex;
   gap: 0.4rem;
@@ -1632,7 +1645,14 @@ body {
 .gatefold-year {
   font-family: var(--font-mono);
   font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.gatefold-provenance {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
   color: rgba(255, 255, 255, 0.3);
+  margin-top: 0.25rem;
 }
 
 .gatefold-section-label {
@@ -2013,7 +2033,8 @@ body {
     font-size: 0.8rem;
   }
 
-  .meta-year {
+  .meta-year,
+  .meta-duration {
     font-size: 1rem;
   }
 

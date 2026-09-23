@@ -1,5 +1,6 @@
 // crate.js - Vertical 3D Cover Flow with persistent element animations
 import { soundFx } from './audio.js';
+import { parseSortArtist } from './sync.js';
 
 export class CrateController {
   constructor(containerEl, counterEl, onSelectRecord, onIndexChange) {
@@ -18,14 +19,16 @@ export class CrateController {
     this.raf = null;
     this.lastT = 0;
     this.size = 420;
-    this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    this.reducedMotion = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches : false;
 
-    window.addEventListener('resize', () => {
-      this.measure();
-      this.render();
-    });
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', () => {
+        this.measure();
+        this.render();
+      });
 
-    this.bindEvents();
+      this.bindEvents();
+    }
   }
 
   setNowSpinningId(id) {
@@ -48,10 +51,19 @@ export class CrateController {
     return 2.75 + 0.85 * (k - 3);
   }
 
-  setRecords(records, sortKey = 'artist') {
+  setRecords(records, sortKey = 'artist', targetRecordId = null) {
+    const previousActiveId = targetRecordId || this.records[this.currentIndex]?.id || null;
     this.records = records || [];
     this.sortKey = sortKey;
-    this.currentIndex = 0;
+
+    let targetIndex = 0;
+    if (previousActiveId) {
+      const foundIndex = this.records.findIndex((r) => r.id === previousActiveId);
+      if (foundIndex !== -1) {
+        targetIndex = foundIndex;
+      }
+    }
+    this.currentIndex = targetIndex;
     this.buildSleeves();
   }
 
@@ -64,6 +76,7 @@ export class CrateController {
   }
 
   buildSleeves() {
+    if (typeof document === 'undefined') return;
     this.container.innerHTML =  /*html*/ '';
     this.sleeveElements = [];
     const total = this.records.length;
@@ -209,7 +222,7 @@ export class CrateController {
   }
 
   kick() {
-    if (this.raf) return;
+    if (this.raf || typeof requestAnimationFrame === 'undefined') return;
     this.lastT = null;
     this.raf = requestAnimationFrame((t) => this.tick(t));
   }
@@ -331,11 +344,19 @@ export class CrateController {
       return (record.genres && record.genres[0]) ? record.genres[0].toUpperCase() : 'OTHER';
     }
     if (this.sortKey === 'year') {
-      if (!record.year) return 'UNKNOWN';
-      const decade = Math.floor(record.year / 10) * 10;
+      const year = (record.year && record.masterYear && record.year !== record.masterYear)
+        ? record.year
+        : (record.masterYear || record.originalYear || record.year);
+      if (!year) return 'UNKNOWN';
+      const decade = Math.floor(year / 10) * 10;
       return `${decade}s`;
     }
-    const name = record.sortArtist || record.artist || '';
+    if (this.sortKey === 'artist-first') {
+      const name = record.artist || record.sortArtist || '';
+      const char = name.trim().charAt(0).toUpperCase();
+      return /[A-Z]/.test(char) ? char : '#';
+    }
+    const name = parseSortArtist(record.artist) || record.sortArtist || record.artist || '';
     const char = name.trim().charAt(0).toUpperCase();
     return /[A-Z]/.test(char) ? char : '#';
   }
@@ -349,6 +370,38 @@ export class CrateController {
       this.currentIndex++;
       soundFx.playFlip();
       this.updatePositions();
+    }
+  }
+
+  jumpToLetter(letter) {
+    if (!this.records || this.records.length === 0) return;
+    const targetChar = letter.toUpperCase();
+
+    const getRecordLetter = (record) => {
+      if (this.sortKey === 'artist-first') {
+        const name = (record.artist || record.sortArtist || '').trim();
+        return name.charAt(0).toUpperCase();
+      }
+      const name = (parseSortArtist(record.artist) || record.sortArtist || record.artist || '').trim();
+      return name.charAt(0).toUpperCase();
+    };
+
+    // Find all matching indices for this letter
+    const matchingIndices = [];
+    for (let i = 0; i < this.records.length; i++) {
+      if (getRecordLetter(this.records[i]) === targetChar) {
+        matchingIndices.push(i);
+      }
+    }
+
+    if (matchingIndices.length === 0) return;
+
+    // If currently on one of the matching records, advance to the next matching record (or loop to first)
+    const nextMatch = matchingIndices.find((idx) => idx > this.currentIndex);
+    const targetIndex = nextMatch !== undefined ? nextMatch : matchingIndices[0];
+
+    if (targetIndex !== this.currentIndex) {
+      this.setIndex(targetIndex);
     }
   }
 
@@ -377,6 +430,9 @@ export class CrateController {
         if (this.records[this.currentIndex] && this.onSelect) {
           this.onSelect(this.records[this.currentIndex]);
         }
+      } else if (/^[a-zA-Z]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        this.jumpToLetter(e.key.toUpperCase());
       }
     });
 

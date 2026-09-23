@@ -3,7 +3,7 @@ import { openDB, getAllRecords, clearRecords, deleteRecords, countRecords, getRe
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
-import { syncDiscogsCollection, enrichTracklistsInBackground, groupTracksBySide } from './sync.js';
+import { syncDiscogsCollection, enrichTracklistsInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist } from './sync.js';
 import { soundFx } from './audio.js';
 
 // Service worker registration: bypass on localhost to prevent stale asset caching during dev
@@ -37,7 +37,7 @@ class App {
   constructor() {
     this.crate = null;
     this.gatefold = null;
-    this.currentSort = 'artist';
+    this.currentSort = 'artist-last-year';
     this.activeVibe = 'all';
     this.allRecords = [];
     this.filteredRecords = [];
@@ -79,6 +79,7 @@ class App {
     this.metaTitle = document.getElementById('meta-title');
     this.metaArtist = document.getElementById('meta-artist');
     this.metaYear = document.getElementById('meta-year');
+    this.metaDuration = document.getElementById('meta-duration');
     this.metaGenres = document.getElementById('meta-genres');
     this.metaTracklist = document.getElementById('meta-tracklist-preview');
     this.metaInspectBtn = document.getElementById('meta-inspect-btn');
@@ -259,16 +260,26 @@ class App {
     await openDB();
     await seedDefaultRecordsIfEmpty();
 
-    // Check if mock records need verified artwork update
+    // Check if mock records need verified artwork or sortArtist update
     const sample = await getRecord('discogs_mock_001');
-    if (sample && sample.artwork?.thumbnail?.includes('wikimedia')) {
+    if (sample && (sample.artwork?.thumbnail?.includes('wikimedia') || sample.sortArtist === 'Miles Davis')) {
       await upsertRecords(MOCK_RECORDS);
     }
 
-    const existing = await getAllRecords();
-    const isMock = (r) => String(r.id).startsWith('discogs_mock_');
-    if (existing.some((r) => !isMock(r)) && existing.some(isMock)) {
-      await deleteRecords(existing.filter(isMock).map((r) => r.id));
+    // Ensure all records in IndexedDB use the latest sortArtist parsing rules
+    const allStored = await getAllRecords();
+    const staleRecords = [];
+    for (const record of allStored) {
+      if (record.artist) {
+        const expectedSort = parseSortArtist(record.artist);
+        if (record.sortArtist !== expectedSort) {
+          record.sortArtist = expectedSort;
+          staleRecords.push(record);
+        }
+      }
+    }
+    if (staleRecords.length > 0) {
+      await upsertRecords(staleRecords);
     }
 
     await this.restoreNowSpinning();
@@ -277,7 +288,7 @@ class App {
   }
 
   async loadAllRecords() {
-    this.allRecords = await getAllRecords('by_artist');
+    this.allRecords = await getAllRecords();
     this.applyFiltersAndSort();
   }
 
@@ -285,10 +296,14 @@ class App {
     const token = localStorage.getItem('discogs_token');
     if (!token) return;
 
-    const missing = this.allRecords.filter((r) => r.discogsId && (!r.tracklist || r.tracklist.length === 0));
-    if (missing.length === 0) return;
+    const needsEnrichment = this.allRecords.filter((r) => {
+      if (!r.discogsId) return false;
+      if (!r.tracklist || r.tracklist.length === 0) return true;
+      return r.tracklist.some((t) => !t.duration);
+    });
+    if (needsEnrichment.length === 0) return;
 
-    enrichTracklistsInBackground(missing, token).then(() => this.loadAllRecords());
+    enrichTracklistsInBackground(needsEnrichment, token).then(() => this.loadAllRecords());
   }
 
   applyFiltersAndSort() {
@@ -306,11 +321,48 @@ class App {
       });
     }
 
+    const getSortYear = (r) => {
+      if (r.year && r.masterYear && r.year !== r.masterYear) {
+        return r.year;
+      }
+      return r.masterYear || r.originalYear || r.year || 0;
+    };
+
     // Sort list
-    if (this.currentSort === 'artist') {
-      list.sort((a, b) => (a.sortArtist || a.artist || '').localeCompare(b.sortArtist || b.artist || ''));
+    if (this.currentSort === 'artist-last-year' || this.currentSort === 'artist') {
+      list.sort((a, b) => {
+        const artistA = parseSortArtist(a.artist) || a.sortArtist || a.artist || '';
+        const artistB = parseSortArtist(b.artist) || b.sortArtist || b.artist || '';
+        const artistComp = artistA.localeCompare(artistB);
+        if (artistComp !== 0) return artistComp;
+
+        const yearComp = getSortYear(a) - getSortYear(b);
+        if (yearComp !== 0) return yearComp;
+
+        return (a.title || '').localeCompare(b.title || '');
+      });
+    } else if (this.currentSort === 'artist-first') {
+      list.sort((a, b) => {
+        const artistA = a.artist || '';
+        const artistB = b.artist || '';
+        const artistComp = artistA.localeCompare(artistB);
+        if (artistComp !== 0) return artistComp;
+
+        const yearComp = getSortYear(a) - getSortYear(b);
+        if (yearComp !== 0) return yearComp;
+
+        return (a.title || '').localeCompare(b.title || '');
+      });
     } else if (this.currentSort === 'year') {
-      list.sort((a, b) => (a.year || 0) - (b.year || 0));
+      list.sort((a, b) => {
+        const yearComp = getSortYear(a) - getSortYear(b);
+        if (yearComp !== 0) return yearComp;
+        const artistA = parseSortArtist(a.artist) || a.sortArtist || a.artist || '';
+        const artistB = parseSortArtist(b.artist) || b.sortArtist || b.artist || '';
+        const artistComp = artistA.localeCompare(artistB);
+        if (artistComp !== 0) return artistComp;
+        return (a.title || '').localeCompare(b.title || '');
+      });
     } else if (this.currentSort === 'added') {
       list.sort((a, b) => new Date(b.dateAdded || 0) - new Date(a.dateAdded || 0));
     } else if (this.currentSort === 'genre') {
@@ -319,20 +371,20 @@ class App {
         const gB = (b.genres && b.genres[0]) || 'Other';
         const comp = gA.localeCompare(gB);
         if (comp !== 0) return comp;
-        return (a.sortArtist || '').localeCompare(b.sortArtist || '');
+        const artistA = parseSortArtist(a.artist) || a.sortArtist || a.artist || '';
+        const artistB = parseSortArtist(b.artist) || b.sortArtist || b.artist || '';
+        return artistA.localeCompare(artistB);
       });
     }
 
+    const currentActiveId = this.filteredRecords[this.crate?.currentIndex]?.id || null;
     this.filteredRecords = list;
-    this.crate.setRecords(list, this.currentSort);
+    this.crate.setRecords(list, this.currentSort, currentActiveId);
     if (this.nowSpinningRecord && this.crate) {
       this.crate.setNowSpinningId(this.nowSpinningRecord.id);
     }
-    if (list.length > 0) {
-      this.updateActiveMetadata(list[0]);
-    } else {
-      this.updateActiveMetadata(null);
-    }
+    const activeRecord = list[this.crate.currentIndex] || null;
+    this.updateActiveMetadata(activeRecord);
   }
 
   onCrateIndexChange(currIndex, total, currentRecord) {
@@ -387,6 +439,7 @@ class App {
       if (this.metaTitle) this.metaTitle.textContent = 'No records in crate';
       if (this.metaArtist) this.metaArtist.textContent = '—';
       if (this.metaYear) this.metaYear.textContent = '';
+      if (this.metaDuration) this.metaDuration.textContent = '';
       if (this.metaGenres) this.metaGenres.innerHTML =  /*html*/ '';
       if (this.metaTracklist) this.metaTracklist.innerHTML =  /*html*/ '';
       return;
@@ -394,7 +447,16 @@ class App {
 
     if (this.metaTitle) this.metaTitle.textContent = record.title || 'Untitled';
     if (this.metaArtist) this.metaArtist.textContent = record.artist || 'Unknown Artist';
-    if (this.metaYear) this.metaYear.textContent = record.year ? String(record.year) : '';
+    const primaryYear = (record.year && record.masterYear && record.year !== record.masterYear)
+      ? record.year
+      : (record.masterYear || record.originalYear || record.year);
+    if (this.metaYear) this.metaYear.textContent = primaryYear ? String(primaryYear) : '';
+
+    if (this.metaDuration) {
+      const dur = calculateTotalDuration(record.tracklist);
+      this.metaDuration.textContent = dur || '';
+      this.metaDuration.style.display = dur ? '' : 'none';
+    }
 
     if (this.metaGenres) {
       const tags = [...(record.genres || []), ...(record.styles || [])].slice(0, 3);

@@ -2,11 +2,19 @@
 class AudioController {
   constructor() {
     this.ctx = null;
-    this.muted = localStorage.getItem('vinyl_audio_muted') === 'true';
+    let isMutedStored = false;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        isMutedStored = localStorage.getItem('vinyl_audio_muted') === 'true';
+      }
+    } catch {
+      isMutedStored = false;
+    }
+    this.muted = isMutedStored;
   }
 
   init() {
-    if (!this.ctx) {
+    if (!this.ctx && typeof window !== 'undefined') {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
@@ -23,7 +31,13 @@ class AudioController {
 
   toggleMute() {
     this.muted = !this.muted;
-    localStorage.setItem('vinyl_audio_muted', String(this.muted));
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('vinyl_audio_muted', String(this.muted));
+      }
+    } catch {
+      // Ignore storage errors
+    }
     return this.muted;
   }
 
