@@ -1,12 +1,10 @@
-// notes.js - Inline Gatefold inspection & Now Spinning ambient display controller
+// notes.js - Inline Gatefold (album inspector) controller
 import { updateRecord, getRecord } from './db.js';
-import { soundFx } from './audio.js';
-import { groupTracksBySide, calculateTotalDuration } from './sync.js';
+import { groupTracksBySide, calculateTotalDuration, getRecordTags } from './sync.js';
 
 export class GatefoldController {
-  constructor({ onNowSpinning } = {}) {
+  constructor() {
     this.activeRecord = null;
-    this.onNowSpinning = onNowSpinning;
 
     // Gatefold elements
     this.workspace = document.getElementById('gatefold-workspace');
@@ -20,22 +18,7 @@ export class GatefoldController {
     this.provenanceEl = document.getElementById('gatefold-provenance');
     this.tracklistEl = document.getElementById('gatefold-tracklist');
     this.wikiEl = document.getElementById('gatefold-wiki');
-    this.spinBtn = document.getElementById('gatefold-spin-btn');
 
-    // Ambient turntable elements
-    this.ambientEl = document.getElementById('ambient-turntable');
-    this.ambientRoomGlow = document.getElementById('ambient-room-glow');
-    this.turntableVinyl = document.getElementById('turntable-vinyl');
-    this.turntableLabelArt = document.getElementById('turntable-label-art');
-    this.ambientCoverArt = document.getElementById('ambient-cover-art');
-    this.ambientTitle = document.getElementById('ambient-title');
-    this.ambientArtist = document.getElementById('ambient-artist');
-    this.ambientTimer = document.getElementById('ambient-timer');
-    this.ambientProgress = document.getElementById('ambient-needle-progress');
-    this.ambientExitBtn = document.getElementById('ambient-exit-btn');
-
-    this._timerInterval = null;
-    this._timerSeconds = 0;
 
     this.bindEvents();
   }
@@ -43,20 +26,6 @@ export class GatefoldController {
   bindEvents() {
     if (this.backBtn) {
       this.backBtn.addEventListener('click', () => this.closeGatefold());
-    }
-
-    if (this.spinBtn) {
-      this.spinBtn.addEventListener('click', () => {
-        if (!this.activeRecord) return;
-        soundFx.playNeedleDrop();
-        if (this.onNowSpinning) this.onNowSpinning(this.activeRecord);
-        this.closeGatefold();
-        this.openAmbientTurntable(this.activeRecord);
-      });
-    }
-
-    if (this.ambientExitBtn) {
-      this.ambientExitBtn.addEventListener('click', () => this.closeAmbientTurntable());
     }
 
     // Swipe-down to close gatefold
@@ -76,7 +45,6 @@ export class GatefoldController {
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         if (this.workspace?.classList.contains('open')) this.closeGatefold();
-        else if (this.ambientEl?.classList.contains('open')) this.closeAmbientTurntable();
       }
     });
   }
@@ -93,6 +61,7 @@ export class GatefoldController {
 
     if (this.workspace) {
       this.workspace.classList.add('open');
+      document.body.classList.add('sleeve-open');
       this.workspace.setAttribute('aria-hidden', 'false');
     }
 
@@ -113,6 +82,7 @@ export class GatefoldController {
 
     if (this.workspace) {
       this.workspace.classList.remove('open');
+      document.body.classList.remove('sleeve-open');
       this.workspace.setAttribute('aria-hidden', 'true');
     }
   }
@@ -153,7 +123,7 @@ export class GatefoldController {
     const yearDisplay = releaseDateStr || (originalYear ? String(originalYear) : '');
 
     const durStr = calculateTotalDuration(record.tracklist) || '';
-    const genresList = [...(record.genres || []), ...(record.styles || [])].slice(0, 2).join(', ');
+    const genresList = getRecordTags(record).slice(0, 2).join(', ');
 
     const mainLineParts = [yearDisplay, durStr, genresList].filter(Boolean);
 
@@ -180,11 +150,6 @@ export class GatefoldController {
 
     if (this.wikiEl) {
       this.wikiEl.innerHTML =  /*html*/ '<p class="gatefold-loading">Reading from archives...</p>';
-    }
-
-    if (this.spinBtn) {
-      this.spinBtn.textContent = '● Spin Album';
-      this.spinBtn.classList.remove('active');
     }
   }
 
@@ -374,60 +339,6 @@ export class GatefoldController {
     return `<ul class="gatefold-tracks">${tracks.map((t) =>
       `<li><span class="gf-tpos">${this.escapeHTML(t.position || '·')}</span><span class="gf-tname">${this.escapeHTML(t.title)}</span><span class="gf-ttime">${this.escapeHTML(t.duration || '')}</span></li>`
     ).join('')}</ul>`;
-  }
-
-  // --------------------------------------------------------
-  // Ambient Turntable Display
-  // --------------------------------------------------------
-
-  openAmbientTurntable(record) {
-    const artUrl = record.artwork?.highRes || record.artwork?.thumbnail || '';
-
-    if (this.turntableLabelArt) this.turntableLabelArt.src = artUrl;
-    if (this.ambientCoverArt) {
-      this.ambientCoverArt.src = artUrl;
-      this.ambientCoverArt.alt = `${record.artist} – ${record.title}`;
-    }
-    if (this.ambientTitle) this.ambientTitle.textContent = record.title || '';
-    if (this.ambientArtist) this.ambientArtist.textContent = record.artist || '';
-    if (this.ambientTimer) this.ambientTimer.textContent = 'Side A';
-    if (this.ambientProgress) this.ambientProgress.style.width = '0%';
-    if (this.ambientRoomGlow) {
-      this.ambientRoomGlow.style.backgroundImage = `url(${artUrl})`;
-    }
-
-    if (this.turntableVinyl) this.turntableVinyl.classList.add('spinning');
-
-    this._timerSeconds = 0;
-    clearInterval(this._timerInterval);
-    this._timerInterval = setInterval(() => this._tickTimer(), 1000);
-
-    if (this.ambientEl) {
-      this.ambientEl.classList.add('open');
-      this.ambientEl.setAttribute('aria-hidden', 'false');
-    }
-  }
-
-  closeAmbientTurntable() {
-    clearInterval(this._timerInterval);
-
-    if (this.turntableVinyl) this.turntableVinyl.classList.remove('spinning');
-
-    if (this.ambientEl) {
-      this.ambientEl.classList.remove('open');
-      this.ambientEl.setAttribute('aria-hidden', 'true');
-    }
-  }
-
-  _tickTimer() {
-    this._timerSeconds++;
-    const m = Math.floor(this._timerSeconds / 60).toString().padStart(2, '0');
-    const s = (this._timerSeconds % 60).toString().padStart(2, '0');
-    if (this.ambientTimer) this.ambientTimer.textContent = `${m}:${s}`;
-
-    // Animate needle progress bar (loops at 20 min per side)
-    const pct = (this._timerSeconds % 1200) / 1200 * 100;
-    if (this.ambientProgress) this.ambientProgress.style.width = `${pct}%`;
   }
 
   escapeHTML(str = '') {

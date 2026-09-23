@@ -442,8 +442,10 @@ export async function syncDiscogsCollection(username, token, onProgress) {
         source: 'discogs',
       };
 
-      // Reset to authentic Discogs artwork on sync. enrichArtInBackground will safely enrich only validated iTunes matches.
-      const existingArtwork = discogsArtwork;
+      // Keep validated high-res artwork if already enriched, otherwise use Discogs artwork
+      const existingArtwork = (existing?.artwork?.source === 'itunes' && existing?.artwork?.highRes)
+        ? existing.artwork
+        : discogsArtwork;
 
       const isEditionTitle = (t) =>
         /\b2\.0\b/i.test(t) ||
@@ -757,23 +759,119 @@ function scoreAlbumMatch(recordArtist, recordTitle, itunesArtist, itunesAlbum) {
   return titleScore + artistScore;
 }
 
+// iTunes uses its own coarse genre names; fold them into the Discogs vocabulary so tags line up
+const ITUNES_GENRE_MAP = {
+  'pop': 'Pop',
+  'k-pop': 'Pop',
+  'rock': 'Rock',
+  'alternative': 'Rock',
+  'hard rock': 'Rock',
+  'metal': 'Rock',
+  'punk': 'Rock',
+  'indie rock': 'Rock',
+  'electronic': 'Electronic',
+  'dance': 'Electronic',
+  'jazz': 'Jazz',
+  'r&b/soul': 'Funk / Soul',
+  'soul': 'Funk / Soul',
+  'funk': 'Funk / Soul',
+  'hip-hop/rap': 'Hip Hop',
+  'hip-hop': 'Hip Hop',
+  'rap': 'Hip Hop',
+  'classical': 'Classical',
+  'soundtrack': 'Stage & Screen',
+  'country': 'Folk, World, & Country',
+  'folk': 'Folk, World, & Country',
+  'singer/songwriter': 'Folk, World, & Country',
+  'world': 'Folk, World, & Country',
+  'blues': 'Blues',
+  'reggae': 'Reggae',
+  'latin': 'Latin',
+  'motown': 'Funk / Soul',
+  'disco': 'Funk / Soul',
+  'neo-soul': 'Funk / Soul',
+  'house': 'Electronic',
+  'techno': 'Electronic',
+  'ambient': 'Electronic',
+  'trip-hop': 'Electronic',
+  'teen pop': 'Pop',
+  'vocal pop': 'Pop',
+  'adult alternative': 'Rock',
+  'college rock': 'Rock',
+  'indie': 'Rock',
+  // Already in Discogs' vocabulary
+  'funk / soul': 'Funk / Soul',
+  'hip hop': 'Hip Hop',
+  'stage & screen': 'Stage & Screen',
+  'folk, world, & country': 'Folk, World, & Country',
+};
+
+// We store iTunes' genre name as-is and translate on read, so the mapping can improve without re-fetching.
+// Names we don't recognise are ignored; Discogs' own genres remain the fallback.
+export function normalizeItunesGenre(name) {
+  if (!name) return null;
+  return ITUNES_GENRE_MAP[String(name).trim().toLowerCase()] || null;
+}
+
+// Genre-level tags for a record (used for browse tabs). Primary genre first, then Discogs genres.
+export function getGenreTags(record) {
+  return uniqueTags([normalizeItunesGenre(record.primaryGenre), ...(record.genres || [])]);
+}
+
+// Every tag for display, broadest to finest: primary genre, other genres, then styles.
+export function getRecordTags(record) {
+  return uniqueTags([normalizeItunesGenre(record.primaryGenre), ...(record.genres || []), ...(record.styles || [])]);
+}
+
+function uniqueTags(list) {
+  const seen = new Set();
+  const out = [];
+  for (const tag of list) {
+    if (!tag) continue;
+    const key = String(tag).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(tag);
+  }
+  return out;
+}
+
+// Best iTunes album match for a record; `ok` is false when iTunes could not be reached (rate limit, offline)
+async function findItunesAlbum(record) {
+  const cleanTitle = (record.title || '').replace(/\.{2,}$/, '').trim();
+  const query = encodeURIComponent(`${record.artist} ${cleanTitle}`);
+  let res = await fetch(`https://itunes.apple.com/search?term=${query}&entity=album&limit=10`);
+  if (!res.ok) return { ok: false, item: null };
+  let data = await res.json();
+
+  // Fallback: If entity=album returns 0 results, query with media=music (Apple frequently omits new releases from entity=album)
+  if (!data || data.resultCount === 0) {
+    const fallbackRes = await fetch(`https://itunes.apple.com/search?term=${query}&media=music&limit=15`);
+    if (fallbackRes.ok) {
+      data = await fallbackRes.json();
+    }
+  }
+
+  const scoredCandidates = (data?.results || [])
+    .map((item) => ({
+      item,
+      score: scoreAlbumMatch(
+        record.artist,
+        record.title,
+        item.artistName,
+        item.collectionName || item.trackName
+      ),
+    }))
+    .filter((c) => c.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  return { ok: true, item: scoredCandidates[0]?.item || null };
+}
+
 export async function enrichArtInBackground(records) {
   for (const record of records) {
     try {
-      const query = encodeURIComponent(`${record.artist} ${record.title}`);
-      const res = await fetch(`https://itunes.apple.com/search?term=${query}&entity=album&limit=10`);
-      if (!res.ok) continue;
-
-      const data = await res.json();
-      const scoredCandidates = (data.results || [])
-        .map((item) => ({
-          item,
-          score: scoreAlbumMatch(record.artist, record.title, item.artistName, item.collectionName),
-        }))
-        .filter((c) => c.score > 0)
-        .sort((a, b) => b.score - a.score);
-
-      const best = scoredCandidates[0]?.item;
+      const { item: best } = await findItunesAlbum(record);
 
       if (best && best.artworkUrl100) {
         const highRes = best.artworkUrl100.replace('100x100bb.jpg', '1200x1200bb.jpg');
@@ -783,6 +881,8 @@ export async function enrichArtInBackground(records) {
             highRes,
             source: 'itunes',
           },
+          primaryGenre: best.primaryGenreName || null,
+          genreChecked: true,
         };
 
         if (best.releaseDate) {
@@ -807,5 +907,23 @@ export async function enrichArtInBackground(records) {
     } catch {
       // Continue to next album if fetch fails
     }
+  }
+}
+
+// Backfill iTunes' primary genre for records that predate it. Gentle on iTunes' rate limit; stops if throttled
+// and simply tries again on the next load.
+export async function enrichGenresInBackground(records) {
+  for (const record of records) {
+    try {
+      const { ok, item } = await findItunesAlbum(record);
+      if (!ok) break;
+      await updateRecord(record.id, {
+        primaryGenre: item?.primaryGenreName || null,
+        genreChecked: true,
+      });
+    } catch {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
   }
 }

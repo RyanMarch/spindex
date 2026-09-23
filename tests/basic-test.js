@@ -17,7 +17,6 @@ const requiredFiles = [
   'public/js/crate.js',
   'public/js/notes.js',
   'public/js/mock-data.js',
-  'public/js/audio.js',
   'wrangler.toml',
   '.gitignore',
 ];
@@ -125,7 +124,6 @@ const jsFiles = [
   'public/js/sync.js',
   'public/js/db.js',
   'public/js/mock-data.js',
-  'public/js/audio.js',
 ];
 
 for (const file of jsFiles) {

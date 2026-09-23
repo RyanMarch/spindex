@@ -3,8 +3,15 @@ import { openDB, getAllRecords, clearRecords, deleteRecords, countRecords, getRe
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
-import { syncDiscogsCollection, enrichTracklistsInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist } from './sync.js';
-import { soundFx } from './audio.js';
+import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags } from './sync.js';
+
+const MAX_GENRE_TABS = 6;
+
+// Shorter names for the tabs and meta line where Discogs' are long
+const TAG_LABELS = {
+  'Funk / Soul': 'Soul & Funk',
+  'Folk, World, & Country': 'Folk & World',
+};
 
 // Service worker registration: bypass on localhost to prevent stale asset caching during dev
 const isLocalhost = Boolean(
@@ -41,7 +48,6 @@ class App {
     this.activeVibe = 'all';
     this.allRecords = [];
     this.filteredRecords = [];
-    this.nowSpinningRecord = null;
     this.metaFadeTimeout = null;
     this.lastMetaRecordId = null;
 
@@ -58,14 +64,12 @@ class App {
     this.prevBtn = document.getElementById('prev-btn');
     this.nextBtn = document.getElementById('next-btn');
 
-    this.vibePills = document.querySelectorAll('.vibe-pill');
+    this.vibeBar = document.querySelector('.vibe-filter-bar');
+    this.browseToggleBtn = document.getElementById('browse-toggle-btn');
+    this.browseToggleLabel = document.getElementById('browse-toggle-label');
+    this.browseBackdrop = document.getElementById('browse-backdrop');
 
-    this.audioToggleBtn = document.getElementById('audio-toggle-btn');
-    this.audioIconOn = document.getElementById('audio-icon-on');
-    this.audioIconOff = document.getElementById('audio-icon-off');
 
-    this.nowSpinningPill = document.getElementById('now-spinning-pill');
-    this.spinText = document.getElementById('spin-text');
 
     this.glowLayers = [
       document.getElementById('ambient-glow-img'),
@@ -81,7 +85,7 @@ class App {
     this.metaYear = document.getElementById('meta-year');
     this.metaDuration = document.getElementById('meta-duration');
     this.metaGenres = document.getElementById('meta-genres');
-    this.metaTracklist = document.getElementById('meta-tracklist-preview');
+    this.metaTrackSummary = document.getElementById('meta-track-summary');
     this.metaInspectBtn = document.getElementById('meta-inspect-btn');
 
     this.settingsDrawer = document.getElementById('settings-drawer');
@@ -103,7 +107,6 @@ class App {
       this.tokenInput.value = localStorage.getItem('discogs_token') || '';
     }
 
-    this.updateAudioIcon();
   }
 
   initControllers() {
@@ -114,23 +117,10 @@ class App {
       (currIndex, total, currentRecord) => this.onCrateIndexChange(currIndex, total, currentRecord)
     );
 
-    this.gatefold = new GatefoldController({
-      onNowSpinning: (record) => this.setNowSpinning(record),
-    });
+    this.gatefold = new GatefoldController();
   }
 
   initEvents() {
-    // Audio toggle
-    if (this.audioToggleBtn) {
-      this.audioToggleBtn.addEventListener('click', () => {
-        soundFx.toggleMute();
-        this.updateAudioIcon();
-        if (!soundFx.isMuted()) {
-          soundFx.playFlip();
-        }
-      });
-    }
-
     // Navigation buttons
     if (this.prevBtn) {
       this.prevBtn.addEventListener('click', () => this.crate.prev());
@@ -147,24 +137,30 @@ class App {
       });
     }
 
-    // Vibe filter pills
-    this.vibePills.forEach((pill) => {
-      pill.addEventListener('click', () => {
-        this.vibePills.forEach((p) => p.classList.remove('active'));
-        pill.classList.add('active');
+    // Genre tabs are rendered from the collection, so listen on the bar
+    if (this.vibeBar) {
+      this.vibeBar.addEventListener('click', (e) => {
+        const pill = e.target.closest('.vibe-pill');
+        if (!pill) return;
         this.activeVibe = pill.dataset.vibe || 'all';
+        this.syncVibeTabs();
         this.applyFiltersAndSort();
-      });
-    });
-
-    // Now spinning pill click opens ambient display
-    if (this.nowSpinningPill) {
-      this.nowSpinningPill.addEventListener('click', () => {
-        if (this.nowSpinningRecord && this.gatefold) {
-          this.gatefold.openAmbientTurntable(this.nowSpinningRecord);
-        }
+        this.setBrowseOpen(false);
       });
     }
+
+    // Browse sheet (compact screens): genres + sort
+    if (this.browseToggleBtn) {
+      this.browseToggleBtn.addEventListener('click', () => {
+        this.setBrowseOpen(!document.body.classList.contains('browse-open'));
+      });
+    }
+    if (this.browseBackdrop) {
+      this.browseBackdrop.addEventListener('click', () => this.setBrowseOpen(false));
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this.setBrowseOpen(false);
+    });
 
     // Inspect button opens inline gatefold
     if (this.metaInspectBtn) {
@@ -230,21 +226,10 @@ class App {
       this.clearCacheBtn.addEventListener('click', async () => {
         if (confirm('Clear local database? You can reload the demo anytime.')) {
           await clearRecords();
-          localStorage.removeItem('now_spinning_id');
-          this.nowSpinningRecord = null;
-          this.updateNowSpinningUI();
           await this.loadAllRecords();
           this.closeSettings();
         }
       });
-    }
-  }
-
-  updateAudioIcon() {
-    const muted = soundFx.isMuted();
-    if (this.audioIconOn && this.audioIconOff) {
-      this.audioIconOn.style.display = muted ? 'none' : 'block';
-      this.audioIconOff.style.display = muted ? 'block' : 'none';
     }
   }
 
@@ -282,14 +267,64 @@ class App {
       await upsertRecords(staleRecords);
     }
 
-    await this.restoreNowSpinning();
     await this.loadAllRecords();
     this.fillMissingTracklists();
+    this.fillMissingGenres();
   }
 
   async loadAllRecords() {
     this.allRecords = await getAllRecords();
+    this.renderVibeTabs();
     this.applyFiltersAndSort();
+  }
+
+  tagLabel(tag) {
+    return TAG_LABELS[tag] || tag;
+  }
+
+  // Browse tabs come from the collection: the most common genre tags, most-filled first
+  renderVibeTabs() {
+    if (!this.vibeBar) return;
+
+    const counts = new Map();
+    for (const record of this.allRecords) {
+      for (const tag of getGenreTags(record)) {
+        counts.set(tag, (counts.get(tag) || 0) + 1);
+      }
+    }
+
+    const top = [...counts.entries()]
+      .filter(([, n]) => n >= 2)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, MAX_GENRE_TABS)
+      .map(([tag]) => tag);
+
+    if (this.activeVibe !== 'all' && !counts.has(this.activeVibe)) this.activeVibe = 'all';
+    // Keep the active tag visible even if it fell out of the top list
+    if (this.activeVibe !== 'all' && !top.includes(this.activeVibe)) top.push(this.activeVibe);
+
+    const tabs = top
+      .map((tag) => `<button class="vibe-pill" data-vibe="${this.escapeHTML(tag)}">${this.escapeHTML(this.tagLabel(tag))}</button>`)
+      .join('');
+    this.vibeBar.innerHTML =  /*html*/ `<button class="vibe-pill" data-vibe="all">All Records</button>${tabs}`;
+    this.syncVibeTabs();
+  }
+
+  syncVibeTabs() {
+    let label = 'All Records';
+    this.vibeBar?.querySelectorAll('.vibe-pill').forEach((pill) => {
+      const active = pill.dataset.vibe === this.activeVibe;
+      pill.classList.toggle('active', active);
+      if (active) label = pill.textContent;
+    });
+    if (this.browseToggleLabel) this.browseToggleLabel.textContent = label;
+  }
+
+  fillMissingGenres() {
+    const needsGenre = this.allRecords.filter((r) => !r.genreChecked);
+    if (needsGenre.length === 0) return;
+
+    enrichGenresInBackground(needsGenre).then(() => this.loadAllRecords());
   }
 
   fillMissingTracklists() {
@@ -306,19 +341,18 @@ class App {
     enrichTracklistsInBackground(needsEnrichment, token).then(() => this.loadAllRecords());
   }
 
+  setBrowseOpen(open) {
+    document.body.classList.toggle('browse-open', open);
+    if (this.browseToggleBtn) this.browseToggleBtn.setAttribute('aria-expanded', String(open));
+  }
+
   applyFiltersAndSort() {
     let list = [...this.allRecords];
 
-    // Filter by vibe
-    if (this.activeVibe === 'picks') {
-      list = list.filter((r) => Boolean(r.notes));
-    } else if (this.activeVibe !== 'all') {
+    // Filter by tag: a record shows under every genre tag it carries
+    if (this.activeVibe !== 'all') {
       const target = this.activeVibe.toLowerCase();
-      list = list.filter((r) => {
-        const matchesGenre = (r.genres || []).some((g) => g.toLowerCase().includes(target));
-        const matchesStyle = (r.styles || []).some((s) => s.toLowerCase().includes(target));
-        return matchesGenre || matchesStyle;
-      });
+      list = list.filter((r) => getGenreTags(r).some((t) => t.toLowerCase() === target));
     }
 
     const getSortYear = (r) => {
@@ -367,8 +401,8 @@ class App {
       list.sort((a, b) => new Date(b.dateAdded || 0) - new Date(a.dateAdded || 0));
     } else if (this.currentSort === 'genre') {
       list.sort((a, b) => {
-        const gA = (a.genres && a.genres[0]) || 'Other';
-        const gB = (b.genres && b.genres[0]) || 'Other';
+        const gA = getGenreTags(a)[0] || 'Other';
+        const gB = getGenreTags(b)[0] || 'Other';
         const comp = gA.localeCompare(gB);
         if (comp !== 0) return comp;
         const artistA = parseSortArtist(a.artist) || a.sortArtist || a.artist || '';
@@ -380,9 +414,6 @@ class App {
     const currentActiveId = this.filteredRecords[this.crate?.currentIndex]?.id || null;
     this.filteredRecords = list;
     this.crate.setRecords(list, this.currentSort, currentActiveId);
-    if (this.nowSpinningRecord && this.crate) {
-      this.crate.setNowSpinningId(this.nowSpinningRecord.id);
-    }
     const activeRecord = list[this.crate.currentIndex] || null;
     this.updateActiveMetadata(activeRecord);
   }
@@ -441,7 +472,7 @@ class App {
       if (this.metaYear) this.metaYear.textContent = '';
       if (this.metaDuration) this.metaDuration.textContent = '';
       if (this.metaGenres) this.metaGenres.innerHTML =  /*html*/ '';
-      if (this.metaTracklist) this.metaTracklist.innerHTML =  /*html*/ '';
+      if (this.metaTrackSummary) this.metaTrackSummary.textContent = '';
       return;
     }
 
@@ -459,38 +490,31 @@ class App {
     }
 
     if (this.metaGenres) {
-      const tags = [...(record.genres || []), ...(record.styles || [])].slice(0, 3);
+      const tags = getRecordTags(record).slice(0, 3).map((t) => this.tagLabel(t));
       this.metaGenres.innerHTML =  /*html*/ tags
         .map((t) => `<span class="meta-genre-tag">${this.escapeHTML(t)}</span>`)
         .join('');
     }
 
-    if (this.metaTracklist) {
-      this.metaTracklist.innerHTML =  /*html*/ this.renderMetaTracklistHTML(record.tracklist || []);
+    if (this.metaTrackSummary) {
+      this.metaTrackSummary.textContent = this.formatTrackSummary(record.tracklist || []);
     }
   }
 
-  renderMetaTracklistHTML(tracks) {
+  // One quiet line, e.g. "24 tracks · 4 sides"; the full tracklist lives in the sleeve view
+  formatTrackSummary(tracks) {
     if (!tracks || tracks.length === 0) return '';
 
-    const sides = groupTracksBySide(tracks);
+    const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+    const parts = [plural(tracks.length, 'track')];
 
-    if (sides && sides.length > 0) {
-      let html = '<div class="meta-sides-grid">';
-      for (const side of sides) {
-        html += `<div class="meta-side-col"><div class="meta-side-hdr">${this.escapeHTML(side.title)}</div><ul class="meta-tracks">`;
-        for (const t of side.tracks) {
-          html += `<li><span class="mt-pos">${this.escapeHTML(t.position || '·')}</span><span class="mt-name">${this.escapeHTML(t.title)}</span></li>`;
-        }
-        html += '</ul></div>';
-      }
-      html += '</div>';
-      return html;
+    const groups = groupTracksBySide(tracks);
+    if (groups && groups.length > 0) {
+      const discs = groups.every((g) => g.sideKey.startsWith('Disc '));
+      parts.push(plural(groups.length, discs ? 'disc' : 'side'));
     }
 
-    return `<ul class="meta-tracks">${tracks.map((t) =>
-      `<li><span class="mt-pos">${this.escapeHTML(t.position || '·')}</span><span class="mt-name">${this.escapeHTML(t.title)}</span></li>`
-    ).join('')}</ul>`;
+    return parts.join(' · ');
   }
 
   escapeHTML(str = '') {
@@ -504,44 +528,6 @@ class App {
   openRecordDetail(record) {
     if (this.gatefold) {
       this.gatefold.openGatefold(record);
-    }
-  }
-
-  setNowSpinning(record) {
-    this.nowSpinningRecord = record;
-    if (record) {
-      localStorage.setItem('now_spinning_id', record.id);
-    } else {
-      localStorage.removeItem('now_spinning_id');
-    }
-    this.updateNowSpinningUI();
-    if (this.crate) {
-      this.crate.setNowSpinningId(record ? record.id : null);
-    }
-  }
-
-  async restoreNowSpinning() {
-    const savedId = localStorage.getItem('now_spinning_id');
-    if (savedId) {
-      const rec = await getRecord(savedId);
-      if (rec) {
-        this.nowSpinningRecord = rec;
-        this.updateNowSpinningUI();
-        if (this.crate) {
-          this.crate.setNowSpinningId(rec.id);
-        }
-      }
-    }
-  }
-
-  updateNowSpinningUI() {
-    if (!this.nowSpinningPill || !this.spinText) return;
-
-    if (this.nowSpinningRecord) {
-      this.spinText.textContent = `${this.nowSpinningRecord.artist} - ${this.nowSpinningRecord.title}`;
-      this.nowSpinningPill.style.display = 'flex';
-    } else {
-      this.nowSpinningPill.style.display = 'none';
     }
   }
 

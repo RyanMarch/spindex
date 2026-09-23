@@ -18,7 +18,6 @@ A tactile, local-first vinyl record companion and guest browsing web application
 - **Input Gestures**: Supports left/right and up/down arrow keys, touch swipe gestures on mobile and tablets, and debounced mouse wheel scrolling.
 - **Divider Tabs & Staff Picks**: Record store category tabs poking above sleeve clusters, plus host pick notes.
 - **Liner Notes Drawer**: Slide-over drawer with Side A/Side B track splits and Wikipedia context extracts.
-- **Now Spinning Display**: Ambient indicator with animated vinyl disc tracking the active spinning album.
 - **Offline & Demo Mode**: Built-in 12-album curated collection loads automatically if the database is unpopulated.
 
 ## Local Development

@@ -1,5 +1,4 @@
 // crate.js - Vertical 3D Cover Flow with persistent element animations
-import { soundFx } from './audio.js';
 import { parseSortArtist } from './sync.js';
 
 export class CrateController {
@@ -13,12 +12,13 @@ export class CrateController {
     this.currentIndex = 0;
     this.visibleRange = 45; // Below-stack keeps spreading, so anything deeper is off screen
     this.sortKey = 'artist';
-    this.nowSpinningId = null;
     this.pos = 0;
     this.vel = 0;
     this.raf = null;
     this.lastT = 0;
     this.size = 420;
+    this.gap = 0; // Extra space opened between the active album and the lower stack (compact layout hosts title/artist there)
+    this.compactMq = typeof window !== 'undefined' ? window.matchMedia?.('(max-width: 960px)') : null;
     this.reducedMotion = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches : false;
 
     if (typeof window !== 'undefined') {
@@ -29,11 +29,6 @@ export class CrateController {
 
       this.bindEvents();
     }
-  }
-
-  setNowSpinningId(id) {
-    this.nowSpinningId = id;
-    this.updatePositions();
   }
 
   getStackStep(k) {
@@ -67,10 +62,9 @@ export class CrateController {
     this.buildSleeves();
   }
 
-  setIndex(index, skipSound = false) {
+  setIndex(index) {
     if (index >= 0 && index < this.records.length && index !== this.currentIndex) {
       this.currentIndex = index;
-      if (!skipSound) soundFx.playFlip();
       this.updatePositions();
     }
   }
@@ -97,42 +91,6 @@ export class CrateController {
       const el = document.createElement('div');
       el.className = 'sleeve';
       el.dataset.index = String(i);
-
-      // Peeking vinyl disc slot for Now Spinning albums
-      const discSlot = document.createElement('div');
-      discSlot.className = 'crate-disc-slot';
-
-      const vinylDisc = document.createElement('div');
-      vinylDisc.className = 'crate-vinyl-disc';
-
-      const discGrooves = document.createElement('div');
-      discGrooves.className = 'disc-grooves';
-
-      const discSheen = document.createElement('div');
-      discSheen.className = 'disc-sheen';
-
-      const discLabel = document.createElement('div');
-      discLabel.className = 'disc-label';
-
-      const discLabelArt = document.createElement('img');
-      discLabelArt.className = 'disc-label-art';
-      discLabelArt.src = record.artwork?.thumbnail || record.artwork?.highRes || '';
-      discLabelArt.alt = '';
-      discLabelArt.loading = 'lazy';
-      discLabelArt.onerror = () => {
-        discLabelArt.style.display = 'none';
-      };
-
-      const spindleHole = document.createElement('div');
-      spindleHole.className = 'spindle-hole';
-
-      discLabel.appendChild(discLabelArt);
-      discLabel.appendChild(spindleHole);
-      vinylDisc.appendChild(discGrooves);
-      vinylDisc.appendChild(discSheen);
-      vinylDisc.appendChild(discLabel);
-      discSlot.appendChild(vinylDisc);
-      el.appendChild(discSlot);
 
       // Solid jacket cover wrapper
       const coverWrap = document.createElement('div');
@@ -219,6 +177,7 @@ export class CrateController {
 
   measure() {
     this.size = this.container.offsetWidth || this.size;
+    this.gap = this.compactMq?.matches ? 64 : 0;
   }
 
   kick() {
@@ -262,7 +221,7 @@ export class CrateController {
     if (below) {
       const yStep = this.lerpStep((n) => this.getBelowYStep(n), k);
       return {
-        y: size * 0.74 + yStep * 50,
+        y: size * 0.74 + yStep * 50 + this.gap,
         z: -175 + step * 18,
         rx: -56,
         s: 0.97 - step * 0.02,
@@ -307,14 +266,13 @@ export class CrateController {
       const offset = item.index - this.pos;
       const rounded = Math.round(offset);
       const absRounded = Math.abs(rounded);
-      const isNowSpinning = Boolean(this.nowSpinningId && item.record.id === this.nowSpinningId);
       const out = absRounded > this.visibleRange + 1;
 
-      const state = `${out ? 'o' : ''}${rounded === 0 ? 'a' : rounded < 0 ? 'u' : 'd'}${isNowSpinning ? 's' : ''}`;
+      const state = `${out ? 'o' : ''}${rounded === 0 ? 'a' : rounded < 0 ? 'u' : 'd'}`;
       if (item.state !== state) {
         item.state = state;
         const dir = rounded < 0 ? 'flow-above' : 'flow-below';
-        item.el.className = `sleeve ${out ? `out-of-range ${dir}` : rounded === 0 ? 'active' : dir}${isNowSpinning ? ' now-spinning' : ''}`;
+        item.el.className = `sleeve ${out ? `out-of-range ${dir}` : rounded === 0 ? 'active' : dir}`;
       }
 
       if (out) continue;
@@ -368,7 +326,6 @@ export class CrateController {
   next() {
     if (this.currentIndex < this.records.length - 1) {
       this.currentIndex++;
-      soundFx.playFlip();
       this.updatePositions();
     }
   }
@@ -408,7 +365,6 @@ export class CrateController {
   prev() {
     if (this.currentIndex > 0) {
       this.currentIndex--;
-      soundFx.playFlip();
       this.updatePositions();
     }
   }
@@ -417,7 +373,7 @@ export class CrateController {
     // Keyboard navigation: Up/Left = prev, Down/Right = next
     window.addEventListener('keydown', (e) => {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
-      if (document.querySelector('.gatefold-workspace.open') || document.querySelector('.ambient-turntable.open') || document.querySelector('.settings-drawer.open')) return;
+      if (document.querySelector('.gatefold-workspace.open') || document.querySelector('.settings-drawer.open')) return;
 
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
         e.preventDefault();
@@ -465,7 +421,7 @@ export class CrateController {
     // Vertical mouse wheel with momentum debounce
     let wheelDebounce = false;
     window.addEventListener('wheel', (e) => {
-      if (document.querySelector('.gatefold-workspace.open') || document.querySelector('.ambient-turntable.open') || document.querySelector('.settings-drawer.open')) return;
+      if (document.querySelector('.gatefold-workspace.open') || document.querySelector('.settings-drawer.open')) return;
       if (wheelDebounce) return;
 
       const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
