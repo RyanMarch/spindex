@@ -1,4 +1,4 @@
-const CACHE_NAME = 'crate-cache-v15';
+const CACHE_NAME = 'crate-cache-v20';
 const ASSETS = [
   '/',
   '/index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   '/js/sync.js',
   '/js/crate.js',
   '/js/notes.js',
+  '/js/wiki.js',
   '/js/mock-data.js',
   '/manifest.webmanifest'
 ];
@@ -42,6 +43,6 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(event.request).then((hit) => hit || (event.request.mode === 'navigate' ? caches.match('/index.html') : undefined)))
   );
 });

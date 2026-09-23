@@ -395,6 +395,69 @@ export function calculateTotalDuration(tracks) {
   return `${minutes} min`;
 }
 
+// Discogs collection "notes" are custom fields (by default: Media Condition, Sleeve Condition, Notes),
+// each identified by a field id. Read them by name so condition grades never masquerade as notes.
+const DEFAULT_FIELD_NAMES = new Map([[1, 'Media Condition'], [2, 'Sleeve Condition'], [3, 'Notes']]);
+
+export async function fetchCollectionFieldNames(username, token) {
+  try {
+    const res = await fetch(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/fields`, {
+      headers: { 'User-Agent': 'VinylCrate/1.0', Authorization: `Discogs token=${token}` },
+    });
+    if (!res.ok) return DEFAULT_FIELD_NAMES;
+    const data = await res.json();
+    const map = new Map((data.fields || []).map((f) => [f.id, f.name]));
+    return map.size > 0 ? map : DEFAULT_FIELD_NAMES;
+  } catch {
+    return DEFAULT_FIELD_NAMES;
+  }
+}
+
+export function parseCollectionFields(notes, fieldNames = DEFAULT_FIELD_NAMES) {
+  const out = { mediaCondition: '', sleeveCondition: '', collectionNotes: [] };
+  for (const n of notes || []) {
+    const value = String(n.value || '').trim();
+    if (!value) continue;
+    const name = fieldNames.get(n.field_id) || `Field ${n.field_id}`;
+    if (/media/i.test(name) && /condition/i.test(name)) out.mediaCondition = value;
+    else if (/sleeve/i.test(name) && /condition/i.test(name)) out.sleeveCondition = value;
+    else out.collectionNotes.push({ name, value });
+  }
+  return out;
+}
+
+// Refresh only the condition grades and notes on records that are already in the crate (one request per 100 records)
+export async function refreshCollectionFields(username, token) {
+  const fieldNames = await fetchCollectionFieldNames(username, token);
+  let page = 1;
+  let totalPages = 1;
+
+  while (page <= totalPages) {
+    const res = await fetch(
+      `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=100`,
+      { headers: { 'User-Agent': 'VinylCrate/1.0', Authorization: `Discogs token=${token}` } }
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    totalPages = data.pagination?.pages || 1;
+
+    for (const item of data.releases || []) {
+      const fields = parseCollectionFields(item.notes, fieldNames);
+      try {
+        await updateRecord(`discogs_${item.id}`, {
+          mediaCondition: fields.mediaCondition,
+          sleeveCondition: fields.sleeveCondition,
+          collectionNotes: fields.collectionNotes,
+          notes: fields.collectionNotes.map((n) => n.value).join('\n'),
+        });
+      } catch {
+        // Not in the local crate yet; a full sync will add it
+      }
+    }
+    page++;
+  }
+}
+
 export async function syncDiscogsCollection(username, token, onProgress) {
   let page = 1;
   let totalPages = 1;
@@ -403,6 +466,7 @@ export async function syncDiscogsCollection(username, token, onProgress) {
 
   const existingRecords = await getAllRecords();
   const existingMap = new Map(existingRecords.map((r) => [r.id, r]));
+  const fieldNames = await fetchCollectionFieldNames(username, token);
 
   while (page <= totalPages) {
     const res = await fetch(
@@ -431,6 +495,7 @@ export async function syncDiscogsCollection(username, token, onProgress) {
         : 'Unknown Artist';
       const recordId = `discogs_${item.id}`;
       const existing = existingMap.get(recordId);
+      const fields = parseCollectionFields(item.notes, fieldNames);
 
       const existingTracklist = existing?.tracklist && existing.tracklist.length > 0
         ? existing.tracklist
@@ -477,7 +542,10 @@ export async function syncDiscogsCollection(username, token, onProgress) {
         styles: basic.styles || [],
         format: basic.formats ? basic.formats.map((f) => f.name) : ['Vinyl'],
         dateAdded: item.date_added || new Date().toISOString(),
-        notes: item.notes && item.notes[0]?.value ? item.notes[0].value : '',
+        notes: fields.collectionNotes.map((n) => n.value).join('\n'),
+        mediaCondition: fields.mediaCondition,
+        sleeveCondition: fields.sleeveCondition,
+        collectionNotes: fields.collectionNotes,
         tracklist: existingTracklist,
         artwork: existingArtwork,
         discogsArtwork,
@@ -823,6 +891,16 @@ export function getRecordTags(record) {
   return uniqueTags([normalizeItunesGenre(record.primaryGenre), ...(record.genres || []), ...(record.styles || [])]);
 }
 
+// Shorter names for tabs, tags and the inspector where Discogs' are long
+const TAG_LABELS = {
+  'Funk / Soul': 'Soul & Funk',
+  'Folk, World, & Country': 'Folk & World',
+};
+
+export function tagLabel(tag) {
+  return TAG_LABELS[tag] || tag;
+}
+
 function uniqueTags(list) {
   const seen = new Set();
   const out = [];
@@ -882,6 +960,8 @@ export async function enrichArtInBackground(records) {
             source: 'itunes',
           },
           primaryGenre: best.primaryGenreName || null,
+          itunesUrl: best.collectionViewUrl || null,
+          itunesArtistUrl: best.artistViewUrl || null,
           genreChecked: true,
         };
 
@@ -919,11 +999,220 @@ export async function enrichGenresInBackground(records) {
       if (!ok) break;
       await updateRecord(record.id, {
         primaryGenre: item?.primaryGenreName || null,
+        itunesUrl: item?.collectionViewUrl || null,
+        itunesArtistUrl: item?.artistViewUrl || null,
         genreChecked: true,
       });
     } catch {
       break;
     }
     await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Full Discogs release details (label, credits, pressing, videos) for the album inspector
+// ---------------------------------------------------------------------------
+
+const stripDisambiguation = (name) => String(name || '').replace(/\s\(\d+\)$/, '').trim();
+
+function youtubeId(uri) {
+  const m = String(uri || '').match(/(?:youtube\.com\/watch\?[^#]*v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+
+export function mapDiscogsTracklist(list) {
+  return (list || [])
+    .filter((t) => (!t.type_ || t.type_ === 'track') && t.title)
+    .map((t, idx) => ({
+      position: t.position || String(idx + 1),
+      title: t.title || '',
+      duration: t.duration || '',
+    }));
+}
+
+export function parseReleaseDetails(data) {
+  const seenLabels = new Set();
+  const labels = [];
+  for (const l of data.labels || []) {
+    const entry = { name: stripDisambiguation(l.name), catno: l.catno && l.catno.toLowerCase() !== 'none' ? l.catno : '' };
+    const key = `${entry.name}|${entry.catno}`;
+    if (!entry.name || seenLabels.has(key)) continue;
+    seenLabels.add(key);
+    labels.push(entry);
+  }
+
+  return {
+    labels,
+    country: data.country || '',
+    released: data.released || '',
+    formats: (data.formats || []).map((f) => ({
+      name: f.name || '',
+      qty: f.qty || '1',
+      descriptions: f.descriptions || [],
+      text: f.text || '',
+    })),
+    artists: (data.artists || []).map((a) => ({ id: a.id, name: stripDisambiguation(a.name) })),
+    credits: (data.extraartists || []).map((a) => ({
+      id: a.id,
+      name: stripDisambiguation(a.name),
+      role: String(a.role || '').trim(),
+    })).filter((c) => c.name && c.role),
+    companies: (data.companies || []).map((c) => ({
+      name: stripDisambiguation(c.name),
+      role: c.entity_type_name || '',
+    })).filter((c) => c.name && c.role),
+    identifiers: (data.identifiers || [])
+      .filter((i) => i.value && (i.type === 'Barcode' || i.type === 'Matrix / Runout'))
+      .map((i) => ({ type: i.type, value: i.value, description: i.description || '' })),
+    notes: data.notes || '',
+    videos: (data.videos || [])
+      .map((v) => ({ title: v.title || '', uri: v.uri, id: youtubeId(v.uri) }))
+      .filter((v) => v.id),
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+// Discogs credit roles are free-form: several roles per person ("Written-By, Mixed By, Keyboards"), bracketed notes
+// that are mostly noise ("Engineer [Assistant, Avast! Recording]"), and plenty of business roles. Split, classify
+// each role on its own, and print only what a sleeve would.
+
+// Split "Producer, Engineer [Assistant, Studio X], Guitar" on commas outside brackets
+export function splitCreditRoles(role) {
+  const parts = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of String(role || '')) {
+    if (ch === '[') depth++;
+    if (ch === ']') depth = Math.max(0, depth - 1);
+    if (ch === ',' && depth === 0) {
+      parts.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  parts.push(current);
+
+  return parts.map((part) => {
+    const detail = (part.match(/\[([^\]]*)\]/) || [])[1] || '';
+    return { base: part.replace(/\s*\[[^\]]*\]/g, '').trim(), detail: detail.trim() };
+  }).filter((p) => p.base);
+}
+
+const BUSINESS_ROLE = /^(management|marketing|a&r|legal|booking|public relations|pr\b|product manager|project manager|coordinator|contractor|advisor|consultant|business)/i;
+const WRITING_ROLE = /^(written[- ]by|words by|lyrics by|music by|songwriter|composed by|arranged by|orchestrated by|liner notes|adapted by|translated by)/i;
+const PRODUCTION_ROLE = /^(produc|executive[- ]produc|co-?produc|compilation produc|engineer|mixed by|recorded by|mastered by|remastered by|lacquer cut|cut by|edited by|editor|supervised by|directed by|remix)/i;
+const ARTWORK_ROLE = /^(art direction|artwork|design|layout|photograph|illustrat|painting|cover|creative director|typograph|lettering|graphics)/i;
+const OTHER_ROLE = /^(technician|model|hair|make-?up|stylist|other)/i;
+
+// Anything unrecognised (there are endless instruments) counts as performing
+function creditGroupFor(base) {
+  if (BUSINESS_ROLE.test(base)) return null;
+  if (WRITING_ROLE.test(base)) return 'Written & arranged';
+  if (PRODUCTION_ROLE.test(base)) return 'Produced & engineered';
+  if (ARTWORK_ROLE.test(base)) return 'Artwork & photography';
+  if (OTHER_ROLE.test(base)) return 'Also credited';
+  return 'Performed by';
+}
+
+// Keep a bracketed note only when it changes the meaning: assistant or additional
+function creditLabel({ base, detail }) {
+  if (/assist/i.test(detail)) return /^engineer$/i.test(base) ? 'Assistant engineer' : `${base} (assistant)`;
+  if (/additional/i.test(detail)) return `${base} (additional)`;
+  return base;
+}
+
+// Which "kinds" of credit a role string carries, for matching records to each other (writers and producers only)
+export function creditKinds(role) {
+  const kinds = new Set();
+  for (const part of splitCreditRoles(role)) {
+    if (/assist/i.test(part.detail)) continue;
+    if (/^(written[- ]by|words by|lyrics by|music by|songwriter|composed by)/i.test(part.base)) kinds.add('writer');
+    if (/^(co-?producer|producer|produced by)$/i.test(part.base)) kinds.add('producer');
+  }
+  return kinds;
+}
+
+const CREDIT_GROUP_ORDER = ['Performed by', 'Written & arranged', 'Produced & engineered', 'Artwork & photography', 'Also credited'];
+
+export function groupCredits(details) {
+  if (!details?.credits?.length) return [];
+
+  const groups = new Map(CREDIT_GROUP_ORDER.map((title) => [title, new Map()]));
+
+  for (const credit of details.credits) {
+    for (const part of splitCreditRoles(credit.role)) {
+      const title = creditGroupFor(part.base);
+      if (!title) continue;
+      const people = groups.get(title);
+      const key = credit.id ? `id:${credit.id}` : `name:${credit.name.toLowerCase()}`;
+      if (!people.has(key)) people.set(key, { id: credit.id || null, name: credit.name, roles: [] });
+      const person = people.get(key);
+      const label = creditLabel(part);
+      if (!person.roles.includes(label)) person.roles.push(label);
+    }
+  }
+
+  return CREDIT_GROUP_ORDER
+    .map((title) => ({ title, people: [...groups.get(title).values()] }))
+    .filter((g) => g.people.length > 0);
+}
+
+// Fetch one release from Discogs. `status` is 'ok', 'throttled' (429) or 'error'.
+export async function fetchReleaseDetails(record, token) {
+  let res;
+  try {
+    res = await fetch(`https://api.discogs.com/releases/${record.discogsId}`, {
+      headers: { 'User-Agent': 'VinylCrate/1.0', Authorization: `Discogs token=${token}` },
+    });
+  } catch {
+    return { status: 'error' };
+  }
+  if (res.status === 429) return { status: 'throttled' };
+  if (!res.ok) return { status: 'error' };
+
+  const data = await res.json();
+  return {
+    status: 'ok',
+    details: parseReleaseDetails(data),
+    tracklist: mapDiscogsTracklist(data.tracklist),
+    masterId: data.master_id || null,
+  };
+}
+
+// Backfill full release details, one gentle request at a time. Stops if throttled and resumes next load.
+export async function enrichDetailsInBackground(records, token, onEach) {
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  for (const record of records) {
+    if (!record.discogsId || record.details) continue;
+
+    const result = await fetchReleaseDetails(record, token);
+    if (result.status === 'throttled') break;
+    if (result.status === 'ok') {
+      const updates = { details: result.details };
+      if ((!record.tracklist || record.tracklist.length === 0) && result.tracklist.length > 0) {
+        updates.tracklist = result.tracklist;
+      }
+      if (!record.masterId && result.masterId) updates.masterId = result.masterId;
+      await updateRecord(record.id, updates);
+      if (onEach) onEach(record.id);
+    }
+    await delay(1100);
+  }
+}
+
+// Links for an artist (official site, YouTube, Bandcamp...) from their Discogs profile
+export async function fetchArtistLinks(artistId, token) {
+  try {
+    const res = await fetch(`https://api.discogs.com/artists/${artistId}`, {
+      headers: { 'User-Agent': 'VinylCrate/1.0', Authorization: `Discogs token=${token}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data.urls || []).slice(0, 12);
+  } catch {
+    return null;
   }
 }

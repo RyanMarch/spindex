@@ -3,15 +3,20 @@ import { openDB, getAllRecords, clearRecords, deleteRecords, countRecords, getRe
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
-import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags } from './sync.js';
+import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, refreshCollectionFields } from './sync.js';
+
+const DEFAULT_TITLE = 'Crate | Vinyl Record Companion';
+
+const slugify = (text) => String(text || '')
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/['’]/g, '')
+  .replace(/&/g, ' and ')
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '') || 'untitled';
 
 const MAX_GENRE_TABS = 6;
-
-// Shorter names for the tabs and meta line where Discogs' are long
-const TAG_LABELS = {
-  'Funk / Soul': 'Soul & Funk',
-  'Folk, World, & Country': 'Folk & World',
-};
 
 // Service worker registration: bypass on localhost to prevent stale asset caching during dev
 const isLocalhost = Boolean(
@@ -117,7 +122,12 @@ class App {
       (currIndex, total, currentRecord) => this.onCrateIndexChange(currIndex, total, currentRecord)
     );
 
-    this.gatefold = new GatefoldController();
+    this.gatefold = new GatefoldController({
+      onStep: (direction) => this.stepInspector(direction),
+      onJump: (id) => this.jumpToRecord(id),
+      getPosition: () => ({ index: this.crate.currentIndex, total: this.filteredRecords.length }),
+      onRoute: (record, mode) => this.syncUrl(record, mode),
+    });
   }
 
   initEvents() {
@@ -268,18 +278,19 @@ class App {
     }
 
     await this.loadAllRecords();
-    this.fillMissingTracklists();
+    this.openFromLocation(true);
+    window.addEventListener('popstate', () => this.openFromLocation());
     this.fillMissingGenres();
+    this.refreshCollectionFieldsIfNeeded()
+      .then(() => this.fillMissingDetails())
+      .then(() => this.fillMissingTracklists());
   }
 
   async loadAllRecords() {
     this.allRecords = await getAllRecords();
+    this.buildRoutes();
     this.renderVibeTabs();
     this.applyFiltersAndSort();
-  }
-
-  tagLabel(tag) {
-    return TAG_LABELS[tag] || tag;
   }
 
   // Browse tabs come from the collection: the most common genre tags, most-filled first
@@ -304,7 +315,7 @@ class App {
     if (this.activeVibe !== 'all' && !top.includes(this.activeVibe)) top.push(this.activeVibe);
 
     const tabs = top
-      .map((tag) => `<button class="vibe-pill" data-vibe="${this.escapeHTML(tag)}">${this.escapeHTML(this.tagLabel(tag))}</button>`)
+      .map((tag) => `<button class="vibe-pill" data-vibe="${this.escapeHTML(tag)}">${this.escapeHTML(tagLabel(tag))}</button>`)
       .join('');
     this.vibeBar.innerHTML =  /*html*/ `<button class="vibe-pill" data-vibe="all">All Records</button>${tabs}`;
     this.syncVibeTabs();
@@ -320,8 +331,37 @@ class App {
     if (this.browseToggleLabel) this.browseToggleLabel.textContent = label;
   }
 
+  // Condition grades and notes come from Discogs collection fields; fetch them once for records that predate them
+  async refreshCollectionFieldsIfNeeded() {
+    const token = localStorage.getItem('discogs_token');
+    const username = localStorage.getItem('discogs_username');
+    if (!token || !username) return;
+
+    const stale = this.allRecords.some((r) => r.discogsId && !String(r.id).startsWith('discogs_mock_') && r.mediaCondition === undefined);
+    if (!stale) return;
+
+    try {
+      await refreshCollectionFields(username, token);
+      await this.loadAllRecords();
+    } catch {
+      // Try again next load
+    }
+  }
+
+  // Full Discogs release (label, credits, pressing, videos) for the album inspector, fetched once per record
+  async fillMissingDetails() {
+    const token = localStorage.getItem('discogs_token');
+    if (!token) return;
+
+    const needsDetails = this.allRecords.filter((r) => r.discogsId && !r.details && !String(r.id).startsWith('discogs_mock_'));
+    if (needsDetails.length === 0) return;
+
+    await enrichDetailsInBackground(needsDetails, token);
+    await this.loadAllRecords();
+  }
+
   fillMissingGenres() {
-    const needsGenre = this.allRecords.filter((r) => !r.genreChecked);
+    const needsGenre = this.allRecords.filter((r) => !r.genreChecked || r.itunesUrl === undefined);
     if (needsGenre.length === 0) return;
 
     enrichGenresInBackground(needsGenre).then(() => this.loadAllRecords());
@@ -490,7 +530,7 @@ class App {
     }
 
     if (this.metaGenres) {
-      const tags = getRecordTags(record).slice(0, 3).map((t) => this.tagLabel(t));
+      const tags = getRecordTags(record).slice(0, 3).map((t) => tagLabel(t));
       this.metaGenres.innerHTML =  /*html*/ tags
         .map((t) => `<span class="meta-genre-tag">${this.escapeHTML(t)}</span>`)
         .join('');
@@ -525,9 +565,105 @@ class App {
       .replace(/"/g, '&quot;');
   }
 
-  openRecordDetail(record) {
+  // ------------------------------------------------------------------------
+  // Addresses: /album/<artist>/<title>/ opens that record's inspector, so a refresh lands back on it
+  // ------------------------------------------------------------------------
+
+  buildRoutes() {
+    this.routeByPath = new Map();
+    this.pathById = new Map();
+    for (const record of [...this.allRecords].sort((a, b) => String(a.id).localeCompare(String(b.id)))) {
+      const base = `/album/${slugify(record.artist)}/${slugify(record.title)}/`;
+      let path = base;
+      // Two pressings of the same title get a numeric suffix so every address is unique
+      for (let n = 2; this.routeByPath.has(path); n++) path = `/album/${slugify(record.artist)}/${slugify(record.title)}-${n}/`;
+      this.routeByPath.set(path, record);
+      this.pathById.set(record.id, path);
+    }
+  }
+
+  routePath(record) {
+    return this.pathById?.get(record.id) || `/album/${slugify(record.artist)}/${slugify(record.title)}/`;
+  }
+
+  recordForPath(pathname) {
+    const path = pathname.endsWith('/') ? pathname : `${pathname}/`;
+    return this.routeByPath?.get(path) || null;
+  }
+
+  setPageTitle(record) {
+    document.title = record ? `${record.title} — ${record.artist} · Crate` : DEFAULT_TITLE;
+  }
+
+  // mode: 'push' (opened from the crate), 'replace' (moved to another record), 'close'
+  syncUrl(record, mode) {
+    this.setPageTitle(record);
+    if (mode === 'close') {
+      // Closing after opening from the crate steps back in history; a cold-loaded address just becomes "/"
+      if (history.state?.album && !history.state.entry) history.back();
+      else if (location.pathname !== '/') history.replaceState(null, '', '/');
+      return;
+    }
+    const path = this.routePath(record);
+    if (mode === 'push' && !history.state?.album) {
+      history.pushState({ album: true }, '', path);
+    } else if (location.pathname !== path) {
+      history.replaceState({ album: true, entry: Boolean(history.state?.entry) }, '', path);
+    }
+  }
+
+  // Show a record at the front of the crate, clearing any filter that would hide it
+  showInCrate(record) {
+    let index = this.filteredRecords.findIndex((r) => r.id === record.id);
+    if (index === -1) {
+      this.activeVibe = 'all';
+      this.syncVibeTabs();
+      this.applyFiltersAndSort();
+      index = this.filteredRecords.findIndex((r) => r.id === record.id);
+    }
+    if (index !== -1) this.crate.setIndex(index);
+  }
+
+  // On load and on Back/Forward: open whatever record the address names, or close the inspector
+  openFromLocation(initial = false) {
+    const record = this.recordForPath(location.pathname);
+    if (record) {
+      this.showInCrate(record);
+      if (initial) history.replaceState({ album: true, entry: true }, '', location.pathname);
+      this.setPageTitle(record);
+      this.gatefold.openGatefold(record, 'none');
+    } else {
+      this.gatefold.closeGatefold(true);
+      this.setPageTitle(null);
+    }
+  }
+
+  // Move the crate by one record while the inspector is open; returns the record now showing
+  stepInspector(direction) {
+    const target = this.crate.currentIndex + direction;
+    if (target < 0 || target >= this.filteredRecords.length) return null;
+    this.crate.setIndex(target);
+    return this.filteredRecords[target];
+  }
+
+  // Bring any record in the collection to the front of the crate and open it
+  jumpToRecord(id) {
+    let index = this.filteredRecords.findIndex((r) => r.id === id);
+    if (index === -1) {
+      // Filtered out by the current tab: show everything so the record can be found
+      this.activeVibe = 'all';
+      this.syncVibeTabs();
+      this.applyFiltersAndSort();
+      index = this.filteredRecords.findIndex((r) => r.id === id);
+    }
+    if (index === -1) return;
+    this.crate.setIndex(index);
+    this.openRecordDetail(this.filteredRecords[index], 'replace');
+  }
+
+  openRecordDetail(record, mode = 'push') {
     if (this.gatefold) {
-      this.gatefold.openGatefold(record);
+      this.gatefold.openGatefold(record, mode);
     }
   }
 
@@ -556,6 +692,7 @@ class App {
 
       this.setSyncStatus('Sync complete! Crate updated.', 'success');
       await this.loadAllRecords();
+      this.fillMissingDetails();
     } catch (err) {
       console.error(err);
       this.setSyncStatus(`Sync failed: ${err.message}`, 'error');

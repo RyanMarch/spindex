@@ -1,0 +1,2 @@
+# Album pages are client-rendered: any /album/... address serves the app at "/", which opens that record
+/album/*  /  200
