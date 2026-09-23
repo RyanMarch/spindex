@@ -1,4 +1,4 @@
-const CACHE_NAME = 'crate-cache-v1';
+const CACHE_NAME = 'crate-cache-v3';
 const ASSETS = [
   '/',
   '/index.html',
@@ -33,7 +33,16 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Network-first for application core assets to prevent stale dev / update caching
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return networkResponse;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

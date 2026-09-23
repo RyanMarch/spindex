@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="description" content="Tactile digital vinyl record crate and jukebox companion for hosting">
   <title>Crate | Vinyl Record Companion</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=4">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%23121214%22 stroke=%22%23e4e4e7%22 stroke-width=%224%22/><circle cx=%2250%22 cy=%2250%22 r=%2220%22 fill=%22%23e11d48%22/><circle cx=%2250%22 cy=%2250%22 r=%224%22 fill=%22%23fff%22/></svg>">
 </head>
@@ -22,8 +22,8 @@
         <span class="brand-title">Crate</span>
       </div>
 
-      <!-- Now Spinning Ambient Pill -->
-      <div id="now-spinning-pill" class="now-spinning-pill" style="display: none;" title="Inspect now spinning album">
+      <!-- Now Spinning Pill -->
+      <div id="now-spinning-pill" class="now-spinning-pill" style="display: none;" title="Open ambient display">
         <span class="spin-disc"></span>
         <div class="spin-info">
           <span class="spin-label">Now Spinning</span>
@@ -31,7 +31,7 @@
         </div>
       </div>
 
-      <!-- Header Controls: Audio, Sort & Settings -->
+      <!-- Header Controls -->
       <div class="header-actions">
         <button id="audio-toggle-btn" class="icon-btn" aria-label="Toggle audio feedback" title="Toggle audio feedback">
           <svg id="audio-icon-on" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2">
@@ -70,17 +70,105 @@
       <button class="vibe-pill" data-vibe="Rock">Rock</button>
       <button class="vibe-pill" data-vibe="Jazz">Jazz</button>
       <button class="vibe-pill" data-vibe="Electronic">Electronic</button>
-      <button class="vibe-pill" data-vibe="Funk / Soul">Soul &amp; Funk</button>
-      <button class="vibe-pill" data-vibe="picks">Host Picks ★</button>
+      <button class="vibe-pill" data-vibe="Funk / Soul">Soul & Funk</button>
     </nav>
 
-    <!-- Listening Room Environment & 3D Wooden Crate -->
-    <main class="crate-stage">
-      <div class="room-spotlight"></div>
-      <div class="tabletop-surface"></div>
+    <!-- Digging Crate: Primary Browsing Stage -->
+    <main class="crate-stage" id="crate-stage">
+      <!-- Dynamic Ambient Backdrop Glow -->
+      <div id="ambient-glow" class="ambient-glow" aria-hidden="true">
+        <img id="ambient-glow-img" class="ambient-glow-img" alt="" />
+        <img id="ambient-glow-img-b" class="ambient-glow-img" alt="" />
+      </div>
 
-      <div class="crate-chassis">
-        <div id="crate-stack" class="crate-stack"></div>
+      <!-- Two-Column Digging Station -->
+      <div class="station-container" id="station-container">
+
+        <!-- Column 1: 3D Vertical Crate Stack -->
+        <div class="station-crate-col">
+          <div class="crate-floor-shadow" aria-hidden="true"></div>
+          <div class="crate-chassis">
+            <div id="crate-stack" class="crate-stack"></div>
+          </div>
+        </div>
+
+        <!-- Column 2: Live Active Metadata (no card, no box, no borders) -->
+        <div class="station-metadata-col" id="station-metadata-col" aria-label="Active album info">
+          <h2 class="meta-title" id="meta-title">Loading...</h2>
+          <p class="meta-artist" id="meta-artist">—</p>
+          <div class="meta-details-row">
+            <span class="meta-year" id="meta-year">—</span>
+            <span class="meta-genres" id="meta-genres"></span>
+          </div>
+
+          <div class="meta-tracklist-preview" id="meta-tracklist-preview"></div>
+
+          <div class="meta-actions">
+            <button id="meta-inspect-btn" class="meta-inspect-btn">
+              Open Sleeve
+              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" fill="none" stroke-width="2">
+                <path d="M5 12h14M12 5l7 7-7 7"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inline Gatefold Inspection Workspace (no modal, transitions inside stage) -->
+      <div class="gatefold-workspace" id="gatefold-workspace" aria-hidden="true">
+        <button class="gatefold-back-btn" id="gatefold-back-btn" aria-label="Back to crate">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2.5">
+            <path d="M19 12H5M12 19l-7-7 7-7"></path>
+          </svg>
+          Back to Crate
+        </button>
+
+        <div class="gatefold-stage">
+          <!-- Left panel: jacket front + sliding vinyl disc -->
+          <div class="gatefold-left">
+            <div class="gatefold-jacket-wrap" id="gatefold-jacket-wrap">
+              <div class="gatefold-jacket">
+                <img class="gatefold-jacket-art" id="gatefold-jacket-art" alt="" />
+                <div class="gatefold-jacket-sheen"></div>
+              </div>
+              <div class="gatefold-disc-slot">
+                <div class="gatefold-vinyl-disc" id="gatefold-vinyl-disc">
+                  <div class="disc-grooves"></div>
+                  <div class="disc-sheen"></div>
+                  <div class="disc-label">
+                    <img class="disc-label-art" id="gatefold-label-art" alt="" />
+                    <div class="spindle-hole"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="gatefold-spin-action">
+              <button id="gatefold-spin-btn" class="gatefold-spin-btn">
+                <span class="btn-spin-icon">●</span> Spin Album
+              </button>
+            </div>
+          </div>
+
+          <!-- Right panel: matte gatefold interior — tracklist & liner notes -->
+          <div class="gatefold-right">
+            <div class="gatefold-header">
+              <h2 class="gatefold-title" id="gatefold-title"></h2>
+              <p class="gatefold-artist" id="gatefold-artist"></p>
+              <span class="gatefold-year" id="gatefold-year"></span>
+            </div>
+
+            <div class="gatefold-tracklist-area">
+              <div class="gatefold-section-label">Tracklist</div>
+              <div class="gatefold-tracklist" id="gatefold-tracklist"></div>
+            </div>
+
+            <div class="gatefold-liner-area">
+              <div class="gatefold-section-label">Liner Notes</div>
+              <div class="gatefold-wiki" id="gatefold-wiki"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -102,64 +190,63 @@
     </div>
   </div>
 
-  <!-- Interactive Vinyl Inspection Showcase Modal -->
-  <aside id="record-modal" class="record-modal" aria-hidden="true">
-    <div class="showcase-container">
-      <button class="modal-close" aria-label="Close album showcase">✕</button>
+  <!-- Now Spinning Ambient Display (full-screen room centerpiece) -->
+  <div class="ambient-turntable" id="ambient-turntable" aria-hidden="true">
+    <div class="ambient-room-glow" id="ambient-room-glow"></div>
 
-      <!-- Left: 12" Jacket & Sliding Vinyl Disc -->
-      <div class="showcase-visual">
-        <div class="jacket-and-disc-stage">
-          <div class="showcase-jacket">
-            <img class="showcase-jacket-art" alt="Album Jacket" />
-            <div class="jacket-spine-shadow"></div>
-            <div class="jacket-mylar-sheen"></div>
+    <div class="ambient-layout">
+      <!-- Turntable platter + tonearm -->
+      <div class="turntable-stage">
+        <div class="turntable-body">
+          <div class="turntable-platter">
+            <div class="turntable-vinyl" id="turntable-vinyl">
+              <div class="disc-grooves"></div>
+              <div class="disc-sheen"></div>
+              <div class="disc-label turntable-label">
+                <img class="disc-label-art" id="turntable-label-art" alt="" />
+                <div class="spindle-hole"></div>
+              </div>
+            </div>
           </div>
-
-          <!-- Real Interactive Grooved Vinyl Disc -->
-          <div class="vinyl-disc" title="Vinyl record">
-            <div class="disc-grooves"></div>
-            <div class="disc-sheen"></div>
-            <div class="disc-label">
-              <img class="disc-label-art" alt="Center Label Art" />
-              <div class="spindle-hole"></div>
+          <div class="tonearm-assembly">
+            <div class="tonearm-pivot"></div>
+            <div class="tonearm" id="tonearm">
+              <div class="tonearm-head"></div>
             </div>
           </div>
         </div>
-
-        <div class="visual-actions">
-          <button id="set-now-spinning-btn" class="btn btn-spin-hero">
-            <span class="btn-spin-icon">●</span> Spin Album
-          </button>
-          <button class="btn btn-secondary btn-back-to-crate">Back to Crate</button>
-        </div>
       </div>
 
-      <!-- Right: Matte Gatefold Liner Notes Card -->
-      <div class="showcase-details">
-        <div class="showcase-header">
-          <h2 class="showcase-title"></h2>
-          <p class="showcase-artist"></p>
-          <span class="showcase-year"></span>
-          <div class="showcase-tags"></div>
+      <!-- Album info -->
+      <div class="ambient-info">
+        <div class="ambient-cover-wrap">
+          <img class="ambient-cover-art" id="ambient-cover-art" alt="" />
         </div>
-
-        <div class="host-note"></div>
-
-        <div class="showcase-section-title">Tracklist</div>
-        <div class="modal-tracklist"></div>
-
-        <div class="showcase-section-title">Liner Notes &amp; History</div>
-        <div class="wiki-body"></div>
+        <div class="ambient-text">
+          <div class="ambient-label">Now Spinning</div>
+          <h2 class="ambient-title" id="ambient-title"></h2>
+          <p class="ambient-artist" id="ambient-artist"></p>
+          <div class="ambient-needle-bar">
+            <div class="ambient-needle-progress" id="ambient-needle-progress"></div>
+          </div>
+          <div class="ambient-timer" id="ambient-timer">Side A</div>
+        </div>
       </div>
     </div>
-  </aside>
+
+    <button class="ambient-exit-btn" id="ambient-exit-btn" aria-label="Return to crate">
+      <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"></path>
+      </svg>
+      Return to Crate
+    </button>
+  </div>
 
   <!-- Slide-out Settings & Sync Drawer -->
   <aside id="settings-drawer" class="settings-drawer" aria-hidden="true">
     <div class="drawer-card">
       <div class="drawer-top">
-        <h3>Collection &amp; Sync</h3>
+        <h3>Collection & Sync</h3>
         <button id="settings-close-btn" class="modal-close" aria-label="Close settings">✕</button>
       </div>
 
@@ -169,7 +256,7 @@
           <p class="settings-desc">Sync your personal vinyl collection directly from Discogs. Rate-limited and cached in your browser.</p>
 
           <label for="discogs-username">Username</label>
-          <input type="text" id="discogs-username" placeholder="e.g. vinylfan42" autocomplete="off" />
+          <input type="text" id="discogs-username" placeholder="vinylfan42" autocomplete="off" />
 
           <label for="discogs-token">Personal Access Token</label>
           <input type="password" id="discogs-token" placeholder="Discogs User Token" autocomplete="off" />

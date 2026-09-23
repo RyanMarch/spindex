@@ -1,29 +1,49 @@
 // app.js - Main application coordinator
-import { openDB, getAllRecords, clearRecords, countRecords, getRecord, upsertRecords } from './db.js';
+import { openDB, getAllRecords, clearRecords, deleteRecords, countRecords, getRecord, upsertRecords } from './db.js';
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
-import { RecordDetailModal } from './notes.js';
-import { syncDiscogsCollection } from './sync.js';
+import { GatefoldController } from './notes.js';
+import { syncDiscogsCollection, enrichTracklistsInBackground, groupTracksBySide } from './sync.js';
 import { soundFx } from './audio.js';
 
-// Service worker registration
-if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.warn('ServiceWorker registration error:', err);
+// Service worker registration: bypass on localhost to prevent stale asset caching during dev
+const isLocalhost = Boolean(
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.hostname.endsWith('.localhost')
+);
+
+if ('serviceWorker' in navigator) {
+  if (isLocalhost) {
+    // Unregister any active service workers and clear caches in local development
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      registrations.forEach((reg) => reg.unregister());
     });
-  });
+    if ('caches' in window) {
+      caches.keys().then((names) => {
+        names.forEach((name) => caches.delete(name));
+      });
+    }
+  } else if (window.location.protocol.startsWith('http')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.warn('ServiceWorker registration error:', err);
+      });
+    });
+  }
 }
 
 class App {
   constructor() {
     this.crate = null;
-    this.detailModal = null;
+    this.gatefold = null;
     this.currentSort = 'artist';
     this.activeVibe = 'all';
     this.allRecords = [];
     this.filteredRecords = [];
     this.nowSpinningRecord = null;
+    this.metaFadeTimeout = null;
+    this.lastMetaRecordId = null;
 
     this.initDOM();
     this.initControllers();
@@ -46,6 +66,22 @@ class App {
 
     this.nowSpinningPill = document.getElementById('now-spinning-pill');
     this.spinText = document.getElementById('spin-text');
+
+    this.glowLayers = [
+      document.getElementById('ambient-glow-img'),
+      document.getElementById('ambient-glow-img-b'),
+    ].filter(Boolean);
+    this.glowActive = -1;
+    this.glowUrl = '';
+
+    // Active metadata column elements
+    this.stationMetadataCol = document.getElementById('station-metadata-col');
+    this.metaTitle = document.getElementById('meta-title');
+    this.metaArtist = document.getElementById('meta-artist');
+    this.metaYear = document.getElementById('meta-year');
+    this.metaGenres = document.getElementById('meta-genres');
+    this.metaTracklist = document.getElementById('meta-tracklist-preview');
+    this.metaInspectBtn = document.getElementById('meta-inspect-btn');
 
     this.settingsDrawer = document.getElementById('settings-drawer');
     this.settingsToggleBtn = document.getElementById('settings-toggle-btn');
@@ -77,9 +113,8 @@ class App {
       (currIndex, total, currentRecord) => this.onCrateIndexChange(currIndex, total, currentRecord)
     );
 
-    const recordModalEl = document.getElementById('record-modal');
-    this.detailModal = new RecordDetailModal(recordModalEl, (record) => {
-      this.setNowSpinning(record);
+    this.gatefold = new GatefoldController({
+      onNowSpinning: (record) => this.setNowSpinning(record),
     });
   }
 
@@ -121,11 +156,21 @@ class App {
       });
     });
 
-    // Now spinning pill click opens modal
+    // Now spinning pill click opens ambient display
     if (this.nowSpinningPill) {
       this.nowSpinningPill.addEventListener('click', () => {
-        if (this.nowSpinningRecord) {
-          this.detailModal.open(this.nowSpinningRecord);
+        if (this.nowSpinningRecord && this.gatefold) {
+          this.gatefold.openAmbientTurntable(this.nowSpinningRecord);
+        }
+      });
+    }
+
+    // Inspect button opens inline gatefold
+    if (this.metaInspectBtn) {
+      this.metaInspectBtn.addEventListener('click', () => {
+        const currentRecord = this.filteredRecords[this.crate.currentIndex];
+        if (currentRecord) {
+          this.openRecordDetail(currentRecord);
         }
       });
     }
@@ -168,6 +213,7 @@ class App {
       this.resetDemoBtn.addEventListener('click', async () => {
         this.resetDemoBtn.disabled = true;
         this.resetDemoBtn.textContent = 'Reloading...';
+        await clearRecords();
         await resetToMockRecords();
         await this.loadAllRecords();
         this.resetDemoBtn.textContent = 'Demo Reloaded!';
@@ -219,13 +265,30 @@ class App {
       await upsertRecords(MOCK_RECORDS);
     }
 
+    const existing = await getAllRecords();
+    const isMock = (r) => String(r.id).startsWith('discogs_mock_');
+    if (existing.some((r) => !isMock(r)) && existing.some(isMock)) {
+      await deleteRecords(existing.filter(isMock).map((r) => r.id));
+    }
+
     await this.restoreNowSpinning();
     await this.loadAllRecords();
+    this.fillMissingTracklists();
   }
 
   async loadAllRecords() {
     this.allRecords = await getAllRecords('by_artist');
     this.applyFiltersAndSort();
+  }
+
+  fillMissingTracklists() {
+    const token = localStorage.getItem('discogs_token');
+    if (!token) return;
+
+    const missing = this.allRecords.filter((r) => r.discogsId && (!r.tracklist || r.tracklist.length === 0));
+    if (missing.length === 0) return;
+
+    enrichTracklistsInBackground(missing, token).then(() => this.loadAllRecords());
   }
 
   applyFiltersAndSort() {
@@ -262,15 +325,123 @@ class App {
 
     this.filteredRecords = list;
     this.crate.setRecords(list, this.currentSort);
+    if (this.nowSpinningRecord && this.crate) {
+      this.crate.setNowSpinningId(this.nowSpinningRecord.id);
+    }
+    if (list.length > 0) {
+      this.updateActiveMetadata(list[0]);
+    } else {
+      this.updateActiveMetadata(null);
+    }
   }
 
   onCrateIndexChange(currIndex, total, currentRecord) {
-    // Index change hook for external listeners if needed
+    const nextId = currentRecord?.id || null;
+    if (nextId === this.lastMetaRecordId) {
+      this.updateActiveMetadata(currentRecord);
+      return;
+    }
+
+    if (this.stationMetadataCol) {
+      clearTimeout(this.metaFadeTimeout);
+      this.stationMetadataCol.classList.add('is-updating');
+      this.metaFadeTimeout = setTimeout(() => {
+        this.updateActiveMetadata(currentRecord);
+        this.stationMetadataCol.classList.remove('is-updating');
+      }, 140);
+    } else {
+      this.updateActiveMetadata(currentRecord);
+    }
+  }
+
+  setGlow(url) {
+    if (this.glowLayers.length < 2 || url === this.glowUrl) return;
+    this.glowUrl = url;
+
+    if (!url) {
+      this.glowLayers.forEach((l) => { l.style.opacity = '0'; });
+      return;
+    }
+
+    const next = (this.glowActive + 1) % 2;
+    const incoming = this.glowLayers[next];
+    const outgoing = this.glowLayers[this.glowActive];
+    const show = () => {
+      if (this.glowUrl !== url) return;
+      incoming.style.opacity = '0.32';
+      if (outgoing) outgoing.style.opacity = '0';
+      this.glowActive = next;
+    };
+
+    incoming.onload = show;
+    incoming.src = url;
+    if (incoming.complete && incoming.naturalWidth > 0) show();
+  }
+
+  updateActiveMetadata(record) {
+    this.lastMetaRecordId = record?.id || null;
+
+    this.setGlow(record?.artwork?.highRes || record?.artwork?.thumbnail || '');
+
+    if (!record) {
+      if (this.metaTitle) this.metaTitle.textContent = 'No records in crate';
+      if (this.metaArtist) this.metaArtist.textContent = '—';
+      if (this.metaYear) this.metaYear.textContent = '';
+      if (this.metaGenres) this.metaGenres.innerHTML =  /*html*/ '';
+      if (this.metaTracklist) this.metaTracklist.innerHTML =  /*html*/ '';
+      return;
+    }
+
+    if (this.metaTitle) this.metaTitle.textContent = record.title || 'Untitled';
+    if (this.metaArtist) this.metaArtist.textContent = record.artist || 'Unknown Artist';
+    if (this.metaYear) this.metaYear.textContent = record.year ? String(record.year) : '';
+
+    if (this.metaGenres) {
+      const tags = [...(record.genres || []), ...(record.styles || [])].slice(0, 3);
+      this.metaGenres.innerHTML =  /*html*/ tags
+        .map((t) => `<span class="meta-genre-tag">${this.escapeHTML(t)}</span>`)
+        .join('');
+    }
+
+    if (this.metaTracklist) {
+      this.metaTracklist.innerHTML =  /*html*/ this.renderMetaTracklistHTML(record.tracklist || []);
+    }
+  }
+
+  renderMetaTracklistHTML(tracks) {
+    if (!tracks || tracks.length === 0) return '';
+
+    const sides = groupTracksBySide(tracks);
+
+    if (sides && sides.length > 0) {
+      let html = '<div class="meta-sides-grid">';
+      for (const side of sides) {
+        html += `<div class="meta-side-col"><div class="meta-side-hdr">${this.escapeHTML(side.title)}</div><ul class="meta-tracks">`;
+        for (const t of side.tracks) {
+          html += `<li><span class="mt-pos">${this.escapeHTML(t.position || '·')}</span><span class="mt-name">${this.escapeHTML(t.title)}</span></li>`;
+        }
+        html += '</ul></div>';
+      }
+      html += '</div>';
+      return html;
+    }
+
+    return `<ul class="meta-tracks">${tracks.map((t) =>
+      `<li><span class="mt-pos">${this.escapeHTML(t.position || '·')}</span><span class="mt-name">${this.escapeHTML(t.title)}</span></li>`
+    ).join('')}</ul>`;
+  }
+
+  escapeHTML(str = '') {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   openRecordDetail(record) {
-    if (this.detailModal) {
-      this.detailModal.open(record);
+    if (this.gatefold) {
+      this.gatefold.openGatefold(record);
     }
   }
 
@@ -282,6 +453,9 @@ class App {
       localStorage.removeItem('now_spinning_id');
     }
     this.updateNowSpinningUI();
+    if (this.crate) {
+      this.crate.setNowSpinningId(record ? record.id : null);
+    }
   }
 
   async restoreNowSpinning() {
@@ -291,6 +465,9 @@ class App {
       if (rec) {
         this.nowSpinningRecord = rec;
         this.updateNowSpinningUI();
+        if (this.crate) {
+          this.crate.setNowSpinningId(rec.id);
+        }
       }
     }
   }
@@ -325,6 +502,9 @@ class App {
       await syncDiscogsCollection(username, token, ({ page, totalPages, count }) => {
         this.setSyncStatus(`Syncing page ${page} of ${totalPages} (${count} albums)...`, '');
       });
+
+      const stale = (await getAllRecords()).filter((r) => String(r.id).startsWith('discogs_mock_'));
+      if (stale.length > 0) await deleteRecords(stale.map((r) => r.id));
 
       this.setSyncStatus('Sync complete! Crate updated.', 'success');
       await this.loadAllRecords();

@@ -27,12 +27,31 @@ for (const file of requiredFiles) {
 }
 
 // 2. Test parseSortArtist from sync.js
-const { parseSortArtist } = await import('../public/js/sync.js');
+const { parseSortArtist, groupTracksBySide } = await import('../public/js/sync.js');
 assert.equal(parseSortArtist('The Beatles'), 'Beatles, The');
 assert.equal(parseSortArtist('The Cure'), 'Cure, The');
 assert.equal(parseSortArtist('Duran Duran (2)'), 'Duran Duran');
 assert.equal(parseSortArtist('Miles Davis'), 'Miles Davis');
 assert.equal(parseSortArtist('The The (3)'), 'The, The');
+
+// Test groupTracksBySide with multi-disc sides (A, B, C, D)
+const testTracks = [
+  { position: 'A1', title: 'Song A1' },
+  { position: 'A2', title: 'Song A2' },
+  { position: 'B1', title: 'Song B1' },
+  { position: 'C1', title: 'Song C1' },
+  { position: 'D1', title: 'Song D1' },
+];
+const grouped = groupTracksBySide(testTracks);
+assert.equal(grouped.length, 4);
+assert.equal(grouped[0].title, 'Side A');
+assert.equal(grouped[1].title, 'Side B');
+assert.equal(grouped[2].title, 'Side C');
+assert.equal(grouped[3].title, 'Side D');
+assert.equal(grouped[0].tracks.length, 2);
+assert.equal(grouped[2].tracks[0].title, 'Song C1');
+assert.equal(groupTracksBySide([]), null);
+assert.equal(groupTracksBySide([{ position: '1', title: 'Track 1' }]), null);
 
 // 3. Test mock data records schema integrity & verified artwork
 const { MOCK_RECORDS } = await import('../public/js/mock-data.js');

@@ -10,10 +10,27 @@ export class CrateController {
     this.records = [];
     this.sleeveElements = [];
     this.currentIndex = 0;
-    this.visibleRange = 24; // Keep full crate collection visible without flying off
+    this.visibleRange = 45; // Below-stack keeps spreading, so anything deeper is off screen
     this.sortKey = 'artist';
+    this.nowSpinningId = null;
+    this.pos = 0;
+    this.vel = 0;
+    this.raf = null;
+    this.lastT = 0;
+    this.size = 420;
+    this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    window.addEventListener('resize', () => {
+      this.measure();
+      this.render();
+    });
 
     this.bindEvents();
+  }
+
+  setNowSpinningId(id) {
+    this.nowSpinningId = id;
+    this.updatePositions();
   }
 
   getStackStep(k) {
@@ -21,11 +38,14 @@ export class CrateController {
     if (k === 1) return 1.0;
     if (k === 2) return 1.85;
     if (k === 3) return 2.55;
-    let sum = 2.55;
-    for (let i = 4; i <= k; i++) {
-      sum += 0.55 * Math.pow(0.75, i - 4);
-    }
-    return sum;
+    return 2.55 + 2.2 * (1 - Math.pow(0.75, k - 3));
+  }
+
+  getBelowYStep(k) {
+    if (k <= 0) return 0;
+    if (k === 1) return 1.0;
+    if (k === 2) return 1.9;
+    return 2.75 + 0.85 * (k - 3);
   }
 
   setRecords(records, sortKey = 'artist') {
@@ -65,25 +85,41 @@ export class CrateController {
       el.className = 'sleeve';
       el.dataset.index = String(i);
 
-      // Record shop category divider tab
-      const tabLabel = this.getDividerLabel(i);
-      if (tabLabel) {
-        const tabEl = document.createElement('div');
-        tabEl.className = 'crate-divider-tab';
-        const tabSlot = (i % 3);
-        tabEl.classList.add(`tab-slot-${tabSlot}`);
-        tabEl.textContent = tabLabel;
-        el.appendChild(tabEl);
-      }
+      // Peeking vinyl disc slot for Now Spinning albums
+      const discSlot = document.createElement('div');
+      discSlot.className = 'crate-disc-slot';
 
-      // Host pick sticky note badge
-      if (record.notes) {
-        const noteEl = document.createElement('div');
-        noteEl.className = 'staff-pick-badge';
-        noteEl.title = record.notes;
-        noteEl.innerHTML =  /*html*/ '<span>Host Pick</span>';
-        el.appendChild(noteEl);
-      }
+      const vinylDisc = document.createElement('div');
+      vinylDisc.className = 'crate-vinyl-disc';
+
+      const discGrooves = document.createElement('div');
+      discGrooves.className = 'disc-grooves';
+
+      const discSheen = document.createElement('div');
+      discSheen.className = 'disc-sheen';
+
+      const discLabel = document.createElement('div');
+      discLabel.className = 'disc-label';
+
+      const discLabelArt = document.createElement('img');
+      discLabelArt.className = 'disc-label-art';
+      discLabelArt.src = record.artwork?.thumbnail || record.artwork?.highRes || '';
+      discLabelArt.alt = '';
+      discLabelArt.loading = 'lazy';
+      discLabelArt.onerror = () => {
+        discLabelArt.style.display = 'none';
+      };
+
+      const spindleHole = document.createElement('div');
+      spindleHole.className = 'spindle-hole';
+
+      discLabel.appendChild(discLabelArt);
+      discLabel.appendChild(spindleHole);
+      vinylDisc.appendChild(discGrooves);
+      vinylDisc.appendChild(discSheen);
+      vinylDisc.appendChild(discLabel);
+      discSlot.appendChild(vinylDisc);
+      el.appendChild(discSlot);
 
       // Solid jacket cover wrapper
       const coverWrap = document.createElement('div');
@@ -105,9 +141,17 @@ export class CrateController {
 
       coverWrap.appendChild(img);
 
-      // Faux spine accent
+      // Faux spine with scannable typography
       const spine = document.createElement('div');
       spine.className = 'faux-spine';
+      const spineTitle = document.createElement('span');
+      spineTitle.className = 'spine-title';
+      spineTitle.textContent = record.title || '';
+      const spineArtist = document.createElement('span');
+      spineArtist.className = 'spine-artist';
+      spineArtist.textContent = record.artist || '';
+      spine.appendChild(spineTitle);
+      spine.appendChild(spineArtist);
       coverWrap.appendChild(spine);
 
       // Dynamic surface sheen
@@ -131,6 +175,8 @@ export class CrateController {
       this.sleeveElements.push({ el, record, index: i });
     }
 
+    this.pos = this.currentIndex;
+    this.vel = 0;
     this.updatePositions();
   }
 
@@ -146,29 +192,125 @@ export class CrateController {
       this.onIndexChange(this.currentIndex, total, this.records[this.currentIndex]);
     }
 
-    // Update continuous positions without destroying elements so CSS transitions animate smoothly
+    this.measure();
+
+    if (this.reducedMotion) {
+      this.pos = this.currentIndex;
+      this.vel = 0;
+      this.render();
+    } else {
+      this.render();
+      this.kick();
+    }
+  }
+
+  measure() {
+    this.size = this.container.offsetWidth || this.size;
+  }
+
+  kick() {
+    if (this.raf) return;
+    this.lastT = null;
+    this.raf = requestAnimationFrame((t) => this.tick(t));
+  }
+
+  tick(t) {
+    const dt = this.lastT === null ? 0 : Math.min(Math.max((t - this.lastT) / 1000, 0), 1 / 30);
+    this.lastT = t;
+
+    // Critically damped spring: velocity is continuous, so motion eases in and rapid inputs blend together
+    const omega = 12;
+    const steps = 4;
+    const h = dt / steps;
+    for (let i = 0; i < steps; i++) {
+      const acc = omega * omega * (this.currentIndex - this.pos) - 2 * omega * this.vel;
+      this.vel += acc * h;
+      this.pos += this.vel * h;
+    }
+
+    const settled = Math.abs(this.currentIndex - this.pos) < 0.0008 && Math.abs(this.vel) < 0.004;
+    if (settled) {
+      this.pos = this.currentIndex;
+      this.vel = 0;
+    }
+
+    this.render();
+    this.raf = settled ? null : requestAnimationFrame((n) => this.tick(n));
+  }
+
+  lerpStep(fn, k) {
+    const f = Math.floor(k);
+    return fn(f) + (fn(f + 1) - fn(f)) * (k - f);
+  }
+
+  poseAt(k, below) {
+    const step = this.lerpStep((n) => this.getStackStep(n), k);
+    const size = this.size;
+    if (below) {
+      const yStep = this.lerpStep((n) => this.getBelowYStep(n), k);
+      return {
+        y: size * 0.74 + yStep * 50,
+        z: -175 + step * 18,
+        rx: -56,
+        s: 0.97 - step * 0.02,
+        b: 0.94 - step * 0.08,
+      };
+    }
+    return {
+      y: -step * 56 - size * 0.28,
+      z: size * -0.46 - step * 25,
+      rx: -64,
+      s: 0.96 - step * 0.02,
+      b: 0.94 - step * 0.08,
+    };
+  }
+
+  pose(offset) {
+    const abs = Math.abs(offset);
+    const below = offset > 0;
+    if (abs >= 1) return this.poseAt(abs, below);
+    const p = this.poseAt(1, below);
+    return {
+      y: p.y * abs,
+      z: p.z * abs,
+      rx: p.rx * abs,
+      s: 1 + (p.s - 1) * abs,
+      b: 1 + (p.b - 1) * abs,
+    };
+  }
+
+  // Fixed layer bands, back to front: above-stack (<=48), album in transit to/from the active slot (55),
+  // lower stack (>=63, deeper in front), and the active album (100) once it is essentially at rest.
+  zFor(offset) {
+    const abs = Math.abs(offset);
+    if (abs < 0.1) return 100;
+    if (offset < 0) return Math.max(2, 48 - 2 * Math.floor(abs));
+    if (offset < 1) return 55;
+    return Math.min(97, 61 + 2 * Math.floor(offset));
+  }
+
+  render() {
     for (const item of this.sleeveElements) {
-      const offset = item.index - this.currentIndex;
-      const absOffset = Math.abs(offset);
-      const stackStep = this.getStackStep(absOffset);
+      const offset = item.index - this.pos;
+      const rounded = Math.round(offset);
+      const absRounded = Math.abs(rounded);
+      const isNowSpinning = Boolean(this.nowSpinningId && item.record.id === this.nowSpinningId);
+      const out = absRounded > this.visibleRange + 1;
 
-      item.el.style.setProperty('--offset', String(offset));
-      item.el.style.setProperty('--abs-offset', String(absOffset));
-      item.el.style.setProperty('--stack-step', String(stackStep.toFixed(4)));
-
-      if (absOffset > this.visibleRange + 1) {
-        item.el.className = offset < 0 ? 'sleeve out-of-range flow-above' : 'sleeve out-of-range flow-below';
-        item.el.style.zIndex = '0';
-      } else if (offset === 0) {
-        item.el.className = 'sleeve active';
-        item.el.style.zIndex = '100';
-      } else if (offset < 0) {
-        item.el.className = 'sleeve flow-above';
-        item.el.style.zIndex = String(Math.max(1, 99 - absOffset * 2));
-      } else {
-        item.el.className = 'sleeve flow-below';
-        item.el.style.zIndex = String(Math.min(99, 50 + offset * 2));
+      const state = `${out ? 'o' : ''}${rounded === 0 ? 'a' : rounded < 0 ? 'u' : 'd'}${isNowSpinning ? 's' : ''}`;
+      if (item.state !== state) {
+        item.state = state;
+        const dir = rounded < 0 ? 'flow-above' : 'flow-below';
+        item.el.className = `sleeve ${out ? `out-of-range ${dir}` : rounded === 0 ? 'active' : dir}${isNowSpinning ? ' now-spinning' : ''}`;
       }
+
+      if (out) continue;
+
+      const p = this.pose(offset);
+      item.el.style.transform = `perspective(1200px) translate3d(0, ${p.y.toFixed(2)}px, ${p.z.toFixed(2)}px) rotateX(${p.rx.toFixed(3)}deg) scale(${p.s.toFixed(4)})`;
+      item.el.style.filter = `brightness(${p.b.toFixed(3)})`;
+
+      item.el.style.zIndex = String(this.zFor(offset));
     }
   }
 
@@ -222,7 +364,7 @@ export class CrateController {
     // Keyboard navigation: Up/Left = prev, Down/Right = next
     window.addEventListener('keydown', (e) => {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
-      if (document.querySelector('.record-modal.open') || document.querySelector('.settings-drawer.open')) return;
+      if (document.querySelector('.gatefold-workspace.open') || document.querySelector('.ambient-turntable.open') || document.querySelector('.settings-drawer.open')) return;
 
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
         e.preventDefault();
@@ -267,7 +409,7 @@ export class CrateController {
     // Vertical mouse wheel with momentum debounce
     let wheelDebounce = false;
     window.addEventListener('wheel', (e) => {
-      if (document.querySelector('.record-modal.open') || document.querySelector('.settings-drawer.open')) return;
+      if (document.querySelector('.gatefold-workspace.open') || document.querySelector('.ambient-turntable.open') || document.querySelector('.settings-drawer.open')) return;
       if (wheelDebounce) return;
 
       const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;

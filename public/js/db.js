@@ -114,3 +114,14 @@ export async function countRecords() {
     request.onerror = () => reject(request.error);
   });
 }
+
+export async function deleteRecords(ids) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    ids.forEach((id) => store.delete(id));
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}

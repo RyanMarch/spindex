@@ -1,184 +1,149 @@
-// notes.js - Interactive vinyl inspection showcase and liner notes
+// notes.js - Inline Gatefold inspection & Now Spinning ambient display controller
 import { updateRecord } from './db.js';
 import { soundFx } from './audio.js';
+import { groupTracksBySide } from './sync.js';
 
-export class RecordDetailModal {
-  constructor(modalEl, onNowSpinning) {
-    this.modal = modalEl;
+export class GatefoldController {
+  constructor({ onNowSpinning } = {}) {
     this.activeRecord = null;
     this.onNowSpinning = onNowSpinning;
-    this.isSpinning = false;
+
+    // Gatefold elements
+    this.workspace = document.getElementById('gatefold-workspace');
+    this.backBtn = document.getElementById('gatefold-back-btn');
+    this.jacketArt = document.getElementById('gatefold-jacket-art');
+    this.labelArt = document.getElementById('gatefold-label-art');
+    this.vinylDisc = document.getElementById('gatefold-vinyl-disc');
+    this.titleEl = document.getElementById('gatefold-title');
+    this.artistEl = document.getElementById('gatefold-artist');
+    this.yearEl = document.getElementById('gatefold-year');
+    this.tracklistEl = document.getElementById('gatefold-tracklist');
+    this.wikiEl = document.getElementById('gatefold-wiki');
+    this.spinBtn = document.getElementById('gatefold-spin-btn');
+
+    // Ambient turntable elements
+    this.ambientEl = document.getElementById('ambient-turntable');
+    this.ambientRoomGlow = document.getElementById('ambient-room-glow');
+    this.turntableVinyl = document.getElementById('turntable-vinyl');
+    this.turntableLabelArt = document.getElementById('turntable-label-art');
+    this.ambientCoverArt = document.getElementById('ambient-cover-art');
+    this.ambientTitle = document.getElementById('ambient-title');
+    this.ambientArtist = document.getElementById('ambient-artist');
+    this.ambientTimer = document.getElementById('ambient-timer');
+    this.ambientProgress = document.getElementById('ambient-needle-progress');
+    this.ambientExitBtn = document.getElementById('ambient-exit-btn');
+
+    this._timerInterval = null;
+    this._timerSeconds = 0;
+
     this.bindEvents();
   }
 
   bindEvents() {
-    const closeBtns = this.modal.querySelectorAll('.modal-close, .btn-back-to-crate');
-    closeBtns.forEach((btn) => {
-      btn.addEventListener('click', () => this.close());
-    });
+    if (this.backBtn) {
+      this.backBtn.addEventListener('click', () => this.closeGatefold());
+    }
 
-    this.modal.addEventListener('click', (e) => {
-      if (e.target === this.modal) this.close();
-    });
-
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.modal.classList.contains('open')) {
-        this.close();
-      }
-    });
-
-    const spinBtn = this.modal.querySelector('#set-now-spinning-btn');
-    if (spinBtn) {
-      spinBtn.addEventListener('click', () => {
+    if (this.spinBtn) {
+      this.spinBtn.addEventListener('click', () => {
         if (!this.activeRecord) return;
-
-        this.isSpinning = true;
         soundFx.playNeedleDrop();
-
-        const discEl = this.modal.querySelector('.vinyl-disc');
-        if (discEl) discEl.classList.add('spinning');
-
-        if (this.onNowSpinning) {
-          this.onNowSpinning(this.activeRecord);
-        }
-
-        spinBtn.textContent = 'Now Spinning';
-        spinBtn.classList.add('btn-active');
+        if (this.onNowSpinning) this.onNowSpinning(this.activeRecord);
+        this.closeGatefold();
+        this.openAmbientTurntable(this.activeRecord);
       });
     }
+
+    if (this.ambientExitBtn) {
+      this.ambientExitBtn.addEventListener('click', () => this.closeAmbientTurntable());
+    }
+
+    // Swipe-down to close gatefold
+    let touchStartY = 0;
+    if (this.workspace) {
+      this.workspace.addEventListener('touchstart', (e) => {
+        touchStartY = e.touches[0].clientY;
+      }, { passive: true });
+
+      this.workspace.addEventListener('touchend', (e) => {
+        const deltaY = e.changedTouches[0].clientY - touchStartY;
+        if (deltaY > 60) this.closeGatefold();
+      }, { passive: true });
+    }
+
+    // Escape key
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (this.workspace?.classList.contains('open')) this.closeGatefold();
+        else if (this.ambientEl?.classList.contains('open')) this.closeAmbientTurntable();
+      }
+    });
   }
 
-  async open(record) {
+  async openGatefold(record) {
     this.activeRecord = record;
-    this.isSpinning = false;
-    this.renderBasic();
-    this.modal.classList.add('open');
-    this.modal.setAttribute('aria-hidden', 'false');
+    this.renderGatefoldBasic(record);
 
-    // Trigger disc slide-out slightly after modal reveal for physical effect
+    if (this.workspace) {
+      this.workspace.classList.add('open');
+      this.workspace.setAttribute('aria-hidden', 'false');
+    }
+
+    // Trigger vinyl disc slide-out slightly after open
     setTimeout(() => {
-      const discEl = this.modal.querySelector('.vinyl-disc');
-      if (discEl) discEl.classList.add('ejected');
-    }, 120);
+      if (this.vinylDisc) this.vinylDisc.classList.add('ejected');
+    }, 180);
 
     if (!record.context) {
-      await this.fetchWikimediaLinerNotes(record);
+      await this.fetchLinerNotes(record);
     } else {
-      const wikiContainer = this.modal.querySelector('.wiki-body');
-      if (wikiContainer) {
-        wikiContainer.innerHTML =  /*html*/ record.context.wikiExtract || '<p class="wiki-empty">No additional liner notes available.</p>';
-      }
+      this.renderLinerNotes(record.context);
     }
   }
 
-  close() {
-    const discEl = this.modal.querySelector('.vinyl-disc');
-    if (discEl) {
-      discEl.classList.remove('ejected', 'spinning');
-    }
-    this.modal.classList.remove('open');
-    this.modal.setAttribute('aria-hidden', 'true');
-  }
+  closeGatefold() {
+    if (this.vinylDisc) this.vinylDisc.classList.remove('ejected');
 
-  renderBasic() {
-    const { artist, title, year, artwork, notes, tracklist, genres, styles } = this.activeRecord;
-
-    const coverEl = this.modal.querySelector('.showcase-jacket-art');
-    const labelCoverEl = this.modal.querySelector('.disc-label-art');
-    const titleEl = this.modal.querySelector('.showcase-title');
-    const artistEl = this.modal.querySelector('.showcase-artist');
-    const yearEl = this.modal.querySelector('.showcase-year');
-    const noteEl = this.modal.querySelector('.host-note');
-    const tagsEl = this.modal.querySelector('.showcase-tags');
-    const tracklistEl = this.modal.querySelector('.modal-tracklist');
-    const wikiContainer = this.modal.querySelector('.wiki-body');
-    const spinBtn = this.modal.querySelector('#set-now-spinning-btn');
-
-    const artUrl = artwork?.highRes || artwork?.thumbnail || '';
-
-    if (coverEl) {
-      coverEl.src = artUrl;
-      coverEl.alt = `${artist} - ${title}`;
-    }
-
-    if (labelCoverEl) {
-      labelCoverEl.src = artUrl;
-    }
-
-    if (titleEl) titleEl.textContent = title;
-    if (artistEl) artistEl.textContent = artist;
-    if (yearEl) yearEl.textContent = year ? `Original Release: ${year}` : '';
-
-    if (spinBtn) {
-      spinBtn.textContent = 'Spin Album';
-      spinBtn.classList.remove('btn-active');
-    }
-
-    if (noteEl) {
-      if (notes) {
-        noteEl.innerHTML =  /*html*/ `<span class="note-label">Host Pick Recommendation</span><p>“${this.escapeHTML(notes)}”</p>`;
-        noteEl.style.display = 'block';
-      } else {
-        noteEl.innerHTML =  /*html*/ '';
-        noteEl.style.display = 'none';
-      }
-    }
-
-    if (tagsEl) {
-      const allTags = [...(genres || []), ...(styles || [])];
-      if (allTags.length > 0) {
-        tagsEl.innerHTML =  /*html*/ allTags.map((tag) => `<span class="tag-pill">${this.escapeHTML(tag)}</span>`).join('');
-        tagsEl.style.display = 'flex';
-      } else {
-        tagsEl.innerHTML =  /*html*/ '';
-        tagsEl.style.display = 'none';
-      }
-    }
-
-    if (tracklistEl) {
-      if (tracklist && tracklist.length > 0) {
-        tracklistEl.innerHTML =  /*html*/ this.renderTracklistHTML(tracklist);
-        tracklistEl.style.display = 'block';
-      } else {
-        tracklistEl.innerHTML =  /*html*/ '';
-        tracklistEl.style.display = 'none';
-      }
-    }
-
-    if (wikiContainer) {
-      wikiContainer.innerHTML =  /*html*/ '<p class="wiki-loading">Reading from archives...</p>';
+    if (this.workspace) {
+      this.workspace.classList.remove('open');
+      this.workspace.setAttribute('aria-hidden', 'true');
     }
   }
 
-  renderTracklistHTML(tracks) {
-    const sideA = tracks.filter((t) => t.position && t.position.startsWith('A'));
-    const sideB = tracks.filter((t) => t.position && t.position.startsWith('B'));
+  renderGatefoldBasic(record) {
+    const artUrl = record.artwork?.highRes || record.artwork?.thumbnail || '';
 
-    if (sideA.length > 0 || sideB.length > 0) {
-      let html = '<div class="sides-grid">';
-      if (sideA.length > 0) {
-        html += '<div class="side-col"><div class="side-header"><span class="side-indicator">A</span><h4>Side One</h4></div><ul>';
-        sideA.forEach((t) => {
-          html += `<li><span class="track-pos">${this.escapeHTML(t.position)}</span> <span class="track-name">${this.escapeHTML(t.title)}</span> <span class="track-time">${this.escapeHTML(t.duration || '')}</span></li>`;
-        });
-        html += '</ul></div>';
-      }
-      if (sideB.length > 0) {
-        html += '<div class="side-col"><div class="side-header"><span class="side-indicator">B</span><h4>Side Two</h4></div><ul>';
-        sideB.forEach((t) => {
-          html += `<li><span class="track-pos">${this.escapeHTML(t.position)}</span> <span class="track-name">${this.escapeHTML(t.title)}</span> <span class="track-time">${this.escapeHTML(t.duration || '')}</span></li>`;
-        });
-        html += '</ul></div>';
-      }
-      html += '</div>';
-      return html;
+    if (this.jacketArt) {
+      this.jacketArt.src = artUrl;
+      this.jacketArt.alt = `${record.artist} – ${record.title}`;
+    }
+    if (this.labelArt) this.labelArt.src = artUrl;
+
+    if (this.titleEl) this.titleEl.textContent = record.title || '';
+    if (this.artistEl) this.artistEl.textContent = record.artist || '';
+    if (this.yearEl) this.yearEl.textContent = record.year ? `${record.year}` : '';
+
+    if (this.tracklistEl) {
+      this.tracklistEl.innerHTML =  /*html*/ this.renderTracklistHTML(record.tracklist || []);
     }
 
-    return `<ul>${tracks.map((t) => `<li><span class="track-pos">${this.escapeHTML(t.position || '')}</span> <span class="track-name">${this.escapeHTML(t.title)}</span> <span class="track-time">${this.escapeHTML(t.duration || '')}</span></li>`).join('')}</ul>`;
+    if (this.wikiEl) {
+      this.wikiEl.innerHTML =  /*html*/ '<p class="gatefold-loading">Reading from archives...</p>';
+    }
+
+    if (this.spinBtn) {
+      this.spinBtn.textContent = '● Spin Album';
+      this.spinBtn.classList.remove('active');
+    }
   }
 
-  async fetchWikimediaLinerNotes(record) {
-    const wikiContainer = this.modal.querySelector('.wiki-body');
+  renderLinerNotes(context) {
+    if (this.wikiEl) {
+      this.wikiEl.innerHTML =  /*html*/ context.wikiExtract || '<p class="gatefold-empty">No additional sleeve notes found in the archives.</p>';
+    }
+  }
+
+  async fetchLinerNotes(record) {
     try {
       const searchTarget = encodeURIComponent(`${record.artist} ${record.title}`);
       let res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${searchTarget}`);
@@ -188,7 +153,7 @@ export class RecordDetailModal {
         res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${artistTarget}`);
       }
 
-      if (!res.ok) throw new Error('No Wikimedia summary found');
+      if (!res.ok) throw new Error('No summary found');
 
       const data = await res.json();
       const context = {
@@ -198,17 +163,95 @@ export class RecordDetailModal {
       };
 
       await updateRecord(record.id, { context });
+
       if (this.activeRecord && this.activeRecord.id === record.id) {
         this.activeRecord.context = context;
-        if (wikiContainer) {
-          wikiContainer.innerHTML =  /*html*/ context.wikiExtract;
-        }
+        this.renderLinerNotes(context);
       }
     } catch {
-      if (wikiContainer) {
-        wikiContainer.innerHTML =  /*html*/ '<p class="wiki-empty">No additional sleeve notes found in the archives.</p>';
+      if (this.wikiEl) {
+        this.wikiEl.innerHTML =  /*html*/ '<p class="gatefold-empty">No additional sleeve notes found in the archives.</p>';
       }
     }
+  }
+
+  renderTracklistHTML(tracks) {
+    if (!tracks || tracks.length === 0) {
+      return '<p class="gatefold-empty">No tracklist provided.</p>';
+    }
+
+    const sides = groupTracksBySide(tracks);
+
+    if (sides && sides.length > 0) {
+      let html = '<div class="gatefold-sides-grid">';
+      for (const side of sides) {
+        html += `<div class="gatefold-side-col"><div class="gatefold-side-hdr">${this.escapeHTML(side.title)}</div><ul class="gatefold-tracks">`;
+        for (const t of side.tracks) {
+          html += `<li><span class="gf-tpos">${this.escapeHTML(t.position || '·')}</span><span class="gf-tname">${this.escapeHTML(t.title)}</span><span class="gf-ttime">${this.escapeHTML(t.duration || '')}</span></li>`;
+        }
+        html += '</ul></div>';
+      }
+      html += '</div>';
+      return html;
+    }
+
+    return `<ul class="gatefold-tracks">${tracks.map((t) =>
+      `<li><span class="gf-tpos">${this.escapeHTML(t.position || '·')}</span><span class="gf-tname">${this.escapeHTML(t.title)}</span><span class="gf-ttime">${this.escapeHTML(t.duration || '')}</span></li>`
+    ).join('')}</ul>`;
+  }
+
+  // --------------------------------------------------------
+  // Ambient Turntable Display
+  // --------------------------------------------------------
+
+  openAmbientTurntable(record) {
+    const artUrl = record.artwork?.highRes || record.artwork?.thumbnail || '';
+
+    if (this.turntableLabelArt) this.turntableLabelArt.src = artUrl;
+    if (this.ambientCoverArt) {
+      this.ambientCoverArt.src = artUrl;
+      this.ambientCoverArt.alt = `${record.artist} – ${record.title}`;
+    }
+    if (this.ambientTitle) this.ambientTitle.textContent = record.title || '';
+    if (this.ambientArtist) this.ambientArtist.textContent = record.artist || '';
+    if (this.ambientTimer) this.ambientTimer.textContent = 'Side A';
+    if (this.ambientProgress) this.ambientProgress.style.width = '0%';
+    if (this.ambientRoomGlow) {
+      this.ambientRoomGlow.style.backgroundImage = `url(${artUrl})`;
+    }
+
+    if (this.turntableVinyl) this.turntableVinyl.classList.add('spinning');
+
+    this._timerSeconds = 0;
+    clearInterval(this._timerInterval);
+    this._timerInterval = setInterval(() => this._tickTimer(), 1000);
+
+    if (this.ambientEl) {
+      this.ambientEl.classList.add('open');
+      this.ambientEl.setAttribute('aria-hidden', 'false');
+    }
+  }
+
+  closeAmbientTurntable() {
+    clearInterval(this._timerInterval);
+
+    if (this.turntableVinyl) this.turntableVinyl.classList.remove('spinning');
+
+    if (this.ambientEl) {
+      this.ambientEl.classList.remove('open');
+      this.ambientEl.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  _tickTimer() {
+    this._timerSeconds++;
+    const m = Math.floor(this._timerSeconds / 60).toString().padStart(2, '0');
+    const s = (this._timerSeconds % 60).toString().padStart(2, '0');
+    if (this.ambientTimer) this.ambientTimer.textContent = `${m}:${s}`;
+
+    // Animate needle progress bar (loops at 20 min per side)
+    const pct = (this._timerSeconds % 1200) / 1200 * 100;
+    if (this.ambientProgress) this.ambientProgress.style.width = `${pct}%`;
   }
 
   escapeHTML(str = '') {
