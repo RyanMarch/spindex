@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler pages dev public --port 8780",
     "lint:syntax": "node tests/syntax-test.mjs",
-    "test": "npm run lint:syntax && node tests/basic-test.js && node tests/oauth-test.mjs && node tests/cache-test.mjs && node tests/vinyl-test.mjs && node tests/logic-test.mjs"
+    "test": "npm run lint:syntax && node tests/basic-test.js && node tests/oauth-test.mjs && node tests/cache-test.mjs && node tests/ext-test.mjs && node tests/sw-test.mjs && node tests/vinyl-test.mjs && node tests/logic-test.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.137.0"

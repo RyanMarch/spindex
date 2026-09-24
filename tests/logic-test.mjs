@@ -4,9 +4,9 @@ import {
   splitCreditRoles, creditKinds, groupCredits, parseCollectionFields, mapDiscogsTracklist, parseReleaseDetails,
   normalizeItunesGenre, getGenreTags, getRecordTags, tagLabel, calculateTotalDuration,
 } from '../public/js/sync.js';
-import { pickAlbumPage, isVariousArtists, pickBackCoverReleases, pickReleaseGroup } from '../public/js/wiki.js';
-import { usefulValue } from '../public/js/values.js';
-import { pickDeezerAlbum, pickDeezerCover, normalize as deezerNormalize } from '../functions/_lib/deezer.js';
+import { pickAlbumPage, isVariousArtists, pickBackCoverReleases, pickReleaseGroup, infoboxField } from '../public/js/wiki.js';
+import { usefulValue, isCustomRelease } from '../public/js/values.js';
+import { pickDeezerAlbum, pickDeezerCover, searchTitle, normalize as deezerNormalize } from '../functions/_lib/deezer.js';
 
 // ---- credit roles ---------------------------------------------------------------------------------------------
 assert.deepEqual(splitCreditRoles('Producer, Engineer [Assistant, Studio X], Guitar'), [
@@ -198,7 +198,7 @@ import { sortYear, masterYearUpdates, itunesYearUpdates, isEditionTitle } from '
   const reissue = { title: 'Millennium', pressingYear: 2023, year: 2023, originalYear: null, masterYear: null };
   assert.equal(sortYear(reissue), 2023, 'before the master is known it files under the pressing');
   const updates = masterYearUpdates(reissue, { title: 'Millennium', year: 1999 });
-  assert.deepEqual(updates, { masterYear: 1999, originalYear: 1999, year: 1999, masterChecked: true });
+  assert.deepEqual(updates, { masterYear: 1999, originalYear: 1999, year: 1999, masterChecked: true, masterTitle: 'Millennium' });
   assert.equal(sortYear({ ...reissue, ...updates }), 1999);
 
   // Special editions keep their own year
@@ -208,7 +208,7 @@ import { sortYear, masterYearUpdates, itunesYearUpdates, isEditionTitle } from '
   assert.equal(sortYear({ ...deluxe, ...kept }), 2023, 'a deluxe edition files under its pressing year');
 
   // A master with no year is marked checked so it is not asked for again
-  assert.deepEqual(masterYearUpdates(reissue, { title: 'X', year: 0 }), { masterChecked: true });
+  assert.deepEqual(masterYearUpdates(reissue, { title: 'X', year: 0 }), { masterChecked: true, masterTitle: 'X' });
 
   assert.equal(isEditionTitle('Abbey Road 50th Anniversary'), true);
   assert.equal(isEditionTitle('Abbey Road'), false);
@@ -221,7 +221,7 @@ import { sortYear, masterYearUpdates, itunesYearUpdates, isEditionTitle } from '
 }
 
 // ---- stale release details ---------------------------------------------------------------------------------------
-import { detailsAreStale } from '../public/js/sync.js';
+import { detailsAreStale, needsDeezerArt, needsItunesArt, buildCollectionRecord, scoreAlbumMatch, ART_SEARCH_VERSION, needsMasterTitleArt, titlesDiffer, needsDetails } from '../public/js/sync.js';
 
 {
   const now = Date.parse('2026-09-24T00:00:00Z');
@@ -253,7 +253,7 @@ import { detailsAreStale } from '../public/js/sync.js';
 }
 
 // ---- how much of the collection a sync reads ---------------------------------------------------------------------
-import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds } from '../public/js/syncplan.js';
+import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds, needsAutoSync, timeAgo } from '../public/js/syncplan.js';
 import { allowedUpstream } from '../functions/_lib/proxy.js';
 
 {
@@ -273,10 +273,10 @@ import { allowedUpstream } from '../functions/_lib/proxy.js';
 
   const mem = new Map();
   const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
-  assert.deepEqual(readSyncMeta('Ryan', storage), { storedTotal: null, lastFullAt: 0 });
-  writeSyncMeta('Ryan', { storedTotal: 210, lastFullAt: 5 }, storage);
-  assert.deepEqual(readSyncMeta('ryan', storage), { storedTotal: 210, lastFullAt: 5 }, 'usernames are not case sensitive');
-  assert.deepEqual(readSyncMeta('x', { getItem() { throw new Error('blocked'); } }), { storedTotal: null, lastFullAt: 0 }, 'blocked storage just means a full read');
+  assert.deepEqual(readSyncMeta('Ryan', storage), { storedTotal: null, lastFullAt: 0, lastCheckedAt: 0 });
+  writeSyncMeta('Ryan', { storedTotal: 210, lastFullAt: 5, lastCheckedAt: 9 }, storage);
+  assert.deepEqual(readSyncMeta('ryan', storage), { storedTotal: 210, lastFullAt: 5, lastCheckedAt: 9 }, 'usernames are not case sensitive');
+  assert.deepEqual(readSyncMeta('x', { getItem() { throw new Error('blocked'); } }), { storedTotal: null, lastFullAt: 0, lastCheckedAt: 0 }, 'blocked storage just means a full read');
 
   // the proxy passes a newest-first sort, and only sorts it knows
   const session = { u: 'Ryan' };
@@ -335,4 +335,389 @@ import { computeStats, durationSeconds, colorGroup } from '../public/js/stats.js
   const session = { u: 'Ryan' };
   assert.equal(allowedUpstream('users/Ryan/collection/value', new URLSearchParams(), session), '/users/Ryan/collection/value');
   assert.equal(allowedUpstream('users/someoneelse/collection/value', new URLSearchParams(), session), null);
+}
+
+// ---- reading outside sources: failures are not answers -----------------------------------------------------------
+import { externalFetch, externalJSON } from '../public/js/external.js';
+import { fetchBackCover } from '../public/js/wiki.js';
+
+{
+  const realFetch = globalThis.fetch;
+  const proxied = (body, { status = 200, hit = true } = {}) => new Response(body === undefined ? null : JSON.stringify(body), {
+    status,
+    headers: { 'x-spindex-proxy': '1', ...(hit ? { 'x-spindex-cache': 'HIT' } : {}) },
+  });
+  try {
+    // goes through the proxy, and falls back to the source when there is no server behind it
+    const seen = [];
+    globalThis.fetch = async (url) => { seen.push(String(url)); return String(url).startsWith('/api/ext') ? proxied({ ok: 1 }) : new Response('{}'); };
+    await externalFetch('https://en.wikipedia.org/w/api.php?x=1');
+    assert.equal(seen[0], `/api/ext?url=${encodeURIComponent('https://en.wikipedia.org/w/api.php?x=1')}`);
+    seen.length = 0;
+    await externalFetch('https://itunes.apple.com/search?term=a');
+    assert.equal(seen[0], 'https://itunes.apple.com/search?term=a', 'sources outside the list are not proxied');
+    seen.length = 0;
+    globalThis.fetch = async (url) => { seen.push(String(url)); return String(url).startsWith('/api/ext') ? new Response('<html>not found</html>', { status: 404 }) : new Response('{"direct":true}'); };
+    assert.deepEqual(await (await externalFetch('https://en.wikipedia.org/w/api.php')).json(), { direct: true }, 'no proxy answering: go direct');
+
+    // 404 is "not there"; anything else wrong throws
+    globalThis.fetch = async () => proxied({}, { status: 404 });
+    assert.equal(await externalJSON('https://coverartarchive.org/release/x'), null);
+    globalThis.fetch = async () => proxied({}, { status: 503 });
+    await assert.rejects(externalJSON('https://coverartarchive.org/release/x'), /503/);
+
+    // a back cover lookup: found, genuinely absent, and "couldn't ask" are three different outcomes
+    const mbGroup = { 'release-groups': [{ id: 'g1', title: 'Transatlanticism' }] };
+    const mbReleases = { releases: [{ id: 'r1', media: [{ format: '12" Vinyl' }], 'cover-art-archive': { back: true } }] };
+    const caa = { images: [{ types: ['Back'], approved: true, thumbnails: { 1200: 'http://img/back-1200.jpg' } }] };
+    const route = (url) => {
+      const target = decodeURIComponent(String(url).split('url=')[1]);
+      if (target.includes('release-group?')) return proxied(mbGroup);
+      if (target.includes('/release?')) return proxied(mbReleases);
+      return proxied(caa);
+    };
+    globalThis.fetch = async (url) => route(url);
+    assert.equal(await fetchBackCover('Death Cab for Cutie', 'Transatlanticism'), 'https://img/back-1200.jpg', 'found (and upgraded to https)');
+
+    globalThis.fetch = async (url) => (decodeURIComponent(String(url)).includes('release-group?') ? proxied({ 'release-groups': [] }) : route(url));
+    assert.equal(await fetchBackCover('Nobody', 'Nothing'), null, 'MusicBrainz has no such album: no back cover');
+
+    globalThis.fetch = async (url) => (decodeURIComponent(String(url)).includes('/release?') ? proxied({}, { status: 502 }) : route(url));
+    await assert.rejects(fetchBackCover('Death Cab for Cutie', 'Transatlanticism'), /502/, 'a source failing is thrown, never recorded as "no back cover"');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+// ---- which artwork lookups a record still needs ------------------------------------------------------------------
+{
+  const photo = { id: 'discogs_1', artwork: { source: 'discogs' } };
+  const searched = { deezerSearchVersion: ART_SEARCH_VERSION, itunesSearchVersion: ART_SEARCH_VERSION };
+  assert.equal(needsDeezerArt(photo), true, 'a Discogs photo asks Deezer first');
+  assert.equal(needsItunesArt(photo), true, 'and iTunes takes whatever is left');
+  assert.equal(needsDeezerArt({ ...photo, deezerSearchVersion: ART_SEARCH_VERSION }), false, 'Deezer answered (a miss counts): not asked again');
+  assert.equal(needsItunesArt({ ...photo, deezerSearchVersion: ART_SEARCH_VERSION }), true, 'a Deezer miss still goes to iTunes');
+  assert.equal(needsItunesArt({ ...photo, ...searched }), false, 'both answered: nothing left to try');
+  assert.equal(needsDeezerArt({ ...photo, deezerChecked: true, artChecked: true }), true, 'a miss recorded under the old, weaker matching is searched again, once');
+  assert.equal(needsItunesArt({ ...photo, deezerChecked: true, artChecked: true }), true);
+  const clean = { id: 'discogs_2', artwork: { source: 'deezer' } };
+  assert.equal(needsDeezerArt(clean) || needsItunesArt(clean), false, 'clean art is left alone');
+  assert.equal(needsDeezerArt({ ...clean, artwork: { source: 'itunes' } }) || needsItunesArt({ ...clean, artwork: { source: 'itunes' } }), false);
+  assert.equal(needsDeezerArt({ id: 'discogs_mock_1', artwork: { source: 'discogs' } }), false, 'demo records are skipped');
+}
+
+// A pinned cover is left alone by the background passes
+{
+  const pinned = { id: 'discogs_5', artworkLocked: true, artwork: { source: 'discogs' } };
+  assert.equal(needsDeezerArt(pinned), false);
+  assert.equal(needsItunesArt(pinned), false);
+}
+
+// ---- syncing must not throw away what the crate has learned since the last sync ------------------------------------
+{
+  const item = {
+    id: 42,
+    date_added: '2024-05-01T00:00:00-07:00',
+    notes: [],
+    basic_information: { title: 'Saga', year: 2023, master_id: 7, artists: [{ name: 'The City of Prague Philharmonic Orchestra' }], genres: ['Stage & Screen'], styles: ['Score'], formats: [{ name: 'Vinyl' }], thumb: 't.jpg', cover_image: 'c.jpg' },
+  };
+  const existing = {
+    id: 'discogs_42', title: 'Old title', year: 2008, masterYear: 2008, masterChecked: true,
+    details: { labels: [{ name: 'Silva Screen' }], fetchedAt: '2026-09-01T00:00:00Z' },
+    tracklist: [{ title: 'Track', duration: '3:00' }],
+    primaryGenre: 'Soundtrack', itunesUrl: 'https://music.apple.com/x', genreChecked: true, artChecked: true, deezerChecked: true, artworkLocked: true,
+    artwork: { source: 'deezer', highRes: 'https://cdn/deezer.jpg', thumbnail: 'https://cdn/deezer-small.jpg' },
+    context: { backCover: 'https://caa/back.jpg' },
+  };
+  const merged = buildCollectionRecord(item, existing, []);
+  assert.equal(merged.title, 'Saga', 'fresh Discogs fields win');
+  assert.equal(merged.pressingYear, 2023);
+  for (const kept of ['details', 'primaryGenre', 'itunesUrl', 'genreChecked', 'artChecked', 'deezerChecked', 'artworkLocked', 'masterChecked']) {
+    assert.deepEqual(merged[kept], existing[kept], `${kept} survives a sync`);
+  }
+  assert.equal(merged.artwork.source, 'deezer', 'cleaner artwork found elsewhere survives a sync');
+  assert.deepEqual(merged.context, existing.context);
+  assert.equal(merged.tracklist.length, 1);
+
+  const fresh = buildCollectionRecord(item, undefined, []);
+  assert.equal(fresh.id, 'discogs_42');
+  assert.equal(fresh.artwork.source, 'discogs', 'a brand new record starts with the Discogs image');
+}
+
+// ---- is a candidate cover the same artwork as the Discogs image? ---------------------------------------------------
+import { readFileSync } from 'node:fs';
+import { fingerprint, scoreImages, decide, sameArtwork, SIZE } from '../public/js/imagematch.js';
+
+// A synthetic 96 x 96 picture from a function of (x, y) returning [r, g, b]
+const picture96 = (fn) => {
+  const px = new Uint8ClampedArray(SIZE * SIZE * 4);
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) { const [r, g, b] = fn(x, y); const i = (y * SIZE + x) * 4; px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = 255; }
+  return px;
+};
+const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+// a cover: a heart on a coloured ground with a text bar, so it has real structure
+const cover = (x, y) => {
+  const heart = Math.hypot(x - 48, y - 46) < 22;
+  const bar = y > 74 && y < 84 && x > 20 && x < 76;
+  if (bar) return [240, 220, 160];
+  return heart ? [200, 40, 50] : [40, 60, 130];
+};
+const checker = (x, y) => (Math.floor(x / 12) % 2 === Math.floor(y / 12) % 2 ? [230, 200, 60] : [30, 110, 40]); // a checkerboard
+{
+  const original = fingerprint(picture96(cover));
+  assert.equal(original.grey.length, SIZE * SIZE);
+  assert.ok(Math.abs([...original.hue].reduce((a, b) => a + b, 0) - 1) < 1e-6, 'the hue histogram adds up to 1');
+
+  // The same picture photographed badly: dimmer, a colour cast, a border, a tilt-ish shift, and glare
+  const photo = (x, y) => {
+    const inner = cover(Math.round((x - 8) * 1.12), Math.round((y - 6) * 1.12)); // smaller, shifted: margins around the sleeve
+    const outside = x < 8 || y < 6 || x > 88 || y > 90;
+    const glare = Math.max(0, 90 - Math.hypot(x - 70, y - 30) * 3);
+    const [r, g, b] = outside ? [90, 84, 78] : inner;
+    return [clamp(r * 0.75 + 20 + glare), clamp(g * 0.75 + 12 + glare), clamp(b * 0.7 + 18 + glare)];
+  };
+  assert.equal(sameArtwork(fingerprint(picture96(photo)), original), true, 'a dim, cast, framed, glared photo of the same cover still matches');
+  assert.equal(sameArtwork(fingerprint(picture96(checker)), original), false, 'a different picture does not');
+  const ramp = (x) => { const v = Math.round((x / SIZE) * 255); return [v, v, v]; };
+  assert.equal(sameArtwork(fingerprint(picture96(ramp)), original), false, 'a plain gradient does not');
+  const flat = (x, y) => [200, 200, 200];
+  assert.equal(sameArtwork(fingerprint(picture96(flat)), original), false, 'a flat grey picture matches nothing');
+  const scores = scoreImages(fingerprint(picture96(cover)), original);
+  assert.ok(scores.edge > 0.99 && scores.grey > 0.99, 'identical pictures score as identical');
+}
+
+{
+  // Real Discogs/Deezer scores, measured in a browser: the thresholds are pinned to what was measured
+  const fixture = JSON.parse(readFileSync(new URL('./fixtures/artwork-scores.json', import.meta.url), 'utf8'));
+  const scored = ([label, edge, grey, hue]) => ({ label, edge, grey, hue });
+  const accepted = fixture.positives.map(scored).filter(decide);
+  assert.ok(accepted.length >= 82, `real pressings of the right album are accepted (${accepted.length} of ${fixture.positives.length})`);
+  // the borderline true matches that the first version wrongly rejected: a photo of a sleeve with glare and margins
+  for (const [label, edge, grey, hue] of [['Star-Crossed photo', 0.486, 0.671, 0.858], ['NVM photo', 0.475, 0.736, 0.75], ['NVM photo 2', 0.497, 0.687, 0.814]]) {
+    assert.equal(decide({ edge, grey, hue }), true, `${label} is accepted`);
+  }
+  // photographs of the disc, or a test-pressing sheet, are not the cover
+  assert.equal(decide({ edge: 0.114, grey: 0.254, hue: 0.573 }), false);
+  for (const impostor of fixture.impostors.map(scored)) assert.equal(decide(impostor), false, `${impostor.label} is never matched`);
+  const worst = Math.max(...fixture.impostors.map((i) => i[1]));
+  assert.ok(worst < 0.5, `the closest mismatch (${worst}) stays clear of the edge threshold`);
+}
+
+// ---- judging a candidate cover, and the choice a person can make --------------------------------------------------
+import { judgeCandidate, needsArtVerification, needsArtRecheck, ART_MATCH_VERSION, deezerThumb, itunesThumb } from '../public/js/sync.js';
+import { artControl, artChoiceUpdates } from '../public/js/artwork.js';
+
+{
+  const record = { id: 'discogs_1', discogsArtwork: { thumbnail: 'https://i.discogs.com/a', highRes: 'https://i.discogs.com/b', source: 'discogs' }, artwork: { source: 'discogs' } };
+  const same = fingerprint(picture96(cover));
+  const other = fingerprint(picture96(checker));
+  const loader = (map) => async (url) => { if (!(url in map)) throw new Error('no such image'); return map[url]; };
+  const seen = [];
+  const relay = '/api/img?url=' + encodeURIComponent('https://i.discogs.com/a');
+
+  const judged = await judgeCandidate(record, 'https://cdn/deezer', async (url) => { seen.push(url); return same; });
+  assert.equal(judged, 'same');
+  assert.ok(seen.includes('/api/img?url=' + encodeURIComponent('https://i.discogs.com/a')), 'the Discogs image is read through our own address');
+  assert.equal(await judgeCandidate(record, 'https://cdn/x', loader({ [relay]: same, 'https://cdn/x': other })), 'different');
+  assert.equal(await judgeCandidate(record, 'https://cdn/missing', loader({ [relay]: same })), 'unknown', 'an image that will not load decides nothing');
+  assert.equal(await judgeCandidate({ id: 'x', artwork: { source: 'discogs' } }, 'https://cdn/x', async () => { throw new Error('unused'); }), 'same', 'no Discogs image, nothing to disagree with');
+
+  assert.equal(deezerThumb('https://cdn/1000x1000-000000-80-0-0.jpg'), 'https://cdn/250x250-000000-80-0-0.jpg');
+  assert.equal(itunesThumb('https://is1/thumb/cover.jpg/1200x1200bb.jpg'), 'https://is1/thumb/cover.jpg/250x250bb.jpg');
+
+  // covers swapped in before the comparison existed get checked once
+  const swapped = { ...record, artwork: { source: 'deezer', highRes: 'x' } };
+  assert.equal(needsArtVerification(swapped), true);
+  assert.equal(needsArtVerification({ ...swapped, artVerified: true }), false);
+  assert.equal(needsArtVerification({ ...swapped, artworkLocked: true }), false, 'a cover a person chose is never second-guessed');
+  assert.equal(needsArtVerification(record), false, 'a Discogs image needs no check');
+
+  // covers turned down by the earlier, stricter comparison are judged once more
+  const turnedDown = { ...record, artCandidate: { source: 'deezer', highRes: 'https://cdn/d.jpg' } };
+  assert.equal(needsArtRecheck(turnedDown), true);
+  assert.equal(needsArtRecheck({ ...turnedDown, artMatchVersion: ART_MATCH_VERSION }), false, 'only once');
+  assert.equal(needsArtRecheck({ ...turnedDown, artworkLocked: true }), false, 'a chosen cover is not second-guessed');
+  assert.equal(needsArtRecheck(record), false, 'no candidate, nothing to recheck');
+
+  // the control
+  const cleaner = { ...record, artwork: { source: 'deezer', highRes: 'https://cdn/d.jpg' } };
+  assert.equal(artControl(cleaner).action, 'discogs');
+  assert.match(artControl(cleaner).note, /matched to the Discogs image/);
+  assert.match(artControl({ ...cleaner, artworkLocked: true }).note, /you chose/, 'a hand-picked cover is not described as auto-matched');
+  assert.equal(artControl(record), null, 'nothing to choose between');
+  const rejected = { ...record, artCandidate: { source: 'deezer', highRes: 'https://cdn/d.jpg' } };
+  assert.equal(artControl(rejected).action, 'candidate');
+  assert.match(artControl(rejected).label, /Deezer/);
+  assert.equal(artControl({ ...record, artworkLocked: true }).action, 'retry');
+
+  // choosing switches between the two covers and pins the record; nothing is lost
+  const toDiscogs = artChoiceUpdates(cleaner, 'discogs');
+  assert.equal(toDiscogs.artwork.source, 'discogs');
+  assert.equal(toDiscogs.artworkLocked, true);
+  assert.equal(toDiscogs.artCandidate.source, 'deezer', 'the cleaner cover is kept so it can be brought back');
+  const back = artChoiceUpdates({ ...cleaner, ...toDiscogs }, 'candidate');
+  assert.equal(back.artwork.source, 'deezer', 'and the person can change their mind');
+  assert.equal(artChoiceUpdates({ id: 'x', artwork: { source: 'deezer' } }, 'discogs'), null, 'no Discogs image to go back to');
+  assert.equal(artChoiceUpdates(record, 'retry').artworkLocked, false);
+  assert.equal(artChoiceUpdates(record, 'bogus'), null);
+}
+
+// ---- Wikipedia infobox fields ------------------------------------------------------------------------------------
+{
+  // The real "NVM" infobox: the producer field is empty and the next line is another field
+  const nvm = [
+    '{{Infobox album', '| name       = NVM', '| released   = {{Start date|2014|02|25}}', '| recorded   =', '| studio     =',
+    '| genre      = [[Pop punk]]', '| length     = {{Duration|m=27|s=47}}', '| label      = [[Hardly Art]]', '| producer   =',
+    '| prev_title = Shame Spiral', '| prev_year  = 2008', '| next_title = [[Lost Time (Tacocat album)|Lost Time]]', '}}',
+  ].join('\n');
+  assert.equal(infoboxField(nvm, 'producer'), '', 'an empty field stays empty, and does not take the next line');
+  assert.equal(infoboxField(nvm, 'recorded'), '', 'the same for a field before another empty one');
+  assert.equal(infoboxField(nvm, 'label'), 'Hardly Art', 'links are cleaned');
+
+  const full = ['{{Infobox album', '| label    = [[Sub Pop]]', '| producer = [[Steve Albini]]<ref>cite</ref>', '| recorded = Electrical Audio, Chicago', '}}'].join('\n');
+  assert.equal(infoboxField(full, 'producer'), 'Steve Albini');
+  assert.equal(infoboxField(full, 'recorded'), 'Electrical Audio, Chicago', 'the last field before the closing braces');
+
+  const list = ['{{Infobox album', '| producer = {{Plainlist|', '* [[Butch Vig]]', '* [[Nirvana]]', '}}', '| label = DGC', '}}'].join('\n');
+  assert.equal(infoboxField(list, 'producer'), 'Butch Vig, Nirvana', 'a multi-line list is joined');
+  assert.equal(infoboxField(list, 'missing'), '');
+  assert.equal(infoboxField('', 'producer'), '');
+
+  // Something already saved on a record that still has the leaked text is never shown
+  assert.equal(usefulValue('prev_title = Shame Spiral'), '');
+  assert.equal(usefulValue('Steve Albini'), 'Steve Albini');
+  assert.equal(usefulValue('Hardly Art'), 'Hardly Art');
+}
+
+{
+  const ubl = ['{{Infobox album', '| producer = {{Unbulleted list|[[Butch Vig]]|[[Nirvana]]}}', '| label = DGC', '}}'].join('\n');
+  assert.equal(infoboxField(ubl, 'producer'), 'Butch Vig, Nirvana', 'a template list is separated by commas, not bars');
+}
+
+// ---- the same album under different bracketed titles ---------------------------------------------------------------
+{
+  assert.equal(searchTitle('TRON: Legacy (Vinyl Edition Motion Picture Soundtrack)'), 'TRON: Legacy');
+  assert.equal(searchTitle('Homework [25th Anniversary]'), 'Homework');
+  assert.equal(searchTitle('(What\'s the Story) Morning Glory?'), "(What's the Story) Morning Glory?", 'a title that is only brackets is left alone');
+  assert.equal(searchTitle('Abbey Road'), 'Abbey Road');
+
+  // iTunes: "(Vinyl Edition ...)" and "(Original ...)" are the same album; a different album is not
+  const tron = 'TRON: Legacy (Vinyl Edition Motion Picture Soundtrack)';
+  assert.ok(scoreAlbumMatch('Daft Punk', tron, 'Daft Punk', 'TRON: Legacy (Original Motion Picture Soundtrack)') >= 100, 'the digital release of the soundtrack matches');
+  assert.equal(scoreAlbumMatch('Daft Punk', tron, 'Daft Punk', 'TRON: Legacy Reconfigured'), -1, 'the remix album does not');
+  assert.equal(scoreAlbumMatch('Daft Punk', tron, 'Daft Punk', 'Random Access Memories'), -1);
+  assert.equal(scoreAlbumMatch('Daft Punk', tron, 'Nine Inch Nails', 'TRON: Ares (Original Motion Picture Soundtrack)'), -1);
+  assert.ok(scoreAlbumMatch('Daft Punk', 'Homework', 'Daft Punk', 'Homework') > scoreAlbumMatch('Daft Punk', 'Homework', 'Daft Punk', 'Homework (25th Anniversary Edition)'), 'the exact title still ranks first');
+}
+
+// ---- searching again with the master's title ---------------------------------------------------------------------
+{
+  const searched = { deezerSearchVersion: ART_SEARCH_VERSION, itunesSearchVersion: ART_SEARCH_VERSION };
+  const base = { id: 'discogs_7', masterId: 291615, artwork: { source: 'discogs' }, ...searched };
+  assert.equal(needsMasterTitleArt(base), true, 'both searches missed and there is a master');
+  assert.equal(needsMasterTitleArt({ ...base, masterId: null }), false, 'a custom entry has no master to ask');
+  assert.equal(needsMasterTitleArt({ ...base, deezerSearchVersion: undefined }), false, 'not before the first two searches are done');
+  assert.equal(needsMasterTitleArt({ ...base, artCandidate: { source: 'deezer' } }), false, 'a cover is already on offer');
+  assert.equal(needsMasterTitleArt({ ...base, masterTitleSearchVersion: ART_SEARCH_VERSION }), false, 'only once');
+  assert.equal(needsMasterTitleArt({ ...base, artwork: { source: 'deezer' } }), false, 'clean art is left alone');
+  assert.equal(needsMasterTitleArt({ ...base, artworkLocked: true }), false);
+
+  assert.equal(titlesDiffer('Saga', 'Music From The Twilight Saga'), true);
+  assert.equal(titlesDiffer('TRON: Legacy (Vinyl Edition Motion Picture Soundtrack)', 'TRON: Legacy (Original Motion Picture Soundtrack)'), false, 'a different bracketed subtitle is already handled by the earlier searches');
+  assert.equal(titlesDiffer('Abbey Road', 'abbey road'), false);
+  assert.equal(titlesDiffer('Abbey Road', ''), false, 'no master title, nothing to try');
+}
+
+// ---- custom releases ---------------------------------------------------------------------------------------------
+{
+  // the wedding record's release, as Discogs describes it: a draft, no master, no label
+  const draft = parseReleaseDetails({ status: 'Draft', country: 'US', labels: [{ name: 'None', catno: '' }], formats: [{ name: 'Lathe Cut', qty: '1', descriptions: ['LP', 'Unofficial Release'] }] });
+  assert.equal(draft.status, 'Draft', 'the release status is kept');
+  assert.equal(parseReleaseDetails({ status: 'Accepted' }).status, 'Accepted');
+  assert.equal(parseReleaseDetails({}).status, '');
+
+  const wedding = { id: 'discogs_32124024', discogsId: 32124024, masterId: null, details: draft, artwork: { source: 'discogs' } };
+  assert.equal(isCustomRelease(wedding), true);
+  assert.equal(isCustomRelease({ ...wedding, details: { status: 'Accepted' } }), false, 'an accepted release is in the shared database');
+  assert.equal(isCustomRelease({ ...wedding, masterId: 291615 }), false, 'a release with a master is known to other services');
+  assert.equal(isCustomRelease({ ...wedding, details: undefined }), false, 'not known to be custom until its details arrive');
+  assert.equal(isCustomRelease({ ...wedding, details: { status: '' } }), false, 'details saved without a status say nothing');
+
+  // no cover searches for it, at any stage
+  const searched = { deezerSearchVersion: ART_SEARCH_VERSION, itunesSearchVersion: ART_SEARCH_VERSION };
+  assert.equal(needsDeezerArt(wedding), false);
+  assert.equal(needsItunesArt(wedding), false);
+  assert.equal(needsMasterTitleArt({ ...wedding, ...searched, masterId: null }), false);
+  assert.equal(needsDeezerArt({ ...wedding, details: undefined }), true, 'before its details are known it is treated like any other record');
+
+  // details saved before the status was kept are fetched again, but only for records that could be custom (no master)
+  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: null, details: { labels: [] } }), true);
+  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: 5, details: { labels: [] } }), false, 'a record with a master cannot be custom');
+  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: null, details: { status: 'Draft' } }), false);
+  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1 }), true, 'no details at all');
+  assert.equal(needsDetails({ id: 'discogs_mock_1', discogsId: 1 }), false, 'demo records have none to fetch');
+}
+
+// ---- data health and source stats ---------------------------------------------------------------------
+import { computeHealth, describeStorage, healthSummary } from '../public/js/health.js';
+import { noteSource, sourceSnapshot, resetSourceStats } from '../public/js/sourcestats.js';
+
+{
+  const rec = (id, extra = {}) => ({ id, discogsId: 1, artwork: { source: 'discogs' }, ...extra });
+  const records = [
+    rec('discogs_1', { masterId: 5, masterYear: 1999, details: { status: 'Accepted' }, artwork: { source: 'deezer' } }),
+    rec('discogs_2', { masterId: 6, masterChecked: true, details: { status: 'Accepted' }, artCandidate: { source: 'deezer' }, context: { backCover: 'x' } }),
+    rec('discogs_3', { masterId: 7, artworkLocked: true, context: { backCover: null } }),
+    rec('discogs_4', { masterId: null, details: { status: 'Draft' } }),
+    { id: 'discogs_mock_1', artwork: { source: 'itunes' } },
+  ];
+  const h = computeHealth(records);
+  assert.equal(h.total, 4, 'demo records are not counted');
+  assert.equal(h.covers.cleaner, 1);
+  assert.equal(h.covers.discogs, 3);
+  assert.equal(h.covers.pinned, 1);
+  assert.equal(h.covers.offered, 1, 'a Discogs image with another cover on offer');
+  assert.deepEqual(h.details, { have: 3, total: 4, custom: 1 });
+  assert.deepEqual(h.years, { resolved: 2, total: 3 });
+  assert.deepEqual(h.backCovers, { found: 1, none: 1, opened: 2 });
+  assert.ok(h.pending.art >= 1 && h.pending.details >= 1, 'work still to do is counted');
+  assert.equal(computeHealth([]).total, 0);
+
+  const s = describeStorage({ usage: 5 * 1024 * 1024, quota: 2 * 1024 ** 3, persisted: true });
+  assert.equal(s.used, '5.0 MB');
+  assert.equal(s.quota, '2048 MB');
+  assert.match(s.persisted, /Protected/);
+  assert.match(describeStorage({ persisted: false }).persisted, /Not protected/);
+  assert.equal(describeStorage({}).used, 'unknown');
+
+  // source stats
+  resetSourceStats();
+  noteSource('MusicBrainz', true);
+  noteSource('MusicBrainz', false, 'answered 503');
+  noteSource('Wikipedia', true);
+  assert.deepEqual(sourceSnapshot(), [{ name: 'MusicBrainz', ok: 1, failed: 1, last: 'answered 503' }, { name: 'Wikipedia', ok: 1, failed: 0, last: '' }]);
+  resetSourceStats();
+}
+
+// ---- automatic sync on open, and how it is described ---------------------------------------------------------------
+{
+  const hour = 3600000;
+  const now = Date.parse('2026-09-24T12:00:00Z');
+  assert.equal(needsAutoSync({ lastCheckedAt: 0 }, now), true, 'never checked: check now');
+  assert.equal(needsAutoSync({ lastCheckedAt: now - 2 * hour }, now), false, 'checked recently: leave it');
+  assert.equal(needsAutoSync({ lastCheckedAt: now - 7 * hour }, now), true, 'a while ago: check on open');
+
+  assert.equal(timeAgo(0, now), 'never');
+  assert.equal(timeAgo(now - 20000, now), 'just now');
+  assert.equal(timeAgo(now - 60000, now), '1 minute ago');
+  assert.equal(timeAgo(now - 5 * 60000, now), '5 minutes ago');
+  assert.equal(timeAgo(now - hour, now), '1 hour ago');
+  assert.equal(timeAgo(now - 5 * hour, now), '5 hours ago');
+  assert.equal(timeAgo(now - 49 * hour, now), '2 days ago');
+  assert.equal(timeAgo(now + 5000, now), 'just now', 'a clock that ran slightly ahead never shows a negative time');
+
+  assert.equal(healthSummary({ total: 0, pending: { art: 0, details: 0 } }), 'Nothing to report yet');
+  assert.equal(healthSummary({ total: 50, pending: { art: 0, details: 0 } }), 'All caught up');
+  assert.equal(healthSummary({ total: 50, pending: { art: 3, details: 10 } }), 'Filling in 10 details and 3 covers');
+  assert.equal(healthSummary({ total: 50, pending: { art: 3, details: 0 } }), 'Filling in 3 covers');
 }

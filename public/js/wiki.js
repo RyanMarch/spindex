@@ -1,6 +1,8 @@
 // wiki.js - Wikipedia / Wikimedia / MusicBrainz / Cover Art Archive lookups for the album inspector.
 // All calls are anonymous and CORS-enabled; results are cached on the record by the caller.
 
+import { externalFetch, externalJSON } from './external.js';
+
 const WIKI_API = 'https://en.wikipedia.org/w/api.php';
 
 const BACKGROUND_SECTION = /^(background|recording|production|writing|composition|concept|development|writing and recording|recording and production|background and recording|background and production|production and recording|music and lyrics)\b/i;
@@ -8,7 +10,7 @@ const RECEPTION_SECTION = /^(critical reception|reception|critical response|revi
 
 async function getJSON(url) {
   try {
-    const res = await fetch(url);
+    const res = await externalFetch(url);
     return res.ok ? await res.json() : null;
   } catch {
     return null;
@@ -78,6 +80,7 @@ function cleanWikiValue(raw) {
     .replace(/<[^>]+>/g, '')
     .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, '$1')
     .replace(/^\s*[*|]+\s*/gm, '')
+    .replace(/\s*\|\s*/g, ', ') // what is left of a list template's separators
     .replace(/\n+/g, ', ')
     .replace(/[{}]/g, '')
     .replace(/\s*,\s*(?:,\s*)+/g, ', ')
@@ -86,18 +89,23 @@ function cleanWikiValue(raw) {
 }
 
 // Label / producer / studio from the album infobox
+// One field of an album infobox ("| producer = [[Name]]"), cleaned up; '' when it is empty or not a usable value.
+// An empty field ("| producer =") must stay empty: it must not run on into the next line and take that field's name and
+// value as its own.
+export function infoboxField(wikitext, name) {
+  const m = String(wikitext || '').match(new RegExp(`\\|[ \\t]*${name}[ \\t]*=[ \\t]*([\\s\\S]*?)(?=\\n[ \\t]*\\|[ \\t]*[a-z_0-9 ]+=|\\n\\}\\})`, 'i'));
+  const value = m ? cleanWikiValue(m[1]) : '';
+  // Anything that still looks like another field ("prev_title = ...") is wiki markup, not a value
+  if (/^[a-z_0-9 ]+=/i.test(value)) return '';
+  return value.length > 0 && value.length < 200 ? value : '';
+}
+
 export async function fetchInfobox(title) {
   const data = await getJSON(`${WIKI_API}?action=parse&page=${encodeURIComponent(title)}&prop=wikitext&format=json&origin=*&redirects=1`);
   const wikitext = data?.parse?.wikitext?.['*'] || '';
   if (!wikitext) return {};
 
-  const field = (name) => {
-    const m = wikitext.match(new RegExp(`\\|\\s*${name}\\s*=\\s*([\\s\\S]*?)(?=\\n\\s*\\|\\s*[a-z_ ]+=|\\n\\}\\})`, 'i'));
-    const value = m ? cleanWikiValue(m[1]) : '';
-    return value.length > 0 && value.length < 200 ? value : '';
-  };
-
-  const out = { label: field('label'), producer: field('producer'), recorded: field('recorded') };
+  const out = { label: infoboxField(wikitext, 'label'), producer: infoboxField(wikitext, 'producer'), recorded: infoboxField(wikitext, 'recorded') };
   return Object.fromEntries(Object.entries(out).filter(([, v]) => v));
 }
 
@@ -257,20 +265,20 @@ export function pickBackCoverReleases(releases) {
     .map((entry) => entry.release);
 }
 
+// The back cover's address, null when there isn't one. Throws when a source can't be reached or is busy, so the caller
+// tries again later instead of recording "no back cover".
 export async function fetchBackCover(artist, title) {
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const cleanTitle = title.replace(/\([^)]*\)/g, '').trim();
 
-  const groups = await getJSON(`https://musicbrainz.org/ws/2/release-group?query=${encodeURIComponent(`artist:"${artist}" AND releasegroup:"${cleanTitle}"`)}&limit=5&fmt=json`);
+  const groups = await externalJSON(`https://musicbrainz.org/ws/2/release-group?query=${encodeURIComponent(`artist:"${artist}" AND releasegroup:"${cleanTitle}"`)}&limit=5&fmt=json`);
   const group = pickReleaseGroup(groups?.['release-groups'], cleanTitle);
   if (!group) return null;
 
-  await wait(1100);
-  const listing = await getJSON(`https://musicbrainz.org/ws/2/release?release-group=${group.id}&inc=media&limit=100&fmt=json`);
+  const listing = await externalJSON(`https://musicbrainz.org/ws/2/release?release-group=${group.id}&inc=media&limit=100&fmt=json`);
 
   // Usually one release; a second is a fallback in case the archive's storage server has a hiccup
   for (const release of pickBackCoverReleases(listing?.releases).slice(0, 2)) {
-    const archive = await getJSON(`https://coverartarchive.org/release/${release.id}`);
+    const archive = await externalJSON(`https://coverartarchive.org/release/${release.id}`);
     const back = archive?.images?.find((img) => img.types?.includes('Back') && img.approved !== false);
     if (back) {
       const url = back.thumbnails?.['1200'] || back.thumbnails?.large || back.image;

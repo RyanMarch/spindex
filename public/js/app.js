@@ -3,9 +3,12 @@ import { openDB, getAllRecords, clearRecords, deleteRecords, getRecord, upsertRe
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
-import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichFallbackArtInBackground, loadRecordDetails, refreshCollectionFields } from './sync.js';
+import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichDeezerArtInBackground, verifyArtInBackground, recheckArtInBackground, needsArtRecheck, enrichMasterTitleArtInBackground, needsMasterTitleArt, needsDeezerArt, needsItunesArt, needsArtVerification, loadRecordDetails, needsDetails, refreshCollectionFields } from './sync.js';
 import { sortYear } from './years.js';
 import { computeStats } from './stats.js';
+import { computeHealth, describeStorage, healthSummary } from './health.js';
+import { needsAutoSync, timeAgo, readSyncMeta } from './syncplan.js';
+import { sourceSnapshot } from './sourcestats.js';
 import { statsHTML, valueHTML } from './statsview.js';
 import { initDiscogs, discogsFetch, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
 
@@ -116,7 +119,6 @@ class App {
     this.discogsDisconnectBtn = document.getElementById('discogs-disconnect-btn');
     this.discogsTokenDetails = document.getElementById('discogs-token-details');
     this.syncStatus = document.getElementById('sync-status');
-    this.resetDemoBtn = document.getElementById('reset-demo-btn');
     this.clearCacheBtn = document.getElementById('clear-cache-btn');
 
     // Restore saved settings
@@ -143,6 +145,7 @@ class App {
       getPosition: () => ({ index: this.crate.currentIndex, total: this.filteredRecords.length }),
       onRoute: (record, mode) => this.syncUrl(record, mode),
       onArtworkChange: () => this.refreshInPlace(),
+      onArtworkRetry: () => this.fillMissingArt(),
     });
   }
 
@@ -165,6 +168,7 @@ class App {
 
     this.initSearch();
     this.initFillStatus();
+    this.requestPersistentStorage();
 
     // Genre tabs are rendered from the collection, so listen on the bar
     if (this.vibeBar) {
@@ -249,39 +253,36 @@ class App {
         this.setSyncStatus('Disconnected from Discogs. Your crate stays on this device.', '');
       });
     }
-    onDiscogsChange(() => this.renderDiscogsSettings());
+    onDiscogsChange(() => { this.renderDiscogsSettings(); this.renderDemoNote(); });
     this.syncFullBtn = document.getElementById('sync-full-btn');
     if (this.syncFullBtn) this.syncFullBtn.addEventListener('click', () => this.handleSync({ full: true }));
     if (this.syncBtn) {
       this.syncBtn.addEventListener('click', () => this.handleSync());
     }
 
-    // Demo reset button
-    if (this.resetDemoBtn) {
-      this.resetDemoBtn.addEventListener('click', async () => {
-        this.resetDemoBtn.disabled = true;
-        this.resetDemoBtn.textContent = 'Reloading...';
-        await clearRecords();
-        await resetToMockRecords();
-        await this.loadAllRecords();
-        this.resetDemoBtn.textContent = 'Demo Reloaded!';
-        setTimeout(() => {
-          this.resetDemoBtn.textContent = 'Reload Demo Crate';
-          this.resetDemoBtn.disabled = false;
-        }, 1500);
-      });
-    }
-
-    // Clear cache button
+    // Clear what this browser has saved. The collection itself lives on Discogs and comes back on the next check.
     if (this.clearCacheBtn) {
       this.clearCacheBtn.addEventListener('click', async () => {
-        if (confirm('Clear local database? You can reload the demo anytime.')) {
-          await clearRecords();
+        if (!confirm('Clear local data? Your Discogs collection is untouched and comes back on the next check. Covers you chose are lost.')) return;
+        await clearRecords();
+        localStorage.removeItem('crate_owner');
+        if (isDiscogsConnected()) {
+          await this.loadAllRecords();
+          this.closeSettings();
+          this.autoSyncIfDue({ force: true });
+        } else {
+          await seedDefaultRecordsIfEmpty();
           await this.loadAllRecords();
           this.closeSettings();
         }
       });
     }
+    document.getElementById('demo-note')?.addEventListener('click', () => this.openSettings());
+
+    // Coming back to the app after a while: look for new records
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') this.autoSyncIfDue();
+    });
   }
 
   // Show the right Discogs controls for how this browser is connected
@@ -302,8 +303,8 @@ class App {
     if (this.discogsConnectedText && connected) {
       const who = `<strong>${this.escapeHTML(username)}</strong>`;
       this.discogsConnectedText.innerHTML =  /*html*/ mode === 'oauth'
-        ? `Connected to Discogs as ${who}. Sync brings in your latest collection.`
-        : `Using a personal access token for ${who}. Sync brings in your latest collection.`;
+        ? `Connected to Discogs as ${who}.`
+        : `Using a personal access token for ${who}.`;
     }
     if (this.usernameInput && mode === 'token') this.usernameInput.value = username;
   }
@@ -337,6 +338,8 @@ class App {
 
   openSettings() {
     this.renderDiscogsSettings();
+    this.renderFreshness();
+    this.renderHealth();
     this.settingsDrawer?.classList.add('open');
     this.settingsDrawer?.setAttribute('aria-hidden', 'false');
   }
@@ -402,8 +405,17 @@ class App {
 
   async bootstrap() {
     await openDB();
-    await seedDefaultRecordsIfEmpty();
     await initDiscogs();
+    // A first-time visitor sees a demo crate; someone connected to Discogs never does (their crate is brought in instead).
+    // "?demo" reloads the demo on purpose, for testing.
+    if (!isDiscogsConnected()) {
+      if (new URLSearchParams(location.search).has('demo')) {
+        await clearRecords();
+        await resetToMockRecords();
+      } else {
+        await seedDefaultRecordsIfEmpty();
+      }
+    }
     this.renderDiscogsSettings();
 
     // Check if mock records need verified artwork or sortArtist update
@@ -432,6 +444,7 @@ class App {
     this.openFromLocation(true);
     window.addEventListener('popstate', () => this.openFromLocation());
     this.handleDiscogsReturn();
+    this.autoSyncIfDue();
     this.fillMissingArt().then(() => this.fillMissingGenres());
     this.refreshCollectionFieldsIfNeeded()
       .then(() => this.fillMissingYears())
@@ -441,6 +454,7 @@ class App {
 
   async loadAllRecords() {
     this.allRecords = await getAllRecords();
+    this.renderDemoNote();
     this.buildRoutes();
     this.renderVibeTabs();
     this.applyFiltersAndSort();
@@ -504,12 +518,12 @@ class App {
   async fillMissingDetails() {
     if (!isDiscogsConnected()) return;
 
-    const needsDetails = this.allRecords.filter((r) => r.discogsId && !r.details && !String(r.id).startsWith('discogs_mock_'));
-    if (needsDetails.length === 0) return;
+    const missing = this.allRecords.filter(needsDetails);
+    if (missing.length === 0) return;
 
-    this.fill = { total: needsDetails.length, done: 0 };
+    this.fill = { total: missing.length, done: 0 };
     try {
-      await enrichDetailsInBackground(needsDetails, () => {
+      await enrichDetailsInBackground(missing, () => {
         this.fill.done++;
         this.renderFillStatus();
       });
@@ -538,11 +552,61 @@ class App {
     await this.refreshInPlace();
   }
 
+  // Without this a browser may clear stored data when space runs short. It is only a request, and browsers may decline.
+  requestPersistentStorage() {
+    navigator.storage?.persist?.().catch(() => { });
+  }
+
+  // "Data health": what the crate knows, what is still filling in, and how each source has behaved this session
+  async renderHealth() {
+    const el = document.getElementById('health-content');
+    if (!el) return;
+    const h = computeHealth(this.allRecords);
+    const summary = document.getElementById('health-summary');
+    if (summary) summary.textContent = healthSummary(h);
+    let estimate = {};
+    let persisted;
+    try {
+      estimate = (await navigator.storage?.estimate?.()) || {};
+      persisted = await navigator.storage?.persisted?.();
+    } catch {
+      // not available here
+    }
+    const storage = describeStorage({ usage: estimate.usage, quota: estimate.quota, persisted });
+    let imageCount = 0;
+    try {
+      imageCount = (await (await caches.open('spindex-images-v1')).keys()).length;
+    } catch {
+      // no cache access here
+    }
+    const esc = (t) => this.escapeHTML ? this.escapeHTML(String(t)) : String(t);
+    const row = (k, v) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`;
+    const sources = sourceSnapshot();
+    el.innerHTML =  /*html*/ `
+      <dl class="health-rows">
+        ${row('Records', h.total)}
+        ${row('Cleaner covers', `${h.covers.cleaner} of ${h.total}`)}
+        ${row('Discogs images', `${h.covers.discogs}${h.covers.offered ? ` (${h.covers.offered} with another cover on offer)` : ''}`)}
+        ${row('Covers you chose', h.covers.pinned)}
+        ${row('Release details', `${h.details.have} of ${h.details.total}${h.details.custom ? ` (${h.details.custom} custom)` : ''}`)}
+        ${row('Original years', `${h.years.resolved} of ${h.years.total}`)}
+        ${row('Back covers', h.backCovers.opened ? `${h.backCovers.found} found, ${h.backCovers.none} none, in ${h.backCovers.opened} albums opened` : 'Found as you open albums')}
+        ${row('Still to work out', h.pending.art + h.pending.details === 0 ? 'Nothing' : `${h.pending.art} cover searches, ${h.pending.details} details`)}
+        ${row('Storage used', `${storage.used} of ${storage.quota}`)}
+        ${row('Protection', storage.persisted)}
+        ${row('Pictures kept offline', imageCount)}
+      </dl>
+      <p class="stat-note">Sources this session</p>
+      ${sources.length
+    ? `<dl class="health-rows">${sources.map((s) => row(s.name, `${s.ok} ok${s.failed ? `, ${s.failed} failed (${s.last})` : ''}`)).join('')}</dl>`
+    : '<p class="stat-note">Nothing asked yet.</p>'}`;
+  }
+
   // A small pill that says what the background Discogs work is doing, so a slow first load reads as intentional
   initFillStatus() {
     this.fillStatusEl = document.getElementById('fill-status');
     this.reorderPill = document.getElementById('reorder-pill');
-    this.reorderPill?.addEventListener('click', () => this.applyFiltersAndSort());
+    this.reorderPill?.addEventListener('click', () => this.loadAllRecords());
     this.queueStats = { low: 0, pausedUntil: 0 };
     onDiscogsQueue((stats) => {
       this.queueStats = stats;
@@ -564,15 +628,20 @@ class App {
         : 'Finishing track lists…';
   }
 
-  // Records still showing a Discogs photo of the sleeve get clean cover art: iTunes first, then Deezer
+  // Records still showing a Discogs photo of the sleeve get clean cover art: Deezer first (fast), then iTunes for the rest
   async fillMissingArt() {
-    const needsArt = () => this.allRecords.filter((r) => r.artwork?.source === 'discogs' && !String(r.id).startsWith('discogs_mock_'));
-    if (needsArt().length === 0) return;
+    if (!this.allRecords.some((r) => needsDeezerArt(r) || needsItunesArt(r) || needsArtVerification(r) || needsArtRecheck(r) || needsMasterTitleArt(r))) return;
 
     const onEach = () => this.scheduleRefresh();
-    await enrichArtInBackground(needsArt().filter((r) => !r.artChecked), onEach);
+    await recheckArtInBackground(this.allRecords.filter(needsArtRecheck), onEach);
     this.allRecords = await getAllRecords();
-    await enrichFallbackArtInBackground(needsArt().filter((r) => r.artChecked && !r.fallbackArtChecked), onEach);
+    await verifyArtInBackground(this.allRecords.filter(needsArtVerification), onEach);
+    this.allRecords = await getAllRecords();
+    await enrichDeezerArtInBackground(this.allRecords.filter(needsDeezerArt), onEach);
+    this.allRecords = await getAllRecords();
+    await enrichArtInBackground(this.allRecords.filter(needsItunesArt), onEach);
+    this.allRecords = await getAllRecords();
+    await enrichMasterTitleArtInBackground(this.allRecords.filter(needsMasterTitleArt), onEach);
     await this.refreshInPlace();
   }
 
@@ -982,9 +1051,52 @@ class App {
     }
   }
 
-  async handleSync({ full = false } = {}) {
+  async handleSync({ full = false, auto = false } = {}) {
+    if (this.syncing) return;
+    this.syncing = true;
+    this.renderFreshness();
+    try {
+      await this.runSync({ full, auto });
+    } finally {
+      this.syncing = false;
+      this.renderFreshness();
+    }
+  }
+
+  // Opening the app (or coming back to it) checks for new records when it has been a while. Nobody needs to press anything.
+  async autoSyncIfDue({ force = false } = {}) {
+    if (this.syncing || !isDiscogsConnected()) return;
+    const { username } = discogsState();
+    const hasRealRecords = this.allRecords.some((r) => !String(r.id).startsWith('discogs_mock_'));
+    if (hasRealRecords && !this.crateBelongsToCurrentUser()) return; // someone else's crate: that is for a person to decide
+    if (!force && !needsAutoSync(readSyncMeta(username))) return;
+    await this.handleSync({ auto: true });
+  }
+
+  renderFreshness() {
+    const el = document.getElementById('sync-freshness');
+    if (!el) return;
+    el.classList.toggle('is-busy', Boolean(this.syncing));
+    if (this.syncing) {
+      el.textContent = 'Checking for new records…';
+      return;
+    }
+    const { username } = discogsState();
+    const last = username ? readSyncMeta(username).lastCheckedAt : 0;
+    el.textContent = last ? `Up to date. Checked ${timeAgo(last)}.` : 'Not checked yet.';
+  }
+
+  // The demo crate is for a first visit: it goes away once Discogs is connected
+  renderDemoNote() {
+    const note = document.getElementById('demo-note');
+    if (!note) return;
+    const onlyDemo = this.allRecords.length > 0 && this.allRecords.every((r) => String(r.id).startsWith('discogs_mock_'));
+    note.hidden = !(onlyDemo && !isDiscogsConnected());
+  }
+
+  async runSync({ full = false, auto = false }) {
     // Typed-in token: save it first (this is the fallback path; signed-in users skip straight to syncing)
-    if (discogsState().mode !== 'oauth') {
+    if (!auto && discogsState().mode !== 'oauth') {
       const username = this.usernameInput?.value.trim();
       const token = this.tokenInput?.value.trim();
       if (username && token) {
@@ -996,14 +1108,17 @@ class App {
     }
 
     const { username } = discogsState();
-    if (!(await this.claimCrateFor(username))) {
+    const hadRealRecords = (await getAllRecords()).some((r) => !String(r.id).startsWith('discogs_mock_'));
+    if (auto) {
+      if (!hadRealRecords) localStorage.setItem('crate_owner', username);
+    } else if (!(await this.claimCrateFor(username))) {
       this.setSyncStatus('Sync cancelled. Your crate is unchanged.', '');
       return;
     }
 
     const buttons = [this.syncBtn, this.syncFullBtn, this.syncTokenBtn].filter(Boolean);
     buttons.forEach((b) => { b.disabled = true; });
-    this.setSyncStatus('Starting Discogs collection sync...', '');
+    this.setSyncStatus(hadRealRecords ? 'Checking for new records...' : 'Bringing in your collection...', '');
 
     try {
       const result = await syncDiscogsCollection(username, ({ page, totalPages, count, message, quick }) => {
@@ -1018,7 +1133,14 @@ class App {
       this.setSyncStatus(result.quick
         ? (result.added > 0 ? `Added ${result.added} new ${result.added === 1 ? 'record' : 'records'}.` : 'Already up to date.')
         : result.removed > 0 ? `Sync complete! Removed ${result.removed} ${result.removed === 1 ? 'record' : 'records'} no longer in your collection.` : 'Sync complete! Crate updated.', 'success');
-      await this.loadAllRecords();
+      if (auto && hadRealRecords) {
+        // Someone may be browsing: don't rebuild the stack under them. A small pill offers the update instead.
+        this.allRecords = await getAllRecords();
+        this.renderDemoNote();
+        this.checkPendingOrder();
+      } else {
+        await this.loadAllRecords();
+      }
       // One request per release supplies its details and tracklist; durations still missing are filled from the master after
       this.fillMissingArt();
       this.fillMissingYears().then(() => this.fillMissingDetails()).then(() => this.fillMissingTracklists());

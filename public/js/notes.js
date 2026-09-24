@@ -9,9 +9,12 @@ import {
   creditKinds,
   loadRecordDetails,
   detailsAreStale,
+  needsDetails,
   fetchArtistLinks,
 } from './sync.js';
-import { usefulValue } from './values.js';
+import { usefulValue, isCustomRelease } from './values.js';
+import { externalFetch } from './external.js';
+import { artControl, artChoiceUpdates } from './artwork.js';
 import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover, findAlbumPage, isVariousArtists } from './wiki.js';
 import { isDiscogsConnected } from './discogs.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
@@ -26,9 +29,10 @@ export class GatefoldController {
   // onJump(recordId): bring another record to the front of the crate and open it.
   // getPosition(): { index, total } of the record on show, for the "17 / 51" counter.
   // onRoute(record|null, mode): keep the address bar in step ('push' | 'replace' | 'close').
-  constructor({ onStep, onJump, getPosition, onRoute, onArtworkChange } = {}) {
+  constructor({ onStep, onJump, getPosition, onRoute, onArtworkChange, onArtworkRetry } = {}) {
     this.onRoute = onRoute;
     this.onArtworkChange = onArtworkChange;
+    this.onArtworkRetry = onArtworkRetry;
     this.onStep = onStep;
     this.onJump = onJump;
     this.getPosition = getPosition;
@@ -47,6 +51,9 @@ export class GatefoldController {
     this.backArt = $('gf-back-art');
     this.flipper = $('gf-flipper');
     this.flipBtn = $('gf-flip-btn');
+    this.artFixBtn = $('gf-art-fix');
+    this.artGroup = $('gf-art-group');
+    this.artNote = $('gf-art-note');
     this.flipLabel = $('gf-flip-label');
     this.labelArt = $('gatefold-label-art');
     this.vinylDisc = $('gatefold-vinyl-disc');
@@ -89,6 +96,8 @@ export class GatefoldController {
     this.prevBtn?.addEventListener('click', () => this.step(-1));
     this.nextBtn?.addEventListener('click', () => this.step(1));
     this.flipBtn?.addEventListener('click', () => this.toggleFlip());
+    this.backArt?.addEventListener('load', () => this.markSpread());
+    this.artFixBtn?.addEventListener('click', () => this.toggleArtFix());
     this.jacketWrap?.addEventListener('click', () => {
       this.toggleFlip();
     });
@@ -261,14 +270,17 @@ export class GatefoldController {
   enrich(record, token) {
     const run = (fn) => fn().catch(() => { });
 
-    // Release details and the Wikipedia context come first; the band and back cover build on them
+    // Release details and the Wikipedia context come first; the band and back cover build on them. A custom release (one
+    // only in someone's own Discogs catalogue) is known to nothing else, so its album is not looked up elsewhere: a search
+    // by its title could only find a different album.
     const details = run(() => this.loadDetails(record, token));
-    const first = Promise.all([details, run(() => this.loadStory(record, token))]);
+    const story = details.then(() => (isCustomRelease(record) ? null : run(() => this.loadStory(record, token))));
+    const first = Promise.all([details, story]);
     this.detailsSettled = details;
     first.then(() => Promise.all([
       run(() => this.loadBand(record, token)),
-      run(() => this.loadBackCover(record, token)),
-      run(() => this.loadListen(record, token)),
+      run(() => (isCustomRelease(record) ? Promise.resolve() : this.loadBackCover(record, token))),
+      run(() => (isCustomRelease(record) ? Promise.resolve() : this.loadListen(record, token))),
     ]));
     return first;
   }
@@ -288,7 +300,7 @@ export class GatefoldController {
 
   async loadDetails(record, token) {
     if (record.discogsId && isDiscogsConnected()) {
-      if (!record.details) {
+      if (needsDetails(record)) {
         const updates = await loadRecordDetails(record);
         if (updates) Object.assign(record, updates);
       } else if (detailsAreStale(record)) {
@@ -304,15 +316,16 @@ export class GatefoldController {
     if (!record.context || record.context.matchVersion !== 2) {
       await this.fetchLinerNotes(record);
     } else if (!record.context.releaseChecked && (!record.releaseDate || record.year === record.pressingYear)) {
-      await this.resolveStructuredReleaseDate(record, record.context.wikiTitle || null);
-      await this.saveContext(record, { releaseChecked: true });
+      const complete = await this.resolveStructuredReleaseDate(record, record.context.wikiTitle || null);
+      if (complete) await this.saveContext(record, { releaseChecked: true });
     }
     if (this.isCurrent(record, token)) this.renderAll(record);
 
     const wikiTitle = record.context?.wikiTitle;
-    if (wikiTitle && !record.context.sectionsFetched) {
+    // infoboxVersion 2: an empty field no longer swallows the next one (a producer of "prev_title = ..."). Older saves are read again.
+    if (wikiTitle && (!record.context.sectionsFetched || record.context.infoboxVersion !== 2)) {
       const [sections, infobox] = await Promise.all([fetchAlbumSections(wikiTitle), fetchInfobox(wikiTitle)]);
-      await this.saveContext(record, { sections, infobox, sectionsFetched: true });
+      await this.saveContext(record, { sections, infobox, sectionsFetched: true, infoboxVersion: 2 });
       if (this.isCurrent(record, token)) this.renderAll(record);
     }
   }
@@ -342,8 +355,13 @@ export class GatefoldController {
   async loadBackCover(record, token) {
     // backCoverVersion 2: chosen by format (vinyl, then CD). Covers saved before that could be a cassette insert.
     if (record.context?.backCover === undefined || record.context.backCoverVersion !== 2) {
-      const url = isVariousArtists(record.artist) ? null : await fetchBackCover(record.artist, record.title);
-      await this.saveContext(record, { backCover: url || null, backCoverVersion: 2 });
+      let url = null;
+      try {
+        if (!isVariousArtists(record.artist)) url = await fetchBackCover(record.artist, record.title);
+        await this.saveContext(record, { backCover: url || null, backCoverVersion: 2 });
+      } catch {
+        // A source was unreachable or busy: leave it unchecked, so the next open tries again
+      }
     }
     if (this.isCurrent(record, token)) this.renderFlip(record);
   }
@@ -356,7 +374,7 @@ export class GatefoldController {
   renderAll(record) {
     const steps = [
       'renderFront', 'renderSpecs', 'renderTracklist', 'renderCredits', 'renderStory', 'renderVideos', 'renderListen',
-      'renderCopy', 'renderBand', 'renderAttribution', 'renderFlip', 'renderConnections', 'renderNav',
+      'renderCopy', 'renderBand', 'renderAttribution', 'renderFlip', 'renderArtFix', 'renderConnections', 'renderNav',
     ];
     for (const step of steps) {
       try {
@@ -421,7 +439,7 @@ export class GatefoldController {
       .filter((p) => p.roles.some((r) => /^(co-?)?producer$/i.test(r)))
       .map((p) => p.name);
     if (names.length > 0) return names.slice(0, 3).join(', ');
-    return record.context?.infobox?.producer || '';
+    return usefulValue(record.context?.infobox?.producer) || '';
   }
 
   renderSpecs(record) {
@@ -488,8 +506,9 @@ export class GatefoldController {
     if (!this.wikiEl) return;
     const ctx = record.context;
     // Nothing to show (still looking, or no article): the section stays out of the way
-    if (this.storySection) this.storySection.hidden = !ctx?.wikiExtract;
-    if (!ctx?.wikiExtract) return;
+    const show = Boolean(ctx?.wikiExtract) && !isCustomRelease(record);
+    if (this.storySection) this.storySection.hidden = !show;
+    if (!show) return;
 
     const paragraphs = (text) => text.split('\n\n').map((p) => `<p>${this.escapeHTML(p)}</p>`).join('');
     const parts = [`<div class="gf-lede">${ctx.wikiExtract}</div>`];
@@ -508,7 +527,7 @@ export class GatefoldController {
   // Places to hear the album: only links known to land on it (never a search page)
   renderListen(record) {
     if (!this.listenSection || !this.listenLinksEl) return;
-    const links = [
+    const links = isCustomRelease(record) ? [] : [
       record.itunesUrl && { name: 'Apple Music', url: record.itunesUrl },
       record.context?.listen?.deezer && { name: 'Deezer', url: record.context.listen.deezer },
     ].filter(Boolean);
@@ -591,7 +610,7 @@ export class GatefoldController {
       parts.push(`<a class="gf-inline-link" href="https://www.discogs.com/release/${encodeURIComponent(record.discogsId)}" target="_blank" rel="noopener">View this pressing on Discogs <span aria-hidden="true">↗</span></a>`);
     }
 
-    this.copySection.hidden = parts.length === 0;
+    this.copySection.hidden = parts.length === 0 && !artControl(record);
     this.copyEl.innerHTML =  /*html*/ parts.join('');
   }
 
@@ -692,6 +711,40 @@ export class GatefoldController {
 
   // The sleeve always flips: it's how you see the whole record. Until (or unless) a real back cover turns up, the
   // back is the front art, dimmed.
+  // Which cover to show is a choice the app makes by comparing pictures, so a person can always overrule it here
+  renderArtFix(record) {
+    if (!this.artGroup || !this.artFixBtn) return;
+    const control = artControl(record);
+    this.artGroup.hidden = !control;
+    if (!control) return;
+    this.artNote.textContent = control.note;
+    this.artFixBtn.textContent = control.label;
+    this.artFixBtn.dataset.action = control.action;
+  }
+
+  async toggleArtFix() {
+    const record = this.activeRecord;
+    const action = this.artFixBtn?.dataset.action;
+    const updates = record && action ? artChoiceUpdates(record, action) : null;
+    if (!updates) return;
+    await updateRecord(record.id, updates);
+    Object.assign(record, updates);
+    this.renderFront(record);
+    this.renderFlip(record);
+    this.renderArtFix(record);
+    this.renderCopy(record);
+    this.onArtworkChange?.();
+    if (action === 'retry') this.onArtworkRetry?.();
+  }
+
+  // Some archived "back" images are the whole wraparound sleeve (back, spine and front side by side). Shown as a square
+  // they'd be cropped to the middle, so a wide picture is shown from its left edge: the back cover.
+  markSpread() {
+    const art = this.backArt;
+    if (!art?.naturalHeight) return;
+    art.closest('.gf-back')?.classList.toggle('is-spread', art.naturalWidth / art.naturalHeight > 1.4);
+  }
+
   renderFlip(record) {
     const back = record.context?.backCover;
     const frontArt = record.artwork?.highRes || record.artwork?.thumbnail || '';
@@ -915,7 +968,7 @@ export class GatefoldController {
 
   async fetchLinerNotes(record) {
     // What we learned elsewhere (artist bio, back cover...) survives; only the album-article fields are redone
-    const WIKI_FIELDS = ['wikiExtract', 'wikiDescription', 'wikiUrl', 'wikiImage', 'wikiTitle', 'sections', 'infobox', 'sectionsFetched', 'releaseChecked'];
+    const WIKI_FIELDS = ['wikiExtract', 'wikiDescription', 'wikiUrl', 'wikiImage', 'wikiTitle', 'sections', 'infobox', 'sectionsFetched', 'infoboxVersion', 'releaseChecked'];
     const kept = Object.fromEntries(Object.entries(record.context || {}).filter(([k]) => !WIKI_FIELDS.includes(k)));
 
     try {
@@ -928,7 +981,7 @@ export class GatefoldController {
         return;
       }
 
-      const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(titleToFetch)}`);
+      const res = await externalFetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(titleToFetch)}`);
       if (!res.ok) throw new Error('No summary found');
 
       const data = await res.json();
@@ -951,15 +1004,18 @@ export class GatefoldController {
     }
   }
 
+  // Returns false when a source couldn't be reached, so the record isn't marked as checked and is tried again later
   async resolveStructuredReleaseDate(record, wikiTitle) {
     let resolvedDate = null;
     let resolvedYear = null;
+    let complete = true;
 
     // 1. Check Wikipedia wikitext infobox `| released =`
     if (wikiTitle) {
       try {
         const parseUrl = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(wikiTitle)}&prop=wikitext&format=json&origin=*`;
-        const parseRes = await fetch(parseUrl);
+        const parseRes = await externalFetch(parseUrl);
+        if (!parseRes.ok && parseRes.status !== 404) complete = false;
         if (parseRes.ok) {
           const parseData = await parseRes.json();
           const wikitext = parseData?.parse?.wikitext?.['*'] || '';
@@ -992,6 +1048,7 @@ export class GatefoldController {
         }
       } catch {
         // Fall through to MusicBrainz
+        complete = false;
       }
     }
 
@@ -1000,7 +1057,8 @@ export class GatefoldController {
       try {
         const cleanTitle = record.title.replace(/\([^)]*\)/g, '').trim();
         const mbUrl = `https://musicbrainz.org/ws/2/release-group?query=artist:${encodeURIComponent(record.artist)}+AND+releasegroup:${encodeURIComponent(cleanTitle)}&fmt=json`;
-        const mbRes = await fetch(mbUrl);
+        const mbRes = await externalFetch(mbUrl);
+        if (!mbRes.ok && mbRes.status !== 404) complete = false;
         if (mbRes.ok) {
           const mbData = await mbRes.json();
           const groups = mbData?.['release-groups'] || [];
@@ -1018,6 +1076,7 @@ export class GatefoldController {
         }
       } catch {
         // Ignore MusicBrainz failure
+        complete = false;
       }
     }
 
@@ -1041,6 +1100,7 @@ export class GatefoldController {
       await updateRecord(record.id, updates);
       Object.assign(record, updates);
     }
+    return resolvedYear ? true : complete;
   }
 
   escapeHTML(str = '') {
