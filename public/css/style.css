@@ -345,6 +345,13 @@ body {
   pointer-events: none !important;
 }
 
+/* One jacket: the cover plus its edge and lip, so they always move together */
+.sleeve-body {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.2s ease;
+}
+
 /* Solid Opaque Cover Wrapper */
 .sleeve-cover-wrap {
   position: absolute;
@@ -356,7 +363,7 @@ body {
     0 1px 2px rgba(0, 0, 0, 0.7),
     0 8px 18px -4px rgba(0, 0, 0, 0.6),
     inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: box-shadow 0.2s ease;
   z-index: 5;
 }
 
@@ -395,8 +402,11 @@ body {
     inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
-.sleeve.active:hover .sleeve-cover-wrap {
+.sleeve.active:hover .sleeve-body {
   transform: translateY(-4px) scale(1.015);
+}
+
+.sleeve.active:hover .sleeve-cover-wrap {
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.7),
     0 14px 26px -4px rgba(0, 0, 0, 0.55),
@@ -406,7 +416,7 @@ body {
 
 .sleeve.active .sleeve-sheen-overlay {
   background:
-    radial-gradient(circle at var(--glare-x, 50%) var(--glare-y, 35%), rgba(255, 255, 255, 0.14) 0%, transparent 60%),
+    radial-gradient(circle at var(--glare-x, 50%) var(--glare-y, 35%), rgba(255, 255, 255, 0.06) 0%, transparent 60%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
     linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, 0.28) 100%);
 }
@@ -1682,7 +1692,6 @@ body.sleeve-open .app-header > * {
   z-index: 50;
   display: flex;
   flex-direction: column;
-  background: rgba(8, 8, 11, 0.66);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -1697,6 +1706,19 @@ body.sleeve-open .app-header > * {
   pointer-events: auto;
   transform: none;
   transition-delay: 0s;
+}
+
+/* The tint and blur live on their own layer behind the content, so a problem painting either can't hide the page */
+.gatefold-workspace::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(8, 8, 11, 0.66);
+  pointer-events: none;
+}
+
+.gatefold-workspace.open::before {
   backdrop-filter: blur(36px) saturate(1.2);
   -webkit-backdrop-filter: blur(36px) saturate(1.2);
 }
@@ -1850,6 +1872,7 @@ body.sleeve-open .app-header > * {
 }
 
 .gatefold-vinyl-disc {
+  /* The pressing's colour is applied inline from the Discogs format (notes.js); this is the standard black record */
   position: relative;
   width: 100%;
   height: 100%;
@@ -2830,9 +2853,9 @@ body.sleeve-open .app-header > * {
 
 /* Active cover follows the pointer: a slight tilt and a moving highlight (mouse and trackpad only) */
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
-  .sleeve.active:hover .sleeve-cover-wrap {
+  .sleeve.active:hover .sleeve-body {
     transform: perspective(1000px) rotateX(calc(var(--tilt-y, 0) * -5deg)) rotateY(calc(var(--tilt-x, 0) * 6deg)) translateY(-4px) scale(1.015);
-    transition: transform 0.12s ease-out, box-shadow 0.2s ease;
+    transition: transform 0.12s ease-out;
   }
 }
 
@@ -2872,4 +2895,52 @@ a.btn {
 .settings-desc strong {
   color: var(--text-main);
   font-weight: 700;
+}
+
+/* Discogs attribution: their terms ask for a notice with the sign-in and credit next to their data */
+.discogs-notice {
+  margin-top: 1.1rem;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.gf-attribution {
+  margin-top: -0.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.gf-attribution[hidden] {
+  display: none;
+}
+
+.gf-attribution a {
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-main);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.28);
+  padding-bottom: 2px;
+}
+
+.gf-attribution a:hover {
+  border-color: var(--color-accent);
+}
+
+.gf-attribution p {
+  max-width: 62ch;
+  margin-top: 0.9rem;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+/* A page that loads straight into an album appears at once: no fade that could stall and leave only the blur showing */
+.gatefold-workspace.instant {
+  transition: none;
 }

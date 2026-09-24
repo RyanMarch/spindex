@@ -12,6 +12,7 @@ import {
 } from './sync.js';
 import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover } from './wiki.js';
 import { isDiscogsConnected } from './discogs.js';
+import { parseVinyl, vinylFill } from './vinyl.js';
 
 const COMPACT = '(max-width: 960px)';
 
@@ -60,6 +61,8 @@ export class GatefoldController {
     this.bandSection = $('gf-band-section');
     this.bandEl = $('gf-band');
     this.bandTitle = $('gf-band-title');
+    this.attributionEl = $('gf-attribution');
+    this.attributionLink = $('gf-attribution-link');
     this.bar = document.querySelector('.gf-bar');
     this.barTitle = $('gf-bar-title');
     this.header = $('gf-header');
@@ -158,6 +161,11 @@ export class GatefoldController {
     if (mode !== 'none') this.onRoute?.(fresh, mode);
 
     if (this.workspace) {
+      // Arriving straight from an address (refresh, shared link) shows the page at once; only opening from the crate fades in
+      if (mode === 'none') {
+        this.workspace.classList.add('instant');
+        setTimeout(() => this.workspace.classList.remove('instant'), 600);
+      }
       this.workspace.classList.add('open');
       document.body.classList.add('sleeve-open');
       this.workspace.setAttribute('aria-hidden', 'false');
@@ -289,18 +297,20 @@ export class GatefoldController {
   // Rendering
   // ------------------------------------------------------------------------
 
+  // Each section renders on its own: if one fails on an odd record, the rest of the page still appears
   renderAll(record) {
-    this.renderFront(record);
-    this.renderSpecs(record);
-    this.renderTracklist(record);
-    this.renderCredits(record);
-    this.renderStory(record);
-    this.renderVideos(record);
-    this.renderCopy(record);
-    this.renderBand(record);
-    this.renderFlip(record);
-    this.renderConnections(record);
-    this.renderNav();
+    const steps = [
+      'renderFront', 'renderSpecs', 'renderTracklist', 'renderCredits', 'renderStory', 'renderVideos',
+      'renderCopy', 'renderBand', 'renderAttribution', 'renderFlip', 'renderConnections', 'renderNav',
+    ];
+    for (const step of steps) {
+      try {
+        const result = this[step](record);
+        if (result && typeof result.catch === 'function') result.catch((err) => console.error(`Album page: ${step} failed`, err));
+      } catch (err) {
+        console.error(`Album page: ${step} failed`, err);
+      }
+    }
   }
 
   renderFront(record) {
@@ -310,11 +320,31 @@ export class GatefoldController {
     }
     if (this.jacketArt) this.jacketArt.alt = `${record.artist} – ${record.title}`;
     if (this.labelArt && this.labelArt.getAttribute('src') !== artUrl) this.labelArt.src = artUrl;
+    this.applyVinyl(record, artUrl);
     if (this.titleEl) this.titleEl.textContent = record.title || '';
     if (this.artistEl) this.artistEl.textContent = record.artist || '';
 
     const pos = this.getPosition?.();
     if (this.stepCount && pos) this.stepCount.textContent = `${pos.index + 1} / ${pos.total}`;
+  }
+
+  // The record peeking out of the jacket takes the colour and finish of the pressing (Discogs: format text)
+  applyVinyl(record, artUrl) {
+    if (!this.vinylDisc) return;
+    try {
+      const look = parseVinyl(record.details?.formats);
+      // Groove rings over the pressing's colour, as one plain inline background (the widest-supported gradient syntax)
+      const grooves = 'repeating-radial-gradient(circle, rgba(0, 0, 0, 0.3) 0px, rgba(0, 0, 0, 0.3) 1px, rgba(255, 255, 255, 0.05) 1px, rgba(255, 255, 255, 0.05) 2px, rgba(0, 0, 0, 0) 2px, rgba(0, 0, 0, 0) 4px)';
+      if (look.kind === 'black') {
+        this.vinylDisc.style.removeProperty('background'); // the standard black record from the stylesheet
+      } else {
+        this.vinylDisc.style.background = `${grooves}, ${vinylFill(look, artUrl)}`;
+      }
+      this.vinylDisc.dataset.finish = look.kind;
+    } catch (err) {
+      console.error('Album page: could not colour the record', err);
+      this.vinylDisc.style.removeProperty('background');
+    }
   }
 
   formatDate(record) {
@@ -577,6 +607,16 @@ export class GatefoldController {
       this.bandEl.querySelector('.gf-band-photo')?.remove();
       this.bandEl.classList.remove('has-photo');
     });
+  }
+
+  // Discogs' terms: credit them next to their data, linking to the page that holds it (a normal, followed link)
+  renderAttribution(record) {
+    if (!this.attributionEl) return;
+    const fromDiscogs = record.discogsId && !String(record.id).startsWith('discogs_mock_');
+    this.attributionEl.hidden = !fromDiscogs;
+    if (fromDiscogs && this.attributionLink) {
+      this.attributionLink.href = `https://www.discogs.com/release/${encodeURIComponent(record.discogsId)}`;
+    }
   }
 
   hasBackCover() {

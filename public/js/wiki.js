@@ -194,7 +194,8 @@ async function fetchCommonsPhoto(fileName) {
 }
 
 // Back cover from the Cover Art Archive (images are explicitly typed there), via MusicBrainz.
-// MusicBrainz asks for at most ~1 request per second, so this walks a few candidate releases gently.
+// MusicBrainz lists which releases have a back cover, so we only ask the archive about those (no guessing, no 404s).
+// MusicBrainz asks for at most ~1 request per second.
 export async function fetchBackCover(artist, title) {
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const cleanTitle = title.replace(/\([^)]*\)/g, '').trim();
@@ -204,10 +205,11 @@ export async function fetchBackCover(artist, title) {
   if (!group) return null;
 
   await wait(1100);
-  const detail = await getJSON(`https://musicbrainz.org/ws/2/release-group/${group.id}?inc=releases&fmt=json`);
-  const releases = (detail?.releases || []).slice(0, 4);
+  const listing = await getJSON(`https://musicbrainz.org/ws/2/release?release-group=${group.id}&limit=100&fmt=json`);
+  const withBack = (listing?.releases || []).filter((r) => r['cover-art-archive']?.back);
 
-  for (const release of releases) {
+  // Usually one release; a second is a fallback in case the archive's storage server has a hiccup
+  for (const release of withBack.slice(0, 2)) {
     await wait(700);
     const archive = await getJSON(`https://coverartarchive.org/release/${release.id}`);
     const back = archive?.images?.find((img) => img.types?.includes('Back') && img.approved !== false);

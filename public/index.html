@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="description" content="Tactile digital vinyl record crate and jukebox companion for hosting">
   <title>Crate | Vinyl Record Companion</title>
-  <link rel="stylesheet" href="/css/style.css?v=36">
+  <link rel="stylesheet" href="/css/style.css?v=42">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%23121214%22 stroke=%22%23e4e4e7%22 stroke-width=%224%22/><circle cx=%2250%22 cy=%2250%22 r=%2220%22 fill=%22%23e11d48%22/><circle cx=%2250%22 cy=%2250%22 r=%224%22 fill=%22%23fff%22/></svg>">
@@ -216,6 +216,12 @@
               <h3 class="gatefold-section-label" id="gf-band-title">The artist</h3>
               <div class="gf-band" id="gf-band"></div>
             </section>
+
+            <footer class="gf-attribution" id="gf-attribution" hidden>
+              <a id="gf-attribution-link" href="https://www.discogs.com" target="_blank" rel="noopener">Data provided by Discogs</a>
+              <p>This application uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs.
+                ‘Discogs’ is a trademark of Zink Media, LLC.</p>
+            </footer>
           </div>
         </div>
       </div>
@@ -285,6 +291,9 @@
           </details>
 
           <div id="sync-status" class="sync-status"></div>
+
+          <p class="discogs-notice">This application uses Discogs’ API but is not affiliated with, sponsored or endorsed by
+            Discogs. ‘Discogs’ is a trademark of Zink Media, LLC.</p>
         </div>
 
         <div class="settings-group">
@@ -302,7 +311,7 @@
     </div>
   </aside>
 
-  <script type="module" src="/js/app.js?v=30"></script>
+  <script type="module" src="/js/app.js?v=36"></script>
 </body>
 
 </html>

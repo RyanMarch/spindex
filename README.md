@@ -74,6 +74,7 @@ token instead") still works as a local fallback.
    project, Settings, Variables and Secrets), or with `wrangler pages secret put <NAME>`.
 
 **Notes**
+- Discogs' API terms are honored in the UI: the trademark notice sits with the sign-in (Settings) and at the bottom of each album page, with a "Data provided by Discogs" link to the release's Discogs page.
 - One crate per browser: connecting a different Discogs account asks before replacing the local crate.
 - The proxy is read-only and allowlisted (your own collection, releases, masters, artists). Nothing is cached server-side.
 - `npm test` includes an end-to-end OAuth test against a mock Discogs server (`tests/oauth-test.mjs`).

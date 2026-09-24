@@ -118,16 +118,18 @@ export class CrateController {
       sheen.className = 'sleeve-sheen-overlay';
       coverWrap.appendChild(sheen);
 
-      el.appendChild(coverWrap);
-
-      // The jacket's thickness: a bevelled edge just outside the artwork, never over it
+      // The jacket's thickness: a bevelled edge and a lit top lip just outside the artwork, never over it
       const edge = document.createElement('div');
       edge.className = 'sleeve-edge';
-      el.appendChild(edge);
 
       const lip = document.createElement('div');
       lip.className = 'sleeve-lip';
-      el.appendChild(lip);
+
+      // Cover and thickness share one wrapper, so a hover lift or tilt moves them together as a single jacket
+      const body = document.createElement('div');
+      body.className = 'sleeve-body';
+      body.append(coverWrap, edge, lip);
+      el.appendChild(body);
 
       // Tilt and glare follow the pointer over the active cover (touch screens have no hover, so skip them)
       if (this.canHover) {
