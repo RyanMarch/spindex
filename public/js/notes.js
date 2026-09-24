@@ -52,6 +52,8 @@ export class GatefoldController {
     this.creditsSection = $('gf-credits-section');
     this.creditsEl = $('gf-credits');
     this.wikiEl = $('gatefold-wiki');
+    this.tracklistSection = $('gf-tracklist-section');
+    this.storySection = $('gf-story-section');
     this.crateSection = $('gf-crate-section');
     this.connectionsEl = $('gf-connections');
     this.watchSection = $('gf-watch-section');
@@ -81,7 +83,7 @@ export class GatefoldController {
     this.nextBtn?.addEventListener('click', () => this.step(1));
     this.flipBtn?.addEventListener('click', () => this.toggleFlip());
     this.jacketWrap?.addEventListener('click', () => {
-      if (this.hasBackCover()) this.toggleFlip();
+      this.toggleFlip();
     });
 
     // Delegated clicks for things rendered later: jumps into the crate and section links
@@ -204,6 +206,7 @@ export class GatefoldController {
 
   resetView() {
     this.flipper?.classList.remove('is-flipped');
+    this.jacketWrap?.classList.remove('disc-front');
     this.scroller().scrollTop = 0;
     if (this.right) this.right.scrollTop = 0;
     if (this.workspace) this.workspace.scrollTop = 0;
@@ -375,11 +378,17 @@ export class GatefoldController {
     return record.context?.infobox?.producer || '';
   }
 
+  // Discogs and Wikipedia fill gaps with placeholders ("None", "Not On Label"); treat those as no value
+  usefulValue(value) {
+    const text = String(value ?? '').trim();
+    return /^(none|not on label.*|unknown|n\/?a|-+|\?+)$/i.test(text) ? '' : text;
+  }
+
   renderSpecs(record) {
     const label = record.details?.labels?.[0];
     const rows = [
       ['Released', this.formatDate(record)],
-      ['Label', label ? label.name : (record.context?.infobox?.label || '')],
+      ['Label', this.usefulValue(label?.name) || this.usefulValue(record.context?.infobox?.label)],
       ['Length', calculateTotalDuration(record.tracklist) || ''],
       ['Produced by', this.producers(record)],
     ].filter(([, value]) => value);
@@ -403,10 +412,8 @@ export class GatefoldController {
   renderTracklist(record) {
     if (!this.tracklistEl) return;
     const tracks = record.tracklist || [];
-    if (tracks.length === 0) {
-      this.tracklistEl.innerHTML =  /*html*/ '<p class="gatefold-empty">No tracklist provided.</p>';
-      return;
-    }
+    if (this.tracklistSection) this.tracklistSection.hidden = tracks.length === 0;
+    if (tracks.length === 0) return;
 
     const row = (t) => `<li><span class="gf-tpos">${this.escapeHTML(t.position || '·')}</span><span class="gf-tname">${this.escapeHTML(t.title)}</span><span class="gf-ttime">${this.escapeHTML(t.duration || '')}</span><a class="gf-lyrics" href="${this.escapeHTML(this.lyricsUrl(record, t))}" target="_blank" rel="noopener" aria-label="Search lyrics for ${this.escapeHTML(t.title)}" title="Find lyrics on Genius">↗</a></li>`;
 
@@ -440,14 +447,9 @@ export class GatefoldController {
   renderStory(record) {
     if (!this.wikiEl) return;
     const ctx = record.context;
-    if (!ctx) {
-      this.wikiEl.innerHTML =  /*html*/ '<p class="gatefold-loading">Reading from the archives…</p>';
-      return;
-    }
-    if (!ctx.wikiExtract) {
-      this.wikiEl.innerHTML =  /*html*/ '<p class="gatefold-empty">No notes for this record in the archives.</p>';
-      return;
-    }
+    // Nothing to show (still looking, or no article): the section stays out of the way
+    if (this.storySection) this.storySection.hidden = !ctx?.wikiExtract;
+    if (!ctx?.wikiExtract) return;
 
     const paragraphs = (text) => text.split('\n\n').map((p) => `<p>${this.escapeHTML(p)}</p>`).join('');
     const parts = [`<div class="gf-lede">${ctx.wikiExtract}</div>`];
@@ -634,24 +636,45 @@ export class GatefoldController {
     return Boolean(this.activeRecord?.context?.backCover);
   }
 
+  // The sleeve always flips: it's how you see the whole record. Until (or unless) a real back cover turns up, the
+  // back is the front art, dimmed.
   renderFlip(record) {
     const back = record.context?.backCover;
-    if (this.flipBtn) this.flipBtn.hidden = !back;
-    if (back && this.backArt && this.backArt.getAttribute('src') !== back) {
-      this.backArt.src = back;
-      this.backArt.alt = `${record.artist} – ${record.title}, back cover`;
+    const frontArt = record.artwork?.highRes || record.artwork?.thumbnail || '';
+    const src = back || frontArt;
+    if (this.backArt) {
+      if (src && this.backArt.getAttribute('src') !== src) this.backArt.src = src;
+      this.backArt.alt = back ? `${record.artist} – ${record.title}, back cover` : '';
+      this.backArt.closest('.gf-back')?.classList.toggle('is-placeholder', !back);
     }
-    this.jacketWrap?.classList.toggle('is-flippable', Boolean(back));
+    if (this.flipBtn) this.flipBtn.hidden = false;
+    this.jacketWrap?.classList.add('is-flippable');
+    this.updateFlipLabel();
+    this.syncDiscFront();
+
     if (this.listenEl) {
       this.listenEl.hidden = !record.itunesUrl;
       if (record.itunesUrl) this.listenEl.href = record.itunesUrl;
     }
   }
 
+  updateFlipLabel() {
+    if (!this.flipLabel) return;
+    const flipped = this.flipper?.classList.contains('is-flipped');
+    if (flipped) this.flipLabel.textContent = 'Flip to front cover';
+    else this.flipLabel.textContent = this.hasBackCover() ? 'Flip to back cover' : 'Flip the sleeve';
+  }
+
   toggleFlip() {
-    if (!this.hasBackCover()) return;
-    const flipped = this.flipper.classList.toggle('is-flipped');
-    if (this.flipLabel) this.flipLabel.textContent = flipped ? 'Flip to front cover' : 'Flip to back cover';
+    this.flipper.classList.toggle('is-flipped');
+    this.updateFlipLabel();
+    this.syncDiscFront();
+  }
+
+  // With no back cover to look at, the flipped sleeve makes room for the record, which slides in front of it
+  syncDiscFront() {
+    const flipped = this.flipper?.classList.contains('is-flipped');
+    this.jacketWrap?.classList.toggle('disc-front', Boolean(flipped && !this.hasBackCover()));
   }
 
   // Other records in your crate, in this order of relevance: same artist, shared writer, shared producer, same label.

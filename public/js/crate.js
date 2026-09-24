@@ -307,44 +307,6 @@ export class CrateController {
 
   }
 
-  getDividerLabel(index) {
-    if (index === 0) return this.formatSectionValue(this.records[0]);
-
-    const prev = this.records[index - 1];
-    const curr = this.records[index];
-
-    const prevVal = this.getSectionValue(prev);
-    const currVal = this.getSectionValue(curr);
-
-    return prevVal !== currVal ? currVal : null;
-  }
-
-  getSectionValue(record) {
-    if (this.sortKey === 'genre') {
-      return (record.genres && record.genres[0]) ? record.genres[0].toUpperCase() : 'OTHER';
-    }
-    if (this.sortKey === 'year') {
-      const year = (record.year && record.masterYear && record.year !== record.masterYear)
-        ? record.year
-        : (record.masterYear || record.originalYear || record.year);
-      if (!year) return 'UNKNOWN';
-      const decade = Math.floor(year / 10) * 10;
-      return `${decade}s`;
-    }
-    if (this.sortKey === 'artist-first') {
-      const name = record.artist || record.sortArtist || '';
-      const char = name.trim().charAt(0).toUpperCase();
-      return /[A-Z]/.test(char) ? char : '#';
-    }
-    const name = parseSortArtist(record.artist) || record.sortArtist || record.artist || '';
-    const char = name.trim().charAt(0).toUpperCase();
-    return /[A-Z]/.test(char) ? char : '#';
-  }
-
-  formatSectionValue(record) {
-    return this.getSectionValue(record);
-  }
-
   next() {
     if (this.currentIndex < this.records.length - 1) {
       this.currentIndex++;

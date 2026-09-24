@@ -118,8 +118,14 @@ export function vinylFill(v, art = '') {
       return [...dots.map(([x, y, r]) => `radial-gradient(circle at ${x}% ${y}%, ${rgba(c2)} 0%, ${rgba(c2)} ${r}%, rgba(0, 0, 0, 0) ${r + 0.6}%)`), flat(c1)].join(', ');
     }
 
-    case 'split':
-      return `conic-gradient(from 55deg, ${rgba(c1)} 0deg, ${rgba(c1)} 180deg, ${rgba(c2)} 180deg, ${rgba(c2)} 360deg)`;
+    case 'split': {
+      // Two colours make halves, three make thirds... The seams start at about 2 o'clock so they show on the crescent
+      // that peeks out of the sleeve
+      const parts = v.colors.length > 1 ? v.colors : [c1, c2];
+      const step = 360 / parts.length;
+      const stops = parts.map((c, i) => `${rgba(c)} ${i * step}deg, ${rgba(c)} ${(i + 1) * step}deg`);
+      return `conic-gradient(from 55deg, ${stops.join(', ')})`;
+    }
 
     case 'swirl':
       return [

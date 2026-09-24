@@ -37,6 +37,8 @@ assert.equal(kind('Opaque Yellow w/ Black Splatter'), 'splatter');
 assert.deepEqual(parseVinyl(pressing('Opaque Yellow w/ Black Splatter')).colors.length, 2);
 assert.equal(kind('Blue / Yellow Split'), 'split');
 assert.equal(kind('Red & White Half and Half'), 'split');
+assert.equal(kind('Black, Grey, Silver Tri-Color'), 'split');
+assert.equal(parseVinyl(pressing('Black, Grey, Silver Tri-Color')).colors.length, 3);
 assert.equal(kind('Galaxy Blue Purple'), 'swirl');
 assert.equal(kind('Blue / Yellow'), 'swirl', 'several colours with no finish named');
 assert.equal(kind('', ['LP', 'Picture Disc']), 'picture');

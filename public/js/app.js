@@ -1,5 +1,5 @@
 // app.js - Main application coordinator
-import { openDB, getAllRecords, clearRecords, deleteRecords, countRecords, getRecord, upsertRecords } from './db.js';
+import { openDB, getAllRecords, clearRecords, deleteRecords, getRecord, upsertRecords } from './db.js';
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
@@ -673,7 +673,7 @@ class App {
 
     if (!record) {
       if (this.metaTitle) this.metaTitle.textContent = 'No records in crate';
-      if (this.metaArtist) this.metaArtist.textContent = '—';
+      if (this.metaArtist) this.metaArtist.textContent = '';
       if (this.metaYear) this.metaYear.textContent = '';
       if (this.metaDuration) this.metaDuration.textContent = '';
       if (this.metaGenres) this.metaGenres.innerHTML =  /*html*/ '';

@@ -236,7 +236,6 @@ export async function fetchBackCover(artist, title) {
 
   // Usually one release; a second is a fallback in case the archive's storage server has a hiccup
   for (const release of withBack.slice(0, 2)) {
-    await wait(700);
     const archive = await getJSON(`https://coverartarchive.org/release/${release.id}`);
     const back = archive?.images?.find((img) => img.types?.includes('Back') && img.approved !== false);
     if (back) {

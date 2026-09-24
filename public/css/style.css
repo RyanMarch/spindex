@@ -8,11 +8,8 @@
   --text-muted: #f4f4f7c4;
   --color-accent: #f43f5e;
   --color-accent-hover: #e11d48;
-  --color-gold: #fbbf24;
   --sleeve-size: min(42vw, 420px);
   --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
@@ -507,29 +504,6 @@ body {
   opacity: 0;
 }
 
-.meta-eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.meta-eyebrow-line {
-  display: block;
-  width: 24px;
-  height: 1px;
-  background: var(--color-accent);
-  opacity: 0.7;
-}
-
-.meta-eyebrow-text {
-  font-size: 0.68rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--color-accent);
-  opacity: 0.8;
-}
-
 .meta-title {
   font-size: clamp(2.2rem, 9cqi, 3.6rem);
   font-weight: 800;
@@ -729,39 +703,6 @@ body {
 }
 
 /* Interactive Vinyl Inspection Showcase Modal */
-.record-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(6, 6, 8, 0.84);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 280ms ease;
-  z-index: 500;
-  padding: 2rem;
-}
-
-.record-modal.open {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.showcase-container {
-  width: min(94vw, 1080px);
-  max-height: 88vh;
-  background: #141419;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.9);
-  display: grid;
-  grid-template-columns: 460px 1fr;
-  overflow: hidden;
-  position: relative;
-}
 
 .modal-close {
   position: absolute;
@@ -787,58 +728,6 @@ body {
   background: rgba(255, 255, 255, 0.12);
 }
 
-/* Left Hero: 12" Jacket & Sliding Vinyl Disc */
-.showcase-visual {
-  background: radial-gradient(circle at 40% 40%, #1e1e26 0%, #121217 100%);
-  border-right: 1px solid var(--border-subtle);
-  padding: 2.5rem 1.5rem 2rem 2.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2rem;
-  overflow: hidden;
-}
-
-.jacket-and-disc-stage {
-  position: relative;
-  width: 280px;
-  height: 280px;
-}
-
-.showcase-jacket {
-  position: absolute;
-  inset: 0;
-  border-radius: 4px;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
-  overflow: hidden;
-  z-index: 10;
-  background: #17171d;
-}
-
-.showcase-jacket-art {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.jacket-spine-shadow {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 12px;
-  background: linear-gradient(90deg, rgba(0, 0, 0, 0.5) 0%, transparent 100%);
-  pointer-events: none;
-}
-
-.jacket-mylar-sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, transparent 60%);
-  pointer-events: none;
-}
 
 /* 12" Vinyl Disc with micro-grooves and center label */
 .vinyl-disc {
@@ -907,132 +796,12 @@ body {
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
-.visual-actions {
-  display: flex;
-  gap: 0.75rem;
-  width: 100%;
-  max-width: 300px;
-}
-
 /* Right: Gatefold Matte Liner Notes Card */
-.showcase-details {
-  padding: 2.25rem 2rem 2.5rem 2rem;
-  overflow-y: auto;
-  background: #15151b;
-}
-
-.showcase-header {
-  margin-bottom: 1.5rem;
-  padding-bottom: 1.25rem;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.showcase-title {
-  font-size: 1.75rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  margin-bottom: 0.35rem;
-}
-
-.showcase-artist {
-  font-size: 1.2rem;
-  color: var(--text-muted);
-  font-weight: 500;
-  margin-bottom: 0.35rem;
-}
-
-.showcase-year {
-  font-size: 0.85rem;
-  color: #71717a;
-  display: block;
-  margin-bottom: 0.75rem;
-}
-
-.showcase-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.tag-pill {
-  font-size: 0.72rem;
-  font-weight: 600;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-muted);
-  padding: 0.2rem 0.6rem;
-  border-radius: 9999px;
-}
-
-.host-note {
-  background: rgba(251, 191, 36, 0.08);
-  border-left: 3px solid var(--color-gold);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  padding: 0.85rem 1.15rem;
-  margin-bottom: 1.75rem;
-}
-
-.note-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--color-gold);
-  display: block;
-  margin-bottom: 0.3rem;
-  letter-spacing: 0.04em;
-}
-
-.host-note p {
-  font-size: 0.92rem;
-  color: #fef3c7;
-  font-style: italic;
-  line-height: 1.5;
-}
-
-.showcase-section-title {
-  font-size: 0.76rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-  margin-bottom: 0.75rem;
-}
-
-.modal-tracklist {
-  margin-bottom: 1.75rem;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 1rem;
-}
 
 .sides-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
-}
-
-.side-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.6rem;
-  border-bottom: 1px solid var(--border-subtle);
-  padding-bottom: 0.35rem;
-}
-
-.side-indicator {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  background: rgba(244, 63, 94, 0.18);
-  color: var(--color-accent);
-  font-weight: 800;
-  font-size: 0.72rem;
-  border-radius: 50%;
 }
 
 .side-col h4 {
@@ -1041,58 +810,6 @@ body {
   text-transform: uppercase;
   font-weight: 700;
   letter-spacing: 0.05em;
-}
-
-.modal-tracklist ul {
-  list-style: none;
-}
-
-.modal-tracklist li {
-  display: flex;
-  align-items: baseline;
-  font-size: 0.82rem;
-  padding: 0.3rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-}
-
-.track-pos {
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  width: 26px;
-  flex-shrink: 0;
-}
-
-.track-name {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-right: 0.5rem;
-}
-
-.track-time {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.wiki-body {
-  font-size: 0.94rem;
-  line-height: 1.65;
-  color: #d1d1d8;
-}
-
-.wiki-body p {
-  margin-bottom: 0.85rem;
-}
-
-.wiki-loading,
-.wiki-empty {
-  font-size: 0.88rem;
-  color: var(--text-muted);
-  font-style: italic;
 }
 
 /* Settings Drawer */
@@ -1267,8 +984,8 @@ body {
   }
 
   .meta-details-row,
-  .meta-genres,
-  .meta-actions {
+.meta-genres,
+.meta-actions {
     display: none;
   }
 
@@ -1283,9 +1000,7 @@ body {
     bottom: 1rem;
   }
 
-  .desktop-hint {
-    display: none;
-  }
+  
 }
 
 /* Large displays (e.g. 2304x1296) */
@@ -1847,6 +1562,11 @@ body.sleeve-open .app-header > * {
   transform: rotateY(180deg);
 }
 
+.gf-back.is-placeholder .gatefold-jacket-art {
+  filter: grayscale(0.7) brightness(0.32) blur(3px);
+  transform: scale(1.04);
+}
+
 .gatefold-jacket-art {
   width: 100%;
   height: 100%;
@@ -1888,6 +1608,15 @@ body.sleeve-open .app-header > * {
 
 .gatefold-vinyl-disc.ejected {
   transform: translateX(calc(var(--jacket) * 0.38));
+}
+
+/* No back cover: the flipped sleeve stays behind and the record comes forward, centred on the square */
+.disc-front .gatefold-disc-slot {
+  z-index: 20;
+}
+
+.disc-front .gatefold-vinyl-disc {
+  transform: translateX(calc(var(--jacket) * 0.04 - 8px));
 }
 
 .gf-flip-btn {
@@ -2200,14 +1929,6 @@ body.sleeve-open .app-header > * {
   text-underline-offset: 3px;
 }
 
-.gatefold-loading,
-.gatefold-empty {
-  font-family: var(--font-sans);
-  font-size: 0.86rem;
-  font-style: italic;
-  color: var(--text-muted);
-}
-
 /* Elsewhere in your crate */
 .gf-connections {
   display: grid;
@@ -2377,8 +2098,8 @@ body.sleeve-open .app-header > * {
 
 @media (prefers-reduced-motion: reduce) {
   .gf-flipper,
-  .gatefold-vinyl-disc,
-  .gatefold-workspace {
+.gatefold-vinyl-disc,
+.gatefold-workspace {
     transition-duration: 0.01ms;
   }
 }
@@ -2996,12 +2717,12 @@ body.search-open .search-input:focus {
 
 @media (max-width: 960px) {
   body.search-open .browse-toggle-btn,
-  body.search-open #settings-toggle-btn {
+body.search-open #settings-toggle-btn {
     display: none;
   }
 
   body.search-open .header-actions,
-  body.search-open .crate-search {
+body.search-open .crate-search {
     flex: 1 1 auto;
   }
 

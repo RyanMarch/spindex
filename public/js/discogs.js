@@ -92,8 +92,6 @@ export function paceMs() {
   return 1100;
 }
 
-export const connectUrl = (returnTo = location.pathname) => `/api/discogs/login?return=${encodeURIComponent(returnTo)}`;
-
 export async function disconnectDiscogs() {
   if (state.mode === 'oauth') {
     try {
