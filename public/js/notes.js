@@ -21,7 +21,7 @@ import { parseVinyl, vinylFill } from './vinyl.js';
 import { crateArtUrl } from './crate.js';
 
 // How long opening an album waits for its Discogs details before showing what it has
-const SETTLE_MS = 450;
+const SETTLE_MS = 160;
 
 const COMPACT = '(max-width: 960px) and (min-height: 521px)';
 
@@ -205,11 +205,23 @@ export class GatefoldController {
 
     // Everything fades in together: wait (briefly) for the cover to be ready rather than showing an empty square
     if (mode !== 'none' && this.jacketArt) {
-      await Promise.race([this.jacketArt.decode().catch(() => { }), new Promise((resolve) => setTimeout(resolve, 300))]);
+      await Promise.race([this.jacketArt.decode().catch(() => { }), new Promise((resolve) => setTimeout(resolve, 120))]);
       if (this.renderToken !== token) return;
     }
 
+    // Let the browser lay out and paint the page while it is still invisible, so the fade doesn't stall on that work
+    if (mode !== 'none' && this.workspace && !this.workspace.classList.contains('open')) {
+      this.workspace.classList.add('warm');
+      await new Promise((resolve) => {
+        const done = () => resolve();
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(done));
+        setTimeout(done, 120);
+      });
+      if (this.renderToken !== token) { this.workspace.classList.remove('warm'); return; }
+    }
+
     if (this.workspace) {
+      this.workspace.classList.remove('warm');
       // Arriving straight from an address (refresh, shared link) shows the page at once; only opening from the crate fades in
       if (mode === 'none') {
         this.workspace.classList.add('instant');
