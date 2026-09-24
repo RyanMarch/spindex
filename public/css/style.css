@@ -28,10 +28,20 @@ body {
   font-family: var(--font-sans);
   line-height: 1.5;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+select,
+input,
+summary {
+  touch-action: manipulation;
 }
 
 .sr-only {
@@ -50,6 +60,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   justify-content: space-between;
   position: relative;
   overflow: clip;
@@ -984,13 +995,28 @@ body {
   }
 
   .meta-details-row,
-.meta-genres,
-.meta-actions {
+  .meta-genres,
+  .meta-actions {
     display: none;
   }
 
   .station-metadata-col {
     z-index: -4 !important;
+  }
+}
+
+/* An upright tablet has the room for a bigger cover and a fuller title block */
+@media (min-width: 700px) and (max-width: 960px) {
+  :root {
+    --sleeve-size: min(64vw, 42vh, 500px);
+  }
+
+  .meta-title {
+    font-size: 1.5rem;
+  }
+
+  .meta-artist {
+    font-size: 1.1rem;
   }
 }
 
@@ -1040,7 +1066,7 @@ body {
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    max-width: 130px;
+    max-width: 190px;
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid var(--border-subtle);
     color: var(--text-main);
@@ -1260,10 +1286,13 @@ body.sleeve-open .app-header > * {
 }
 
 .drawer-top .modal-close {
+  position: static;
+  flex: 0 0 auto;
   background: transparent;
   border: none;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
+  margin: -0.4rem -0.6rem 0 0;
   border-radius: 50%;
   color: var(--text-muted);
 }
@@ -1431,6 +1460,23 @@ body.sleeve-open .app-header > * {
   z-index: -1;
   background: rgba(8, 8, 11, 0.66);
   pointer-events: none;
+}
+
+/* Small screens scroll the whole sheet, so the backdrop stays put while the content moves over it */
+@media (max-width: 960px) {
+  .gatefold-workspace::before {
+    position: fixed;
+  }
+}
+
+/* Once the sleeve is open the crate underneath isn't seen or touched: stop painting it */
+.crate-chassis {
+  transition: visibility 0s;
+}
+
+body.sleeve-open .crate-chassis {
+  visibility: hidden;
+  transition: visibility 0s linear 340ms;
 }
 
 .gatefold-workspace.open::before {
@@ -1683,9 +1729,9 @@ body.sleeve-open .app-header > * {
 
 /* Spec strip: small-caps label over value, like the back of a record */
 .gf-specs {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 1.25rem 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem 2.5rem;
   margin-top: 1.75rem;
   padding-top: 1.4rem;
   border-top: 1px solid var(--border-strong);
@@ -2043,8 +2089,9 @@ body.sleeve-open .app-header > * {
   outline-offset: 3px;
 }
 
-/* Phones and tablets: one column. The sheet scrolls as a whole; the bar stays put. */
-@media (max-width: 960px) {
+/* Phones and tablets held upright: one column. The sheet scrolls as a whole; the bar stays put. A phone on its side
+   is too short for that, so it keeps the two-column layout. */
+@media (max-width: 960px) and (min-height: 521px) {
   .gatefold-workspace {
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -2065,11 +2112,18 @@ body.sleeve-open .app-header > * {
   }
 
   .gatefold-left {
-    padding: 0.5rem 1rem 0;
+    padding: 1.4rem 1rem 0;
   }
 
   .gf-object {
     --jacket: min(64vw, 340px);
+  }
+
+  /* Tablets held upright have room for a bigger sleeve */
+  @media (min-width: 700px) {
+    .gf-object {
+      --jacket: min(58vw, 460px);
+    }
   }
 
   .gatefold-right {
@@ -2145,6 +2199,7 @@ body.sleeve-open .app-header > * {
 
 .gf-tabs {
   display: none;
+  position: relative; /* so a tab's offsetLeft is measured from the tab strip */
 }
 
 /* Desktop: the contents, listed under the jacket like the back of a sleeve */
@@ -2197,10 +2252,62 @@ body.sleeve-open .app-header > * {
   width: 0.8rem;
 }
 
-/* Short desktop windows have no room to list sections under the jacket */
-@media (min-width: 961px) and (max-height: 760px) {
+/* Short wide windows (an iPad on its side) have no room to list sections under the jacket: they ride in the top bar */
+@media (min-width: 961px) and (max-height: 760px), (max-width: 960px) and (max-height: 520px) {
   .gf-rail {
     display: none;
+  }
+
+  .gf-bar-title {
+    display: none;
+  }
+
+  .gf-tabs {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    justify-content: center;
+    gap: 1.6rem;
+  }
+
+  .gf-stepper {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .gf-tabs button {
+    position: relative;
+    padding: 0.7rem 0;
+    background: transparent;
+    border: none;
+    font-family: inherit;
+    font-size: 0.66rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--text-muted);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .gf-tabs button::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: var(--color-accent);
+    transform: scaleX(0);
+    transition: transform 0.2s ease;
+  }
+
+  .gf-tabs button.active {
+    color: var(--text-main);
+  }
+
+  .gf-tabs button.active::after {
+    transform: scaleX(1);
   }
 }
 
@@ -2376,7 +2483,7 @@ body.sleeve-open .app-header > * {
 }
 
 /* Phones and tablets: section tabs ride in the sticky bar; the title replaces "Back to Crate" once scrolled */
-@media (max-width: 960px) {
+@media (max-width: 960px) and (min-height: 521px) {
   .gf-section {
     scroll-margin-top: 7.5rem;
   }
@@ -2677,7 +2784,13 @@ a.btn {
 }
 
 .search-input::-webkit-search-cancel-button {
-  display: none;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-left: 0.4rem;
+  cursor: pointer;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a0a0aa' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='10' fill='%23444450' stroke='none'/%3E%3Cline x1='8' y1='8' x2='16' y2='16'/%3E%3Cline x1='16' y1='8' x2='8' y2='16'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 .search-input::placeholder {
@@ -2709,5 +2822,184 @@ body.search-open .crate-search {
   body.search-open .search-input {
     width: 100%;
     font-size: 1rem; /* 16px: keeps iOS from zooming the page on focus */
+  }
+}
+
+/* Touch: fingertip-sized targets (about 44px) without changing how anything looks */
+@media (pointer: coarse) {
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .browse-toggle-btn {
+    min-height: 38px;
+  }
+
+  .nav-pill-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .gf-step-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .gatefold-back-btn {
+    min-height: 44px;
+  }
+
+  .gf-tabs button {
+    min-height: 40px;
+  }
+
+  .gf-flip-btn {
+    min-height: 44px;
+  }
+
+  .vibe-pill,
+  .sort-select {
+    min-height: 40px;
+  }
+
+  /* Small links and glyphs keep their look; an invisible halo makes them easy to hit */
+  .gf-lyrics,
+  .gf-links-row a,
+  .gf-inline-link,
+  .gf-credit-name a,
+  .gf-source a {
+    position: relative;
+  }
+
+  .gf-lyrics::after,
+  .gf-links-row a::after,
+  .gf-inline-link::after,
+  .gf-source a::after {
+    content: '';
+    position: absolute;
+    inset: -11px -8px;
+  }
+}
+
+/* The crate is for touching; the album page is for reading, so its text can be selected and copied */
+.crate-stack {
+  -webkit-touch-callout: none;
+}
+
+.gatefold-workspace .gatefold-right {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ==========================================================================
+   Safe areas: the notch and Dynamic Island, the status bar (clock and battery), the home indicator.
+   The page draws edge to edge, so everything that sits at an edge keeps clear of them.
+   ========================================================================== */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
+.app-layout {
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+
+.app-header {
+  left: var(--sal);
+  right: var(--sar);
+  padding-top: calc(0.9rem + var(--sat));
+}
+
+.floating-nav-pill {
+  bottom: calc(1.5rem + var(--sab));
+}
+
+.gatefold-workspace {
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+
+.gf-bar {
+  padding-top: calc(1.1rem + var(--sat));
+}
+
+.gatefold-right {
+  padding-bottom: calc(6rem + var(--sab));
+}
+
+.drawer-card {
+  padding-top: calc(1.75rem + var(--sat));
+  padding-bottom: calc(1.75rem + var(--sab));
+  padding-right: calc(1.75rem + var(--sar));
+}
+
+@media (max-width: 960px) {
+  .app-header {
+    padding-top: calc(0.6rem + var(--sat));
+  }
+
+  .crate-stage {
+    padding-bottom: calc(4.5rem + var(--sab));
+  }
+
+  .gf-bar {
+    padding-top: calc(0.5rem + var(--sat));
+  }
+}
+
+@media (max-width: 640px) {
+  .floating-nav-pill {
+    bottom: calc(1rem + var(--sab));
+  }
+}
+
+/* A phone on its side: very little height, so the album page is compact but keeps its two columns */
+@media (max-width: 960px) and (max-height: 520px) {
+  .gf-object {
+    --jacket: min(30vw, 50dvh, 260px);
+  }
+
+  .gf-back-text {
+    display: none;
+  }
+
+  .gf-bar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding-top: calc(0.4rem + var(--sat));
+    padding-bottom: 0.2rem;
+    gap: 0.75rem;
+  }
+
+  .gf-tabs {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 1.2rem;
+    justify-content: flex-start;
+  }
+
+  .gf-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .gf-tabs button {
+    flex: 0 0 auto;
+  }
+
+  .gatefold-title {
+    font-size: 1.6rem;
+  }
+
+  .gatefold-artist {
+    font-size: 1rem;
+  }
+
+  .gatefold-right {
+    gap: 2rem;
+    padding: 0.5rem 1.25rem calc(4rem + var(--sab)) 1rem;
   }
 }

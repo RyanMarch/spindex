@@ -14,7 +14,7 @@ import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover, findA
 import { isDiscogsConnected } from './discogs.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
 
-const COMPACT = '(max-width: 960px)';
+const COMPACT = '(max-width: 960px) and (min-height: 521px)';
 
 export class GatefoldController {
   // onStep(direction): move the crate by one record and return the record now showing.
@@ -116,7 +116,9 @@ export class GatefoldController {
     let start = null;
     this.workspace?.addEventListener('touchstart', (e) => {
       const t = e.touches[0];
-      start = { x: t.clientX, y: t.clientY, scrollTop: this.scroller().scrollTop, inVideo: Boolean(e.target.closest('iframe')) };
+      // Not from the screen's edges (Safari's back swipe lives there) and not from the section tabs, which scroll sideways
+      const nearEdge = t.clientX < 24 || t.clientX > window.innerWidth - 24;
+      start = { x: t.clientX, y: t.clientY, scrollTop: this.scroller().scrollTop, inVideo: nearEdge || Boolean(e.target.closest('iframe, .gf-tabs')) };
     }, { passive: true });
 
     this.workspace?.addEventListener('touchend', (e) => {
@@ -227,7 +229,7 @@ export class GatefoldController {
   // ------------------------------------------------------------------------
 
   async enrich(record, token) {
-    const run = (fn) => fn().catch(() => {});
+    const run = (fn) => fn().catch(() => { });
 
     // Release details and the Wikipedia context come first; the band and back cover build on them
     await Promise.all([
@@ -584,7 +586,7 @@ export class GatefoldController {
 
     // A group is "the band"; a person is "the artist"
     const isGroup = /\b(band|group|duo|trio|quartet|quintet|ensemble|collective|orchestra)\b/i.test(bio?.description || '');
-    const heading = isGroup ? 'The band' : 'The artist';
+    const heading = isGroup ? 'The artist' : 'The artist';
     if (this.bandTitle) this.bandTitle.textContent = heading;
     this.bandSection.dataset.nav = heading;
 
