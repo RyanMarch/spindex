@@ -26,8 +26,9 @@ export class GatefoldController {
   // onJump(recordId): bring another record to the front of the crate and open it.
   // getPosition(): { index, total } of the record on show, for the "17 / 51" counter.
   // onRoute(record|null, mode): keep the address bar in step ('push' | 'replace' | 'close').
-  constructor({ onStep, onJump, getPosition, onRoute } = {}) {
+  constructor({ onStep, onJump, getPosition, onRoute, onArtworkChange } = {}) {
     this.onRoute = onRoute;
+    this.onArtworkChange = onArtworkChange;
     this.onStep = onStep;
     this.onJump = onJump;
     this.getPosition = getPosition;
@@ -164,6 +165,8 @@ export class GatefoldController {
   // mode: 'push' when coming from the crate, 'replace' when moving between records, 'none' for address-bar driven opens
   async openGatefold(record, mode = 'push') {
     const fresh = (await getRecord(record.id)) || record;
+    // The stack may still hold older artwork than the page is about to show: bring it up to date so they agree
+    if ((record.artwork?.highRes || record.artwork?.thumbnail) !== (fresh.artwork?.highRes || fresh.artwork?.thumbnail)) this.onArtworkChange?.();
     this.activeRecord = fresh;
     const token = ++this.renderToken;
 

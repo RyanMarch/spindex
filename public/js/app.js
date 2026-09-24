@@ -140,6 +140,7 @@ class App {
       onJump: (id) => this.jumpToRecord(id),
       getPosition: () => ({ index: this.crate.currentIndex, total: this.filteredRecords.length }),
       onRoute: (record, mode) => this.syncUrl(record, mode),
+      onArtworkChange: () => this.refreshInPlace(),
     });
   }
 
@@ -530,10 +531,20 @@ class App {
     const needsArt = () => this.allRecords.filter((r) => r.artwork?.source === 'discogs' && !String(r.id).startsWith('discogs_mock_'));
     if (needsArt().length === 0) return;
 
-    await enrichArtInBackground(needsArt().filter((r) => !r.artChecked));
+    const onEach = () => this.scheduleRefresh();
+    await enrichArtInBackground(needsArt().filter((r) => !r.artChecked), onEach);
     this.allRecords = await getAllRecords();
-    await enrichFallbackArtInBackground(needsArt().filter((r) => r.artChecked && !r.fallbackArtChecked));
+    await enrichFallbackArtInBackground(needsArt().filter((r) => r.artChecked && !r.fallbackArtChecked), onEach);
     await this.refreshInPlace();
+  }
+
+  // New artwork shows up in the stack as it arrives, in batches rather than one repaint per record
+  scheduleRefresh() {
+    if (this.refreshTimer) return;
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
+      this.refreshInPlace();
+    }, 4000);
   }
 
   fillMissingGenres() {
