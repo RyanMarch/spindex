@@ -1,4 +1,4 @@
-# Crate
+# Spindex
 
 Browse your Discogs record collection like flipping through a crate. Local-first: your collection is saved in your
 browser, and works offline once loaded.
@@ -6,7 +6,7 @@ browser, and works offline once loaded.
 ## Overview
 
 - **Stack**: Vanilla HTML, CSS custom properties and ES modules. No client-side framework or bundler.
-- **Storage**: Browser IndexedDB (`vinyl_vault_db`, `records` store). No hosted database.
+- **Storage**: Browser IndexedDB (`spindex_db`, `records` store). No hosted database.
 - **Server**: Cloudflare Pages Functions (`functions/`) for Discogs sign-in, a read-only Discogs proxy, and a Deezer lookup.
 - **Data sources**:
   - Discogs: your collection, release details, tracklists, credits, pressings and condition grades.
@@ -67,7 +67,7 @@ test of the Discogs sign-in against a mock Discogs server.
 
 "Connect Discogs" uses Discogs' OAuth 1.0a flow. The consumer secret never reaches the browser: Pages Functions in
 `functions/api/discogs/` run the login, keep the user's access token in an encrypted HttpOnly cookie, and proxy the
-read-only Discogs requests Crate needs (`/api/discogs/...`). A personal access token (Settings, "Use a personal access
+read-only Discogs requests Spindex needs (`/api/discogs/...`). A personal access token (Settings, "Use a personal access
 token instead") still works as a local fallback.
 
 **Set up (local)**
@@ -91,7 +91,7 @@ token instead") still works as a local fallback.
 ## Deploying (Cloudflare Pages)
 
 1. Create a Pages project from this repo: no build command, output directory `public`.
-2. Register a production Discogs application with callback `https://<your-domain>/api/discogs/callback`.
+2. Register a production Discogs application with callback `https://<your-domain>/api/discogs/callback` (for example `https://spindex.ryanmarch.me/api/discogs/callback`).
 3. Set `DISCOGS_CONSUMER_KEY`, `DISCOGS_CONSUMER_SECRET` and `SESSION_SECRET` (a new `openssl rand -base64 32`) as
    encrypted Production variables.
 4. Add the custom domain (sign-in needs HTTPS).

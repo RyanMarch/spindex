@@ -72,7 +72,7 @@ export async function discogsFetch(path, init = {}) {
     if (!saved) throw new Error('Not connected to Discogs');
     res = await fetch(`${API}${path}`, {
       ...init,
-      headers: { ...(init.headers || {}), 'User-Agent': 'VinylCrate/1.0', Authorization: `Discogs token=${saved.token}` },
+      headers: { ...(init.headers || {}), 'User-Agent': 'Spindex/1.0', Authorization: `Discogs token=${saved.token}` },
     });
   } else {
     throw new Error('Not connected to Discogs');

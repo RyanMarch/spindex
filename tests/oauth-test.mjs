@@ -26,7 +26,7 @@ function startMock(strict) {
     log.push(`${req.method} ${url.pathname}`);
     const send = (status, body, headers = {}) => { res.writeHead(status, { 'Content-Type': 'application/json', ...headers }); res.end(typeof body === 'string' ? body : JSON.stringify(body)); };
 
-    if (!req.headers['user-agent']?.includes('VinylCrate')) return send(400, { message: 'User-Agent required' });
+    if (!req.headers['user-agent']?.includes('Spindex')) return send(400, { message: 'User-Agent required' });
     if (a.oauth_consumer_key !== CONSUMER_KEY) return send(401, { message: 'bad consumer' });
 
     if (url.pathname === '/oauth/request_token') {

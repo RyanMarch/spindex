@@ -1,4 +1,4 @@
-const CACHE_NAME = 'crate-cache-v59';
+const CACHE_NAME = 'spindex-cache-v2';
 const ASSETS = [
   '/',
   '/index.html',

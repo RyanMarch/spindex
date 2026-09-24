@@ -1,7 +1,7 @@
 // oauth.js - Discogs OAuth 1.0a helpers (PLAINTEXT signatures over HTTPS, as Discogs recommends).
 // Runs in Cloudflare Pages Functions. The consumer secret must only ever exist server-side.
 
-export const USER_AGENT = 'VinylCrate/1.0 +https://vinylcrate.ryanmarch.me';
+export const USER_AGENT = 'Spindex/1.0 +https://spindex.ryanmarch.me';
 
 // Overridable so tests can point the flow at a local mock instead of the real Discogs
 export const apiBase = (env) => (env.DISCOGS_API_BASE || 'https://api.discogs.com').replace(/\/$/, '');

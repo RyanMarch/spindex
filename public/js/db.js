@@ -1,5 +1,5 @@
-// db.js - Local-first IndexedDB storage for Vinyl Crate
-const DB_NAME = 'vinyl_vault_db';
+// db.js - Local-first IndexedDB storage for Spindex
+const DB_NAME = 'spindex_db';
 const DB_VERSION = 1;
 const STORE_NAME = 'records';
 

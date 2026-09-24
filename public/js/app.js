@@ -6,7 +6,7 @@ import { GatefoldController } from './notes.js';
 import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, refreshCollectionFields } from './sync.js';
 import { initDiscogs, discogsState, isDiscogsConnected, onDiscogsChange, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
 
-const DEFAULT_TITLE = 'Crate | Vinyl Record Companion';
+const DEFAULT_TITLE = 'Spindex | Your record collection';
 
 const slugify = (text) => String(text || '')
   .normalize('NFKD')
@@ -757,7 +757,7 @@ class App {
   }
 
   setPageTitle(record) {
-    document.title = record ? `${record.title} — ${record.artist} · Crate` : DEFAULT_TITLE;
+    document.title = record ? `${record.title} — ${record.artist} · Spindex` : DEFAULT_TITLE;
   }
 
   // mode: 'push' (opened from the crate), 'replace' (moved to another record), 'close'
