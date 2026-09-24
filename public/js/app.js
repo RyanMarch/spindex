@@ -9,6 +9,7 @@ import { sortYear } from './years.js';
 import { computeStats } from './stats.js';
 import { computeHealth, describeStorage, healthSummary } from './health.js';
 import { watchForUpdates, shouldAutoReload } from './updates.js';
+import { trackSummary, pressingNotes } from './vinyl.js';
 import { needsAutoSync, timeAgo, readSyncMeta } from './syncplan.js';
 import { sourceSnapshot } from './sourcestats.js';
 import { statsHTML, valueHTML } from './statsview.js';
@@ -1068,7 +1069,10 @@ class App {
     if (this.metaTitle) this.metaTitle.textContent = record.title || 'Untitled';
     if (this.metaLine) {
       const firstTag = getRecordTags(record)[0];
-      this.metaLine.textContent = [sortYear(record) || '', firstTag ? tagLabel(firstTag) : ''].filter(Boolean).join(' · ');
+      const tracks = record.tracklist || [];
+      const groups = tracks.length ? groupTracksBySide(tracks) : null;
+      const notes = pressingNotes({ sideKeys: (groups || []).map((g) => g.sideKey), formats: record.details?.formats });
+      this.metaLine.textContent = [sortYear(record) || '', firstTag ? tagLabel(firstTag) : '', ...notes].filter(Boolean).join(' · ');
     }
     if (this.metaArtist) this.metaArtist.textContent = record.artist || 'Unknown Artist';
     const primaryYear = sortYear(record);
@@ -1088,24 +1092,19 @@ class App {
     }
 
     if (this.metaTrackSummary) {
-      this.metaTrackSummary.textContent = this.formatTrackSummary(record.tracklist || []);
+      this.metaTrackSummary.textContent = this.formatTrackSummary(record);
     }
   }
 
-  // One quiet line, e.g. "24 tracks · 4 sides"; the full tracklist lives in the sleeve view
-  formatTrackSummary(tracks) {
-    if (!tracks || tracks.length === 0) return '';
-
-    const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-    const parts = [plural(tracks.length, 'track')];
-
-    const groups = groupTracksBySide(tracks);
-    if (groups && groups.length > 0) {
-      const discs = groups.every((g) => g.sideKey.startsWith('Disc '));
-      parts.push(plural(groups.length, discs ? 'disc' : 'side'));
-    }
-
-    return parts.join(' · ');
+  // One quiet line, e.g. "24 tracks · 2 discs · 45 rpm": discs only from two up, speed only when it isn't 33
+  formatTrackSummary(record) {
+    const tracks = record.tracklist || [];
+    const groups = tracks.length ? groupTracksBySide(tracks) : null;
+    return trackSummary({
+      trackCount: tracks.length,
+      sideKeys: (groups || []).map((g) => g.sideKey),
+      formats: record.details?.formats,
+    });
   }
 
   escapeHTML(str = '') {

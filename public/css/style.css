@@ -3118,156 +3118,283 @@ html {
   cursor: default
 }
 
-/* Collection stats */
+/* Collection stats: laid out like the printed page inside a sleeve */
 .stats-drawer .drawer-card {
-  width: min(94vw, 560px)
+  width: min(94vw, 560px);
+}
+
+.stats-drawer .drawer-eyebrow {
+  display: none;
 }
 
 .stats-content {
-  padding-bottom: calc(1rem + var(--sab, 0px))
+  --paper: #e9e1cf;
+  padding-bottom: calc(1.5rem + var(--sab, 0px));
 }
 
-.stat-tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: .6rem;
-  margin-bottom: 1.6rem
+.st-lede,
+.st-value-line {
+  margin: 0.4rem 0 0;
+  font-family: var(--font-serif);
+  font-size: 1.45rem;
+  line-height: 1.4;
+  font-weight: 400;
+  color: var(--text-main);
 }
 
-.stat-tile {
-  padding: .8rem .9rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .03)
-}
-
-.stat-tile strong {
-  display: block;
-  font-size: 1.25rem;
+.st-lede b,
+.st-value-line b {
   font-weight: 700;
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums
+  color: var(--paper);
 }
 
-.stat-tile span {
-  display: block;
-  margin-top: .15rem;
-  font-size: .68rem;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--text-muted)
-}
-
-.stat-section {
-  margin-bottom: 1.8rem
-}
-
-.stat-section h4 {
-  margin: 0 0 .7rem;
-  font-size: .72rem;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--text-muted)
-}
-
-.stat-note {
-  margin: .6rem 0 0;
-  font-size: .75rem;
-  color: var(--text-muted)
-}
-
-.stat-row {
-  display: grid;
-  grid-template-columns: minmax(72px, 30%) 1fr auto;
-  align-items: center;
-  gap: .7rem;
-  padding: .22rem 0;
-  font-size: .85rem
-}
-
-.stat-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap
-}
-
-.stat-bar {
-  display: block;
-  height: 8px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, .07);
-  overflow: hidden
-}
-
-.stat-bar i {
-  display: block;
-  height: 100%;
-  border-radius: 4px;
-  background: var(--color-accent)
-}
-
-.stat-count {
-  min-width: 2ch;
-  text-align: right;
+.st-value-line {
+  font-size: 1.1rem;
+  margin-top: 0.9rem;
   color: var(--text-muted);
-  font-variant-numeric: tabular-nums
 }
 
-.stat-colors {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .5rem;
+.st-quiet {
+  font-style: italic;
+}
+
+.st-value {
+  margin-bottom: 0.4rem;
+}
+
+.st-range {
+  position: relative;
+  height: 1px;
+  margin: 1rem 0.2rem 0.6rem;
+  background: rgba(233, 225, 207, 0.35);
+}
+
+.st-range::before,
+.st-range::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  width: 1px;
+  height: 9px;
+  background: rgba(233, 225, 207, 0.55);
+}
+
+.st-range::before {
+  left: 0;
+}
+
+.st-range::after {
+  right: 0;
+}
+
+.st-range i {
+  position: absolute;
+  top: -5px;
+  width: 11px;
+  height: 11px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.st-section {
+  margin-top: 2.2rem;
+}
+
+.st-section h4 {
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid rgba(233, 225, 207, 0.22);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--paper);
+}
+
+.st-note {
+  margin: 0.7rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+/* Index rows: name, dotted leader, number, like a tracklist */
+.st-index,
+.st-shelf,
+.st-standouts {
   margin: 0;
   padding: 0;
-  list-style: none
+  list-style: none;
 }
 
-.stat-colors li {
+.st-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.24rem 0;
+  font-size: 0.95rem;
+}
+
+.st-row .st-disc {
+  align-self: center;
+}
+
+.st-dots {
+  flex: 1;
+  min-width: 1rem;
+  border-bottom: 1px dotted rgba(233, 225, 207, 0.35);
+  transform: translateY(-0.28em);
+}
+
+.st-row b,
+.st-shelf-row b {
+  min-width: 2ch;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+}
+
+.st-disc {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+/* A row of spines per decade */
+.st-shelf-row {
+  display: grid;
+  grid-template-columns: 4.2rem 1fr auto;
+  align-items: end;
+  gap: 0.7rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(233, 225, 207, 0.12);
+  font-size: 0.9rem;
+}
+
+.st-shelf-row .st-name {
+  align-self: center;
+  color: var(--text-muted);
+}
+
+.st-shelf-row b {
+  align-self: center;
+}
+
+.st-spines {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.st-spines i {
+  flex: 0 0 auto;
+  width: 6px;
+  border-radius: 1px 1px 0 0;
+  background: var(--paper);
+  opacity: 0.8;
+}
+
+/* Standouts: real covers with a line about each */
+.st-standouts {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.st-standout {
   display: flex;
   align-items: center;
-  gap: .5rem;
-  padding: .35rem .7rem .35rem .4rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  font-size: .82rem
+  gap: 0.9rem;
 }
 
-.stat-colors b {
+.st-cover {
+  display: block;
+  flex: 0 0 auto;
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 2px;
+  background: var(--bg-card);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.st-standout-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.st-standout-text em {
+  font-family: var(--font-serif);
+  font-size: 0.85rem;
   color: var(--text-muted);
-  font-weight: 600
 }
 
-.stat-disc {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .15)
+.st-standout-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1rem;
+  font-weight: 700;
 }
 
-.stat-growth {
+.st-standout-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* The most collected artist's sleeves, fanned like a hand of cards */
+.st-fan {
+  position: relative;
+  flex: 0 0 auto;
+  display: block;
+  width: 60px;
+  height: 60px;
+}
+
+.st-fan span {
+  position: absolute;
+  inset: 0;
+  transform: translateX(calc(var(--i) * 9px));
+  z-index: calc(10 - var(--i));
+}
+
+.st-artist {
+  padding-right: 0;
+}
+
+.st-artist .st-fan {
+  width: calc(60px + 27px);
+}
+
+.st-growth {
   display: block;
   width: 100%;
-  height: 84px
+  height: 72px;
 }
 
-.stat-growth-line {
+.st-growth-line {
   fill: none;
-  stroke: var(--color-accent);
-  stroke-width: 2;
-  vector-effect: non-scaling-stroke
+  stroke: var(--paper);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
 }
 
-.stat-growth-fill {
-  fill: var(--color-accent);
-  opacity: .14
-}
-
-.stat-axis {
+.st-axis {
   display: flex;
   justify-content: space-between;
-  margin-top: .35rem;
-  font-size: .7rem;
-  color: var(--text-muted)
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 .gf-art-group {

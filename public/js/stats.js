@@ -52,7 +52,12 @@ export function computeStats(records, { topGenres = 7, topArtists = 8 } = {}) {
     const decade = Math.floor(year / 10) * 10;
     decadeCounts.set(decade, (decadeCounts.get(decade) || 0) + 1);
   }
-  const decades = [...decadeCounts].sort((a, b) => a[0] - b[0]).map(([decade, count]) => ({ name: `${decade}s`, decade, count }));
+  const decades = [...decadeCounts].sort((a, b) => a[0] - b[0]).map(([decade, count]) => ({
+    name: `${decade}s`,
+    decade,
+    count,
+    years: dated.filter((x) => Math.floor(x.year / 10) * 10 === decade).map((x) => x.year).sort((a, b) => a - b),
+  }));
   const byYear = [...dated].sort((a, b) => a.year - b.year);
   const oldest = byYear[0] || null;
   const newest = byYear[byYear.length - 1] || null;
@@ -67,6 +72,10 @@ export function computeStats(records, { topGenres = 7, topArtists = 8 } = {}) {
   const artistNames = real.map((r) => r.artist).filter((a) => a && !isVarious(a));
   const artistTally = tally(artistNames);
 
+  // The artist with the most records, and a few of their sleeves to show
+  const topName = artistTally[0]?.count > 1 ? artistTally[0] : null;
+  const topArtist = topName ? { ...topName, records: real.filter((r) => r.artist === topName.name).slice(0, 4) } : null;
+
   // Pressings: colour needs the full Discogs details, which fill in gradually
   const withDetails = real.filter((r) => r.details?.formats?.length);
   const colorMap = new Map();
@@ -79,8 +88,10 @@ export function computeStats(records, { topGenres = 7, topArtists = 8 } = {}) {
   }
   const colors = [...colorMap.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
-  // Runtime
-  const runtimeSeconds = real.reduce((sum, r) => sum + (r.tracklist || []).reduce((s, t) => s + durationSeconds(t.duration), 0), 0);
+  // Runtime, and the record that takes longest to play
+  const lengths = real.map((r) => ({ record: r, seconds: (r.tracklist || []).reduce((sum, t) => sum + durationSeconds(t.duration), 0) }));
+  const runtimeSeconds = lengths.reduce((sum, x) => sum + x.seconds, 0);
+  const longest = lengths.filter((x) => x.seconds > 0).sort((a, b) => b.seconds - a.seconds)[0] || null;
 
   // Growth: how the collection built up, by month added
   const monthCounts = new Map();
@@ -99,6 +110,8 @@ export function computeStats(records, { topGenres = 7, topArtists = 8 } = {}) {
     undated: total - dated.length,
     oldest,
     newest,
+    longest,
+    topArtist,
     genres,
     colors,
     colorCoverage: { known: withDetails.length, total },
