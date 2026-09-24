@@ -122,6 +122,68 @@ assert.equal(tagLabel('Jazz'), 'Jazz');
 assert.equal(calculateTotalDuration([]), null);
 assert.equal(calculateTotalDuration([{ duration: '3:00' }, { duration: '2:00' }]), '5 min');
 
+
+// ---- grid and list views: jump rail, pressing tags, art sizes -------------------------------------------
+import { railLabel, groupRail, cardTags, smallArtUrl, normalizeView, VIEWS } from '../public/js/browse.js';
+
+{
+  assert.deepEqual(VIEWS, ['stack', 'grid', 'list']);
+  assert.equal(normalizeView('grid'), 'grid');
+  assert.equal(normalizeView('carousel'), 'stack', 'an unknown or missing view falls back to the stack');
+  assert.equal(normalizeView(null), 'stack');
+
+  // Letters follow the sort: "The Beatles" files under B for the artist sort, T for the first-name sort
+  const beatles = { artist: 'The Beatles', year: 1969 };
+  assert.equal(railLabel('artist-last-year', beatles), 'B');
+  assert.equal(railLabel('artist', beatles), 'B');
+  assert.equal(railLabel('artist-first', beatles), 'T');
+  assert.equal(railLabel('artist-last-year', { artist: '2Pac' }), '#', 'digits and symbols share one entry');
+  assert.equal(railLabel('artist-last-year', { artist: '  ' }), '#', 'an empty name does not crash');
+  assert.equal(railLabel('artist-last-year', { artist: 'Ólafur Arnalds' }), '#', 'non A-Z letters go under #');
+  assert.equal(railLabel('year', { masterYear: 1999 }), '1990s', 'years become decades');
+  assert.equal(railLabel('year', { year: 2025 }), '2020s');
+  assert.equal(railLabel('year', {}), '–', 'no year yet');
+  assert.equal(railLabel('genre', beatles), null, 'genre and recently-added sorts have no rail');
+  assert.equal(railLabel('added', beatles), null);
+
+  // A rail entry is where each run starts, in the order shown
+  const list = ['Aphex Twin', 'AFI', 'Bowie', 'Bush', 'Clash', 'The Clash', 'Zappa'].map((artist) => ({ artist }));
+  const groups = groupRail(list, (r) => railLabel('artist-first', r));
+  assert.deepEqual(groups, [{ label: 'A', index: 0 }, { label: 'B', index: 2 }, { label: 'C', index: 4 }, { label: 'T', index: 5 }, { label: 'Z', index: 6 }]);
+  assert.deepEqual(groupRail(list, () => null), [], 'no labels, no rail');
+  assert.deepEqual(groupRail(list, null), []);
+  assert.deepEqual(groupRail([], (r) => r.artist), []);
+}
+
+{
+  const rec = (formats) => ({ details: { formats } });
+  assert.deepEqual(cardTags({}), [], 'no details yet, no tags');
+  assert.deepEqual(cardTags(rec([])), []);
+  assert.deepEqual(cardTags(rec([{ name: 'Vinyl', qty: '1', descriptions: ['LP', 'Album'], text: '' }])), [], 'a plain black LP earns none');
+  assert.deepEqual(
+    cardTags(rec([{ name: 'Vinyl', qty: '2', descriptions: ['LP', 'Album', 'Limited Edition', 'Reissue', 'Remastered'], text: 'Red Marbled' }])),
+    ['2 × LP', 'Red Marbled', 'Limited'],
+    'double LP, colour, then the most telling words; never more than three',
+  );
+  assert.deepEqual(cardTags(rec([{ name: 'Vinyl', qty: '1', descriptions: ['7"', 'Single', '45 RPM'], text: '' }])), ['7"', 'Single']);
+  assert.deepEqual(cardTags(rec([{ name: 'Vinyl', qty: '1', descriptions: ['LP', 'Album', '180 Gram'], text: 'Black' }])), ['180g']);
+  assert.deepEqual(cardTags(rec([{ name: 'Vinyl', qty: '1', descriptions: ['LP', 'Picture Disc'], text: '' }])), ['Picture disc'], 'a picture disc says so once');
+  assert.deepEqual(
+    cardTags(rec([{ name: 'Vinyl', qty: '1', descriptions: ['LP'], text: 'Blue [Light Blue]' }])),
+    ['Blue'],
+    'a bracketed shade is dropped from the label',
+  );
+
+  // Big sleeves are for the stack; tiles and rows ask the source for less
+  const itunes = { artwork: { highRes: 'https://is1.mzstatic.com/x/1200x1200bb.jpg' } };
+  assert.equal(smallArtUrl(itunes, 300), 'https://is1.mzstatic.com/x/300x300bb.jpg');
+  const deezer = { artwork: { highRes: 'https://cdn-images.dzcdn.net/images/cover/abc/1000x1000-000000-80-0-0.jpg' } };
+  assert.ok(smallArtUrl(deezer, 250).includes('/250x250-'), 'Deezer sizes are switched too');
+  const discogs = { artwork: { highRes: 'https://i.discogs.com/abc/rs:fit/w:600/x.jpeg' } };
+  assert.equal(smallArtUrl(discogs, 300), discogs.artwork.highRes, 'other sources are left as they are');
+  assert.equal(smallArtUrl({}, 300), '', 'no art, no address');
+}
+
 console.log('Logic tests passed.');
 
 // ---- Discogs request queue ------------------------------------------------------------------------------------

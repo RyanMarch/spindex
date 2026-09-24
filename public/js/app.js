@@ -2,7 +2,7 @@
 import { openDB, getAllRecords, clearRecords, deleteRecords, getRecord, upsertRecords } from './db.js';
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
-import { BrowseView, normalizeView } from './browse.js';
+import { BrowseView, normalizeView, railLabel } from './browse.js';
 import { GatefoldController } from './notes.js';
 import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichDeezerArtInBackground, verifyArtInBackground, recheckArtInBackground, needsArtRecheck, enrichMasterTitleArtInBackground, needsMasterTitleArt, needsDeezerArt, needsItunesArt, needsArtVerification, loadRecordDetails, needsDetails, refreshCollectionFields } from './sync.js';
 import { sortYear } from './years.js';
@@ -930,19 +930,8 @@ class App {
     if (!initial || this.filteredRecords.length) this.renderBrowse();
   }
 
-  // What the jump rail is made of depends on the sort: letters for names, decades for years, nothing for the rest
   railKey(record) {
-    const sort = this.currentSort;
-    if (sort === 'year') {
-      const year = sortYear(record);
-      return year ? `${Math.floor(year / 10) * 10}s` : '–';
-    }
-    if (sort === 'artist-last-year' || sort === 'artist' || sort === 'artist-first') {
-      const name = (sort === 'artist-first' ? record.artist : parseSortArtist(record.artist) || record.sortArtist || record.artist) || '';
-      const ch = name.trim().charAt(0).toUpperCase();
-      return /[A-Z]/.test(ch) ? ch : '#';
-    }
-    return null;
+    return railLabel(this.currentSort, record);
   }
 
   // Stack view on a phone: tapping the counter brings up the letter (or decade) strip to jump along the crate

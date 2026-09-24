@@ -4066,3 +4066,97 @@ body.sleeve-open .browse-rail {
 .update-pill[hidden] {
   display: none;
 }
+
+/* Tablets in portrait get the year and genre line too */
+@media (min-width: 641px) and (max-width: 960px) {
+  .meta-line {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    opacity: 0.75;
+  }
+
+  .station-metadata-col {
+    height: 100px;
+  }
+}
+
+/* A phone on its side: too short for the stacked layout, so cover on the left and details on the right, like a laptop */
+@media (max-height: 520px) and (orientation: landscape) {
+  :root {
+    --sleeve-size: min(52vh, 36vw);
+  }
+
+  .crate-stage {
+    padding: 3.2rem 2rem 3.4rem;
+  }
+
+  .station-container {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    align-items: center;
+    gap: 2rem;
+    min-height: 0;
+  }
+
+  .station-crate-col {
+    justify-content: center;
+    min-height: calc(var(--sleeve-size) + 40px);
+  }
+
+  .station-metadata-col {
+    width: auto;
+    min-width: 0;
+    height: auto;
+    margin: 0;
+    align-items: flex-start;
+    text-align: left;
+    z-index: 10 !important;
+  }
+
+  .meta-title {
+    font-size: 1.7rem;
+    margin-top: 0;
+    -webkit-line-clamp: 2;
+  }
+
+  .meta-artist {
+    font-size: 1.1rem;
+  }
+
+  .meta-line {
+    display: none;
+  }
+
+  .meta-details-row,
+  .meta-genres,
+  .meta-actions {
+    display: flex;
+  }
+
+  .floating-nav-pill {
+    bottom: calc(0.6rem + var(--sab));
+  }
+
+  .browse-view {
+    padding-top: 4rem;
+  }
+
+  .bv-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .demo-note,
+  body:not([data-view="stack"]) .demo-note {
+    top: auto;
+    bottom: calc(0.8rem + var(--sab));
+    left: 1.5rem;
+    transform: none;
+  }
+}

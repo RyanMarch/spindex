@@ -2,6 +2,8 @@
 // the others: every cover at once, or a table with the details beside each one.
 import { crateArtUrl } from './crate.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
+import { parseSortArtist } from './sync.js';
+import { sortYear } from './years.js';
 
 export const VIEWS = ['stack', 'grid', 'list'];
 
@@ -56,6 +58,31 @@ function discBackground(record) {
   }
 }
 
+// What the jump rail is made of depends on the sort: letters for names, decades for years, nothing for the rest
+export function railLabel(sort, record) {
+  if (sort === 'year') {
+    const year = sortYear(record);
+    return year ? `${Math.floor(year / 10) * 10}s` : '–';
+  }
+  if (sort === 'artist-last-year' || sort === 'artist' || sort === 'artist-first') {
+    const name = (sort === 'artist-first' ? record.artist : parseSortArtist(record.artist) || record.sortArtist || record.artist) || '';
+    const ch = name.trim().charAt(0).toUpperCase();
+    return /[A-Z]/.test(ch) ? ch : '#';
+  }
+  return null;
+}
+
+// One entry per run of records that share a label: where each letter (or decade) starts
+export function groupRail(records, labelOf) {
+  const groups = [];
+  if (!labelOf) return groups;
+  records.forEach((record, index) => {
+    const label = labelOf(record);
+    if (label && groups[groups.length - 1]?.label !== label) groups.push({ label, index });
+  });
+  return groups;
+}
+
 // The columns a list can be sorted by, and the sort each one asks for
 export const LIST_COLUMNS = [
   { key: 'artist', label: 'Album / Artist', sort: 'artist-last-year' },
@@ -107,13 +134,7 @@ export class BrowseView {
   // ---- Jump rail: the letters (or decades) down the edge, tap or drag to go there ----
 
   buildRail(records, railKey) {
-    this.groups = [];
-    if (railKey) {
-      records.forEach((record, index) => {
-        const label = railKey(record);
-        if (label && this.groups[this.groups.length - 1]?.label !== label) this.groups.push({ label, index });
-      });
-    }
+    this.groups = groupRail(records, railKey);
     const show = this.groups.length > 1;
     this.root.classList.toggle('has-rail', show);
     if (!this.rail) return;
