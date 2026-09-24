@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="Spindex">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
   <title>Spindex | Your record collection</title>
-  <link rel="stylesheet" href="/css/style.css?v=98">
+  <link rel="stylesheet" href="/css/style.css?v=107">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%23121214%22 stroke=%22%23e4e4e7%22 stroke-width=%224%22/><circle cx=%2250%22 cy=%2250%22 r=%2220%22 fill=%22%23e11d48%22/><circle cx=%2250%22 cy=%2250%22 r=%224%22 fill=%22%23fff%22/></svg>">
@@ -79,6 +79,20 @@
           </button>
         </div>
 
+        <button id="surprise-btn" class="icon-btn" aria-label="Surprise me" title="Surprise me: jump to a random record">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line>
+            <polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line>
+          </svg>
+        </button>
+
+        <button id="filter-toggle-btn" class="icon-btn filter-toggle" aria-label="Filter the crate" title="Filter by decade, size, pressing, discs, speed">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round">
+            <line x1="4" y1="6" x2="20" y2="6"></line><line x1="7" y1="12" x2="17" y2="12"></line><line x1="10" y1="18" x2="14" y2="18"></line>
+          </svg>
+          <span id="filter-badge" class="filter-badge" hidden></span>
+        </button>
+
         <form class="crate-search" id="crate-search" role="search" autocomplete="off">
           <button type="button" id="search-toggle-btn" class="icon-btn" aria-label="Search the crate"
             title="Search (/)">
@@ -125,6 +139,13 @@
 
       <!-- Grid and list views of the whole collection (the stack is hidden while one is showing) -->
       <section id="browse-view" class="browse-view" aria-label="Collection" hidden></section>
+
+      <!-- Said when there is nothing to show: an empty crate, a search or filter that matched nothing -->
+      <div id="empty-state" class="empty-state" hidden>
+        <h2 id="empty-title"></h2>
+        <p id="empty-body"></p>
+        <div id="empty-actions" class="empty-actions"></div>
+      </div>
 
       <!-- Two-Column Digging Station -->
       <div class="station-container" id="station-container">
@@ -315,6 +336,66 @@
     </div>
   </div>
 
+  <!-- Filters -->
+  <aside id="filter-drawer" class="settings-drawer filter-drawer" aria-hidden="true">
+    <div class="drawer-card">
+      <div class="drawer-top">
+        <div>
+          <h3>Filter</h3>
+        </div>
+        <button id="filter-close-btn" class="modal-close" aria-label="Close filters">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
+            stroke-linecap="round" aria-hidden="true">
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div id="filter-content" class="filter-content"></div>
+      <div class="filter-foot">
+        <button id="filter-clear-btn" class="text-btn" type="button">Clear all</button>
+        <button id="filter-done-btn" class="btn btn-primary" type="button">Show records</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Keyboard shortcuts ("?") -->
+  <div id="help-overlay" class="help-overlay" role="dialog" aria-label="Keyboard shortcuts" hidden>
+    <div class="help-card">
+      <h3>Keyboard</h3>
+      <dl>
+        <dt><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></dt><dd>Move through the crate</dd>
+        <dt><kbd>Enter</kbd></dt><dd>Open the record</dd>
+        <dt><kbd>A</kbd> to <kbd>Z</kbd></dt><dd>Jump to that letter</dd>
+        <dt><kbd>/</kbd></dt><dd>Search</dd>
+        <dt><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></dt><dd>Stack, grid or list</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Close whatever is open</dd>
+        <dt><kbd>?</kbd></dt><dd>This list</dd>
+      </dl>
+    </div>
+  </div>
+
+  <!-- First visit, and the first time a collection is brought in -->
+  <div id="welcome" class="welcome" role="dialog" aria-modal="true" aria-labelledby="welcome-title" hidden>
+    <div class="welcome-card">
+      <svg class="welcome-mark" viewBox="0 0 24 24" width="34" height="34" stroke="currentColor" fill="none" stroke-width="1.8" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle><path d="M12 2a10 10 0 0 1 10 10"></path>
+      </svg>
+      <h2 id="welcome-title"></h2>
+      <p id="welcome-body"></p>
+      <div id="welcome-progress" class="welcome-progress" hidden><i id="welcome-bar"></i></div>
+      <p id="welcome-count" class="welcome-count" hidden></p>
+      <div id="welcome-covers" class="welcome-covers" aria-hidden="true"></div>
+      <div id="welcome-actions" class="welcome-actions"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <div id="share-banner-slot"></div>
+
+  <div id="crate-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
   <!-- Collection stats -->
   <aside id="stats-drawer" class="settings-drawer stats-drawer" aria-hidden="true">
     <div class="drawer-card">
@@ -340,8 +421,7 @@
     <div class="drawer-card">
       <div class="drawer-top">
         <div>
-          <span class="drawer-eyebrow">Settings</span>
-          <h3>Your Crate</h3>
+          <h3>Settings</h3>
         </div>
         <button id="settings-close-btn" class="modal-close" aria-label="Close settings">
           <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
@@ -354,15 +434,13 @@
 
       <div class="settings-content">
         <div class="settings-group" id="discogs-group">
-          <h4>Discogs</h4>
-
-          <!-- Connected (through Discogs sign-in, or with a personal token) -->
-          <div id="discogs-connected" hidden>
-            <p class="settings-desc" id="discogs-connected-text"></p>
+          <!-- Connected (through Discogs sign-in, or with a personal token): the crate's name tag -->
+          <div id="discogs-connected" class="crate-tag" hidden>
+            <p class="crate-tag-who" id="discogs-connected-text"></p>
             <p class="sync-freshness" id="sync-freshness" role="status"></p>
             <div class="settings-actions">
-              <button id="sync-discogs-btn" class="btn btn-secondary">Check now</button>
-              <button id="discogs-disconnect-btn" class="btn btn-secondary">Disconnect</button>
+              <button id="sync-discogs-btn" class="btn btn-primary">Check now</button>
+              <button id="discogs-disconnect-btn" class="text-btn" type="button">Disconnect</button>
             </div>
           </div>
 
@@ -391,11 +469,31 @@
           <div id="sync-status" class="sync-status"></div>
         </div>
 
-        <div class="settings-group">
-          <button id="settings-stats-btn" class="btn btn-secondary settings-stats-btn" type="button">Collection stats</button>
+        <!-- Share: a read-only link (needs the server's KV namespace and a Discogs sign-in) -->
+        <div class="settings-group share-group" id="share-group" hidden>
+          <h4 class="share-title">Share your crate</h4>
+          <p class="settings-desc" id="share-desc">Make a read-only link that anyone can open to browse your collection.
+            They can't change anything, and your notes and conditions stay private.</p>
+          <div id="share-off">
+            <button id="share-create-btn" class="btn btn-secondary" type="button">Create a link</button>
+          </div>
+          <div id="share-on" hidden>
+            <div class="share-link-row">
+              <input id="share-link" class="share-link" type="text" readonly aria-label="Your read-only link" />
+              <button id="share-copy-btn" class="btn btn-primary" type="button">Copy</button>
+            </div>
+            <p class="sync-freshness" id="share-meta"></p>
+            <div class="settings-actions">
+              <button id="share-update-btn" class="text-btn" type="button">Update now</button>
+              <button id="share-stop-btn" class="text-btn text-btn-danger" type="button">Stop sharing</button>
+            </div>
+          </div>
+          <p class="settings-hint" id="share-error" hidden></p>
         </div>
 
-        <div class="settings-group">
+        <div class="settings-group settings-rows">
+          <button id="settings-stats-btn" class="settings-row" type="button">Collection stats</button>
+          <button id="settings-help-btn" class="settings-row settings-row-keys" type="button">Keyboard shortcuts</button>
           <details class="settings-advanced" id="health-details">
             <summary>Diagnostics <span class="health-summary" id="health-summary"></span></summary>
             <div id="health-content" class="health-content"></div>
@@ -405,10 +503,10 @@
             <summary>Advanced</summary>
             <p class="settings-desc">Checking for new records is automatic. Edits to records you already have (notes,
               conditions) are picked up every couple of weeks, or here.</p>
-            <button id="sync-full-btn" class="btn btn-secondary" type="button">Re-read the whole collection</button>
+            <button id="sync-full-btn" class="text-btn" type="button">Re-read the whole collection</button>
             <p class="settings-desc" style="margin-top: 1.5rem;">Clear what this browser has saved. Your Discogs
               collection is untouched and comes back on the next check; covers you chose are lost.</p>
-            <button id="clear-cache-btn" class="btn btn-danger">Clear local data</button>
+            <button id="clear-cache-btn" class="text-btn text-btn-danger" type="button">Clear local data</button>
           </details>
         </div>
 
@@ -418,7 +516,7 @@
     </div>
   </aside>
 
-  <script type="module" src="/js/app.js?v=104"></script>
+  <script type="module" src="/js/app.js?v=111"></script>
 </body>
 
 </html>

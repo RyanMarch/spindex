@@ -330,8 +330,7 @@ export class BrowseView {
     this.root.dataset.mode = view;
 
     if (!records.length) {
-      this.root.append(el('p', 'bv-empty', 'Nothing here yet.'));
-      this.buildRail([], null);
+      this.buildRail([], null); // what to say about an empty crate is the app's job (emptystate.js)
       return;
     }
 
@@ -420,6 +419,16 @@ export class BrowseView {
     this.items[this.activeIndex]?.classList.remove('is-current');
     this.activeIndex = index;
     this.items[index]?.classList.add('is-current');
+  }
+
+  // A brief ring around a record, so the eye finds where "surprise me" landed
+  pulse(index) {
+    const item = this.items[index];
+    if (!item) return;
+    item.classList.remove('is-pulse');
+    void item.offsetWidth;
+    item.classList.add('is-pulse');
+    setTimeout(() => item.classList.remove('is-pulse'), 1300);
   }
 
   scrollToActive(behavior = 'auto') {

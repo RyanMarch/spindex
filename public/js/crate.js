@@ -98,10 +98,6 @@ export class CrateController {
 
     if (total === 0) {
       if (this.counter) this.counter.textContent = '0 / 0';
-      const emptyMsg = document.createElement('div');
-      emptyMsg.className = 'empty-crate-msg';
-      emptyMsg.innerHTML =  /*html*/ '<p>Your record crate is empty.</p><small>Sync with Discogs or reload demo collection.</small>';
-      this.container.appendChild(emptyMsg);
       if (this.onIndexChange) this.onIndexChange(0, 0, null);
       return;
     }
@@ -112,6 +108,9 @@ export class CrateController {
       const el = document.createElement('div');
       el.className = 'sleeve';
       el.dataset.index = String(i);
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', `${record.title} by ${record.artist}`);
+      el.tabIndex = -1;
 
       // Solid jacket cover wrapper
       const coverWrap = document.createElement('div');
@@ -324,6 +323,9 @@ export class CrateController {
         item.state = state;
         const dir = rounded < 0 ? 'flow-above' : 'flow-below';
         item.el.className = `sleeve ${out ? `out-of-range ${dir}` : rounded === 0 ? 'active' : dir}`;
+        // Screen readers only need the sleeve that is up front; the rest of the stack is decoration
+        item.el.setAttribute('aria-hidden', String(rounded !== 0));
+        item.el.tabIndex = rounded === 0 ? 0 : -1;
       }
 
       if (out) continue;

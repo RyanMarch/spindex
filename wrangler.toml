@@ -1,3 +1,7 @@
 name = "spindex"
 compatibility_date = "2026-09-22"
 pages_build_output_dir = "public"
+
+[[kv_namespaces]]
+binding = "SHARES"
+id = "387782961e59471397243af59b7fec39"
