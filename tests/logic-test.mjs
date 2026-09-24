@@ -253,7 +253,7 @@ import { detailsAreStale, needsDeezerArt, needsItunesArt, buildCollectionRecord,
 }
 
 // ---- how much of the collection a sync reads ---------------------------------------------------------------------
-import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds } from '../public/js/syncplan.js';
+import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds, needsAutoSync, timeAgo } from '../public/js/syncplan.js';
 import { allowedUpstream } from '../functions/_lib/proxy.js';
 
 {
@@ -273,10 +273,10 @@ import { allowedUpstream } from '../functions/_lib/proxy.js';
 
   const mem = new Map();
   const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
-  assert.deepEqual(readSyncMeta('Ryan', storage), { storedTotal: null, lastFullAt: 0 });
-  writeSyncMeta('Ryan', { storedTotal: 210, lastFullAt: 5 }, storage);
-  assert.deepEqual(readSyncMeta('ryan', storage), { storedTotal: 210, lastFullAt: 5 }, 'usernames are not case sensitive');
-  assert.deepEqual(readSyncMeta('x', { getItem() { throw new Error('blocked'); } }), { storedTotal: null, lastFullAt: 0 }, 'blocked storage just means a full read');
+  assert.deepEqual(readSyncMeta('Ryan', storage), { storedTotal: null, lastFullAt: 0, lastCheckedAt: 0 });
+  writeSyncMeta('Ryan', { storedTotal: 210, lastFullAt: 5, lastCheckedAt: 9 }, storage);
+  assert.deepEqual(readSyncMeta('ryan', storage), { storedTotal: 210, lastFullAt: 5, lastCheckedAt: 9 }, 'usernames are not case sensitive');
+  assert.deepEqual(readSyncMeta('x', { getItem() { throw new Error('blocked'); } }), { storedTotal: null, lastFullAt: 0, lastCheckedAt: 0 }, 'blocked storage just means a full read');
 
   // the proxy passes a newest-first sort, and only sorts it knows
   const session = { u: 'Ryan' };
@@ -656,4 +656,68 @@ import { artControl, artChoiceUpdates } from '../public/js/artwork.js';
   assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: null, details: { status: 'Draft' } }), false);
   assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1 }), true, 'no details at all');
   assert.equal(needsDetails({ id: 'discogs_mock_1', discogsId: 1 }), false, 'demo records have none to fetch');
+}
+
+// ---- data health and source stats ---------------------------------------------------------------------
+import { computeHealth, describeStorage, healthSummary } from '../public/js/health.js';
+import { noteSource, sourceSnapshot, resetSourceStats } from '../public/js/sourcestats.js';
+
+{
+  const rec = (id, extra = {}) => ({ id, discogsId: 1, artwork: { source: 'discogs' }, ...extra });
+  const records = [
+    rec('discogs_1', { masterId: 5, masterYear: 1999, details: { status: 'Accepted' }, artwork: { source: 'deezer' } }),
+    rec('discogs_2', { masterId: 6, masterChecked: true, details: { status: 'Accepted' }, artCandidate: { source: 'deezer' }, context: { backCover: 'x' } }),
+    rec('discogs_3', { masterId: 7, artworkLocked: true, context: { backCover: null } }),
+    rec('discogs_4', { masterId: null, details: { status: 'Draft' } }),
+    { id: 'discogs_mock_1', artwork: { source: 'itunes' } },
+  ];
+  const h = computeHealth(records);
+  assert.equal(h.total, 4, 'demo records are not counted');
+  assert.equal(h.covers.cleaner, 1);
+  assert.equal(h.covers.discogs, 3);
+  assert.equal(h.covers.pinned, 1);
+  assert.equal(h.covers.offered, 1, 'a Discogs image with another cover on offer');
+  assert.deepEqual(h.details, { have: 3, total: 4, custom: 1 });
+  assert.deepEqual(h.years, { resolved: 2, total: 3 });
+  assert.deepEqual(h.backCovers, { found: 1, none: 1, opened: 2 });
+  assert.ok(h.pending.art >= 1 && h.pending.details >= 1, 'work still to do is counted');
+  assert.equal(computeHealth([]).total, 0);
+
+  const s = describeStorage({ usage: 5 * 1024 * 1024, quota: 2 * 1024 ** 3, persisted: true });
+  assert.equal(s.used, '5.0 MB');
+  assert.equal(s.quota, '2048 MB');
+  assert.match(s.persisted, /Protected/);
+  assert.match(describeStorage({ persisted: false }).persisted, /Not protected/);
+  assert.equal(describeStorage({}).used, 'unknown');
+
+  // source stats
+  resetSourceStats();
+  noteSource('MusicBrainz', true);
+  noteSource('MusicBrainz', false, 'answered 503');
+  noteSource('Wikipedia', true);
+  assert.deepEqual(sourceSnapshot(), [{ name: 'MusicBrainz', ok: 1, failed: 1, last: 'answered 503' }, { name: 'Wikipedia', ok: 1, failed: 0, last: '' }]);
+  resetSourceStats();
+}
+
+// ---- automatic sync on open, and how it is described ---------------------------------------------------------------
+{
+  const hour = 3600000;
+  const now = Date.parse('2026-09-24T12:00:00Z');
+  assert.equal(needsAutoSync({ lastCheckedAt: 0 }, now), true, 'never checked: check now');
+  assert.equal(needsAutoSync({ lastCheckedAt: now - 2 * hour }, now), false, 'checked recently: leave it');
+  assert.equal(needsAutoSync({ lastCheckedAt: now - 7 * hour }, now), true, 'a while ago: check on open');
+
+  assert.equal(timeAgo(0, now), 'never');
+  assert.equal(timeAgo(now - 20000, now), 'just now');
+  assert.equal(timeAgo(now - 60000, now), '1 minute ago');
+  assert.equal(timeAgo(now - 5 * 60000, now), '5 minutes ago');
+  assert.equal(timeAgo(now - hour, now), '1 hour ago');
+  assert.equal(timeAgo(now - 5 * hour, now), '5 hours ago');
+  assert.equal(timeAgo(now - 49 * hour, now), '2 days ago');
+  assert.equal(timeAgo(now + 5000, now), 'just now', 'a clock that ran slightly ahead never shows a negative time');
+
+  assert.equal(healthSummary({ total: 0, pending: { art: 0, details: 0 } }), 'Nothing to report yet');
+  assert.equal(healthSummary({ total: 50, pending: { art: 0, details: 0 } }), 'All caught up');
+  assert.equal(healthSummary({ total: 50, pending: { art: 3, details: 10 } }), 'Filling in 10 details and 3 covers');
+  assert.equal(healthSummary({ total: 50, pending: { art: 3, details: 0 } }), 'Filling in 3 covers');
 }

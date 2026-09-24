@@ -12,14 +12,14 @@
   <meta name="apple-mobile-web-app-title" content="Spindex">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
   <title>Spindex | Your record collection</title>
-  <link rel="stylesheet" href="/css/style.css?v=78">
+  <link rel="stylesheet" href="/css/style.css?v=80">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%23121214%22 stroke=%22%23e4e4e7%22 stroke-width=%224%22/><circle cx=%2250%22 cy=%2250%22 r=%2220%22 fill=%22%23e11d48%22/><circle cx=%2250%22 cy=%2250%22 r=%224%22 fill=%22%23fff%22/></svg>">
 </head>
 
 <body>
-  <button id="reorder-pill" class="reorder-pill" type="button" hidden>New order ready. Re-sort</button>
+  <button id="reorder-pill" class="reorder-pill" type="button" hidden>Crate updated. Tap to refresh</button>
   <div id="fill-status" class="fill-status" role="status" aria-live="polite" hidden></div>
 
   <div class="app-layout">
@@ -103,6 +103,7 @@
 
     <!-- Digging Crate: Primary Browsing Stage -->
     <main class="crate-stage" id="crate-stage">
+      <button id="demo-note" class="demo-note" type="button" hidden>This is a demo crate. Connect Discogs to see your own records.</button>
       <!-- Dynamic Ambient Backdrop Glow -->
       <div id="ambient-glow" class="ambient-glow" aria-hidden="true">
         <img id="ambient-glow-img" class="ambient-glow-img" alt="" />
@@ -331,17 +332,17 @@
           <!-- Connected (through Discogs sign-in, or with a personal token) -->
           <div id="discogs-connected" hidden>
             <p class="settings-desc" id="discogs-connected-text"></p>
+            <p class="sync-freshness" id="sync-freshness" role="status"></p>
             <div class="settings-actions">
-              <button id="sync-discogs-btn" class="btn btn-primary">Sync Collection</button>
+              <button id="sync-discogs-btn" class="btn btn-secondary">Check now</button>
               <button id="discogs-disconnect-btn" class="btn btn-secondary">Disconnect</button>
             </div>
-            <p class="settings-hint">Sync checks for new records. <button id="sync-full-btn" class="link-btn" type="button">Re-read the whole collection</button> to pick up edits to older ones.</p>
           </div>
 
           <!-- Not connected -->
           <div id="discogs-connect" hidden>
             <p class="settings-desc">Sign in with Discogs to bring in your collection. Spindex reads your collection and
-              release details only, and your login stays on this site's server.</p>
+              release details only, and your login stays on this site's server. After that it keeps itself up to date.</p>
             <a id="discogs-connect-btn" class="btn btn-primary" href="/api/discogs/login">Connect Discogs</a>
           </div>
           <p class="settings-desc" id="discogs-unconfigured" hidden>Discogs sign-in isn't set up on this server yet. You
@@ -361,29 +362,32 @@
           </details>
 
           <div id="sync-status" class="sync-status"></div>
-
-          <p class="discogs-notice">This application uses Discogs’ API but is not affiliated with, sponsored or endorsed
-            by
-            Discogs. ‘Discogs’ is a trademark of Zink Media, LLC.</p>
         </div>
 
         <div class="settings-group">
-          <h4>Demo Collection</h4>
-          <p class="settings-desc">Reload the built-in 12-album sample crate.</p>
-          <button id="reset-demo-btn" class="btn btn-secondary">Reload Demo Crate</button>
+          <details class="settings-advanced" id="health-details">
+            <summary>Diagnostics <span class="health-summary" id="health-summary"></span></summary>
+            <div id="health-content" class="health-content"></div>
+          </details>
+
+          <details class="settings-advanced" id="advanced-details">
+            <summary>Advanced</summary>
+            <p class="settings-desc">Checking for new records is automatic. Edits to records you already have (notes,
+              conditions) are picked up every couple of weeks, or here.</p>
+            <button id="sync-full-btn" class="btn btn-secondary" type="button">Re-read the whole collection</button>
+            <p class="settings-desc" style="margin-top: 1.5rem;">Clear what this browser has saved. Your Discogs
+              collection is untouched and comes back on the next check; covers you chose are lost.</p>
+            <button id="clear-cache-btn" class="btn btn-danger">Clear local data</button>
+          </details>
         </div>
 
-        <div class="settings-group">
-          <h4>Storage</h4>
-          <p class="settings-desc">Your crate is saved in this browser, so it works offline and never leaves your
-            device.</p>
-          <button id="clear-cache-btn" class="btn btn-danger">Clear Local Cache</button>
-        </div>
+        <p class="discogs-notice">This application uses Discogs’ API but is not affiliated with, sponsored or endorsed
+          by Discogs. ‘Discogs’ is a trademark of Zink Media, LLC.</p>
       </div>
     </div>
   </aside>
 
-  <script type="module" src="/js/app.js?v=80"></script>
+  <script type="module" src="/js/app.js?v=84"></script>
 </body>
 
 </html>

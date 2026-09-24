@@ -2,6 +2,7 @@
 // through our own /api/ext, which keeps a shared edge cache (a second device gets answers without waiting on the source)
 // and identifies the app properly to each service. If there is no server (a static preview, offline), it goes direct.
 import { createLimiter } from './limiter.js';
+import { noteSource } from './sourcestats.js';
 
 const PROXIED = new Set(['en.wikipedia.org', 'www.wikidata.org', 'commons.wikimedia.org', 'musicbrainz.org', 'coverartarchive.org']);
 const isHit = (res) => res?.headers?.get?.('x-spindex-cache') === 'HIT';
@@ -23,7 +24,9 @@ const musicbrainz = createLimiter({
   maxRetries: 2,
 });
 
-export function externalFetch(url) {
+const SOURCE_NAMES = { 'en.wikipedia.org': 'Wikipedia', 'www.wikidata.org': 'Wikidata', 'commons.wikimedia.org': 'Wikimedia Commons', 'musicbrainz.org': 'MusicBrainz', 'coverartarchive.org': 'Cover Art Archive' };
+
+export async function externalFetch(url) {
   let host = '';
   try {
     host = new URL(url).host;
@@ -31,7 +34,16 @@ export function externalFetch(url) {
     return fetch(url);
   }
   if (!PROXIED.has(host)) return fetch(url);
-  return host === 'musicbrainz.org' ? musicbrainz.schedule(() => viaProxy(url), 'low') : viaProxy(url);
+  const name = SOURCE_NAMES[host] || host;
+  try {
+    const res = await (host === 'musicbrainz.org' ? musicbrainz.schedule(() => viaProxy(url), 'low') : viaProxy(url));
+    // a 404 is a real answer ("not there"); anything else that isn't ok is the source having trouble
+    noteSource(name, res.ok || res.status === 404, `answered ${res.status}`);
+    return res;
+  } catch (err) {
+    noteSource(name, false, 'could not be reached');
+    throw err;
+  }
 }
 
 // JSON, or null when the source has nothing (a 404). Anything else that goes wrong throws, so a hiccup is never

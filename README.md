@@ -24,7 +24,8 @@ browser, and works offline once loaded.
   the artist, videos, listening links, a flippable sleeve with the pressing's real disc colour, and links to other
   records in your crate. Sections with nothing to show are hidden.
 - **Phones and tablets**: touch-sized controls, safe-area support, and layouts for portrait and landscape.
-- **Demo crate**: a built-in 12-album collection loads when the database is empty.
+- **Demo crate**: a first visit (before Discogs is connected) shows a built-in 12-album collection. It goes away once you connect. Add `?demo` to the address to reload it while testing.
+- **Stays up to date by itself**: opening the app (or coming back to it) checks Discogs for new records when it has been a few hours. Settings shows when it last checked.
 
 ## Local development
 

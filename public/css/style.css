@@ -3073,3 +3073,17 @@ html {
 .gf-art-fix:hover{color:var(--color-accent-hover)}
 
 .gf-back.is-spread .gatefold-jacket-art{object-position:0% 50%}
+
+.health-content{margin-top:.8rem}
+.health-rows{margin:0 0 .8rem}
+.health-rows > div{display:flex;justify-content:space-between;gap:1rem;padding:.3rem 0;font-size:.82rem;border-bottom:1px solid var(--border-subtle)}
+.health-rows dt{color:var(--text-muted)}
+.health-rows dd{margin:0;text-align:right}
+
+.sync-freshness{margin:0 0 1rem;font-size:.85rem;color:var(--text-muted)}
+.sync-freshness.is-busy{color:var(--color-accent)}
+.health-summary{margin-left:.5rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)}
+.settings-advanced + .settings-advanced{margin-top:1rem}
+.demo-note{position:absolute;top:calc(var(--sat, 0px) + 4.6rem);left:50%;transform:translateX(-50%);z-index:240;max-width:calc(100vw - 32px);padding:.45rem .9rem;border-radius:999px;background:rgba(20,20,26,.92);border:1px solid var(--border-subtle);color:var(--text-muted);font:inherit;font-size:.74rem;cursor:pointer;text-align:center}
+.demo-note:hover{color:var(--text-main)}
+.demo-note[hidden]{display:none}

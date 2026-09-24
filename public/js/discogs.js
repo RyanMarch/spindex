@@ -6,6 +6,7 @@
 //  'none'   not connected.
 
 import { createLimiter } from './limiter.js';
+import { noteSource } from './sourcestats.js';
 
 const API = 'https://api.discogs.com';
 
@@ -89,8 +90,10 @@ async function send(path, init) {
 
 // Every Discogs request goes through one shared queue. priority is 'high' for anything a person is waiting on and
 // 'low' for background filling, which yields to it.
-export function discogsFetch(path, init = {}, priority = 'high') {
-  return limiter.schedule(() => send(path, init), priority);
+export async function discogsFetch(path, init = {}, priority = 'high') {
+  const res = await limiter.schedule(() => send(path, init), priority);
+  noteSource('Discogs', res.ok || res.status === 404, `answered ${res.status}`);
+  return res;
 }
 
 // Queue activity, for the "filling in details" indicator: fn({ pending, high, low, pausedUntil })

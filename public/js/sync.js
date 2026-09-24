@@ -2,6 +2,7 @@
 import { upsertRecords, updateRecord, getAllRecords, deleteRecords } from './db.js';
 import { discogsFetch } from './discogs.js';
 import { createLimiter } from './limiter.js';
+import { noteSource } from './sourcestats.js';
 import { fingerprintFromUrl, sameArtwork, discogsImageUrl } from './imagematch.js';
 import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds } from './syncplan.js';
 import { isCustomRelease } from './values.js';
@@ -12,8 +13,8 @@ import { masterYearUpdates, itunesYearUpdates, isEditionTitle } from './years.js
 // pauses it and retries instead of ending the whole pass.
 const itunesLimiter = createLimiter({ pace: () => 3200, maxRetries: 2 });
 
-function itunesFetch(url, priority = 'low') {
-  return itunesLimiter.schedule(async () => {
+async function itunesFetch(url, priority = 'low') {
+  const res = await itunesLimiter.schedule(async () => {
     try {
       return await fetch(url);
     } catch {
@@ -21,6 +22,8 @@ function itunesFetch(url, priority = 'low') {
       return { status: 429, ok: false, headers: { get: () => null } };
     }
   }, priority);
+  noteSource('iTunes', res.ok, `answered ${res.status}`);
+  return res;
 }
 
 // Known band names or entities that shouldn't be split into "Last, First"
@@ -586,7 +589,7 @@ export async function syncDiscogsCollection(username, onProgress, { full = false
     page++;
   }
 
-  writeSyncMeta(username, { storedTotal: total, lastFullAt: stoppedEarly ? meta.lastFullAt : Date.now() });
+  writeSyncMeta(username, { storedTotal: total, lastFullAt: stoppedEarly ? meta.lastFullAt : Date.now(), lastCheckedAt: Date.now() });
 
   await upsertRecords(fetchedRecords);
 
