@@ -17,6 +17,7 @@ export class CrateController {
     this.raf = null;
     this.lastT = 0;
     this.size = 420;
+    this.canHover = typeof window !== 'undefined' && Boolean(window.matchMedia?.('(hover: hover) and (pointer: fine)')?.matches);
     this.gap = 0; // Extra space opened between the active album and the lower stack (compact layout hosts title/artist there)
     this.compactMq = typeof window !== 'undefined' ? window.matchMedia?.('(max-width: 960px)') : null;
     this.reducedMotion = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches : false;
@@ -112,25 +113,42 @@ export class CrateController {
 
       coverWrap.appendChild(img);
 
-      // Faux spine with scannable typography
-      const spine = document.createElement('div');
-      spine.className = 'faux-spine';
-      const spineTitle = document.createElement('span');
-      spineTitle.className = 'spine-title';
-      spineTitle.textContent = record.title || '';
-      const spineArtist = document.createElement('span');
-      spineArtist.className = 'spine-artist';
-      spineArtist.textContent = record.artist || '';
-      spine.appendChild(spineTitle);
-      spine.appendChild(spineArtist);
-      coverWrap.appendChild(spine);
-
       // Dynamic surface sheen
       const sheen = document.createElement('div');
       sheen.className = 'sleeve-sheen-overlay';
       coverWrap.appendChild(sheen);
 
       el.appendChild(coverWrap);
+
+      // The jacket's thickness: a bevelled edge just outside the artwork, never over it
+      const edge = document.createElement('div');
+      edge.className = 'sleeve-edge';
+      el.appendChild(edge);
+
+      const lip = document.createElement('div');
+      lip.className = 'sleeve-lip';
+      el.appendChild(lip);
+
+      // Tilt and glare follow the pointer over the active cover (touch screens have no hover, so skip them)
+      if (this.canHover) {
+        let frame = null;
+        el.addEventListener('pointermove', (e) => {
+          if (!el.classList.contains('active') || frame) return;
+          frame = requestAnimationFrame(() => {
+            frame = null;
+            const r = coverWrap.getBoundingClientRect();
+            const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+            const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+            el.style.setProperty('--tilt-x', (x - 0.5).toFixed(3));
+            el.style.setProperty('--tilt-y', (y - 0.5).toFixed(3));
+            el.style.setProperty('--glare-x', `${(x * 100).toFixed(1)}%`);
+            el.style.setProperty('--glare-y', `${(y * 100).toFixed(1)}%`);
+          });
+        });
+        el.addEventListener('pointerleave', () => {
+          for (const v of ['--tilt-x', '--tilt-y', '--glare-x', '--glare-y']) el.style.removeProperty(v);
+        });
+      }
 
       // Card click handling
       el.addEventListener('click', (e) => {
@@ -145,6 +163,7 @@ export class CrateController {
       this.container.appendChild(el);
       this.sleeveElements.push({ el, record, index: i });
     }
+
 
     this.pos = this.currentIndex;
     this.vel = 0;
@@ -283,6 +302,7 @@ export class CrateController {
 
       item.el.style.zIndex = String(this.zFor(offset));
     }
+
   }
 
   getDividerLabel(index) {

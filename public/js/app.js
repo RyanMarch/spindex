@@ -4,6 +4,7 @@ import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './m
 import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
 import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, refreshCollectionFields } from './sync.js';
+import { initDiscogs, discogsState, isDiscogsConnected, onDiscogsChange, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
 
 const DEFAULT_TITLE = 'Crate | Vinyl Record Companion';
 
@@ -100,6 +101,13 @@ class App {
     this.usernameInput = document.getElementById('discogs-username');
     this.tokenInput = document.getElementById('discogs-token');
     this.syncBtn = document.getElementById('sync-discogs-btn');
+    this.syncTokenBtn = document.getElementById('sync-token-btn');
+    this.discogsConnectedEl = document.getElementById('discogs-connected');
+    this.discogsConnectedText = document.getElementById('discogs-connected-text');
+    this.discogsConnectEl = document.getElementById('discogs-connect');
+    this.discogsUnconfiguredEl = document.getElementById('discogs-unconfigured');
+    this.discogsDisconnectBtn = document.getElementById('discogs-disconnect-btn');
+    this.discogsTokenDetails = document.getElementById('discogs-token-details');
     this.syncStatus = document.getElementById('sync-status');
     this.resetDemoBtn = document.getElementById('reset-demo-btn');
     this.clearCacheBtn = document.getElementById('clear-cache-btn');
@@ -185,8 +193,7 @@ class App {
     // Settings drawer toggling
     if (this.settingsToggleBtn) {
       this.settingsToggleBtn.addEventListener('click', () => {
-        this.settingsDrawer.classList.add('open');
-        this.settingsDrawer.setAttribute('aria-hidden', 'false');
+        this.openSettings();
       });
     }
 
@@ -211,6 +218,18 @@ class App {
     });
 
     // Sync button
+    if (this.syncTokenBtn) {
+      this.syncTokenBtn.addEventListener('click', () => this.handleSync());
+    }
+    if (this.discogsDisconnectBtn) {
+      this.discogsDisconnectBtn.addEventListener('click', async () => {
+        if (discogsState().mode === 'token') await forgetToken();
+        else await disconnectDiscogs();
+        if (this.tokenInput) this.tokenInput.value = '';
+        this.setSyncStatus('Disconnected from Discogs. Your crate stays on this device.', '');
+      });
+    }
+    onDiscogsChange(() => this.renderDiscogsSettings());
     if (this.syncBtn) {
       this.syncBtn.addEventListener('click', () => this.handleSync());
     }
@@ -243,6 +262,87 @@ class App {
     }
   }
 
+  // Show the right Discogs controls for how this browser is connected
+  renderDiscogsSettings() {
+    const { mode, username, configured } = discogsState();
+    const connected = mode !== 'none';
+
+    if (this.discogsConnectedEl) this.discogsConnectedEl.hidden = !connected;
+    if (this.discogsConnectEl) this.discogsConnectEl.hidden = connected || !configured;
+    if (this.discogsUnconfiguredEl) this.discogsUnconfiguredEl.hidden = connected || configured;
+    if (this.discogsDisconnectBtn) this.discogsDisconnectBtn.textContent = mode === 'token' ? 'Forget token' : 'Disconnect';
+    if (this.discogsTokenDetails) {
+      // The token form is the main way in when sign-in isn't available; otherwise it stays tucked away
+      this.discogsTokenDetails.hidden = connected;
+      if (!connected && !configured) this.discogsTokenDetails.open = true;
+    }
+
+    if (this.discogsConnectedText && connected) {
+      const who = `<strong>${this.escapeHTML(username)}</strong>`;
+      this.discogsConnectedText.innerHTML =  /*html*/ mode === 'oauth'
+        ? `Connected to Discogs as ${who}. Sync brings in your latest collection.`
+        : `Using a personal access token for ${who}. Sync brings in your latest collection.`;
+    }
+    if (this.usernameInput && mode === 'token') this.usernameInput.value = username;
+  }
+
+  openSettings() {
+    this.renderDiscogsSettings();
+    this.settingsDrawer?.classList.add('open');
+    this.settingsDrawer?.setAttribute('aria-hidden', 'false');
+  }
+
+  // Coming back from Discogs' sign-in page (?discogs=connected|denied|error)
+  async handleDiscogsReturn() {
+    const params = new URLSearchParams(location.search);
+    const outcome = params.get('discogs');
+    if (!outcome) return;
+
+    params.delete('discogs');
+    const query = params.toString();
+    history.replaceState(history.state, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
+
+    this.openSettings();
+    if (outcome === 'connected') {
+      const { username } = discogsState();
+      const hasRealRecords = (await getAllRecords()).some((r) => !String(r.id).startsWith('discogs_mock_'));
+      if (hasRealRecords) {
+        this.setSyncStatus(`Connected to Discogs as ${username}.`, 'success');
+      } else {
+        this.handleSync(); // first connection: bring the collection in straight away
+      }
+    } else if (outcome === 'denied') {
+      this.setSyncStatus('Discogs sign-in was cancelled.', 'error');
+    } else {
+      this.setSyncStatus("Couldn't complete the Discogs sign-in. Please try again.", 'error');
+    }
+  }
+
+  // One crate per browser: if a different Discogs account connects, don't blend two collections together
+  async claimCrateFor(username) {
+    const owner = localStorage.getItem('crate_owner');
+    if (owner && owner.toLowerCase() !== username.toLowerCase()) {
+      const realRecords = (await getAllRecords()).filter((r) => !String(r.id).startsWith('discogs_mock_'));
+      if (realRecords.length > 0 && !confirm(`This crate holds ${owner}'s collection. Replace it with ${username}'s?`)) {
+        return false;
+      }
+      await clearRecords();
+    }
+    localStorage.setItem('crate_owner', username);
+    return true;
+  }
+
+  // Background jobs may only touch the crate that belongs to the connected account
+  crateBelongsToCurrentUser() {
+    const { username } = discogsState();
+    const owner = localStorage.getItem('crate_owner');
+    if (!owner) {
+      localStorage.setItem('crate_owner', username); // crates synced before this existed belong to whoever is connected
+      return true;
+    }
+    return owner.toLowerCase() === username.toLowerCase();
+  }
+
   closeSettings() {
     if (this.settingsDrawer) {
       this.settingsDrawer.classList.remove('remove');
@@ -254,6 +354,8 @@ class App {
   async bootstrap() {
     await openDB();
     await seedDefaultRecordsIfEmpty();
+    await initDiscogs();
+    this.renderDiscogsSettings();
 
     // Check if mock records need verified artwork or sortArtist update
     const sample = await getRecord('discogs_mock_001');
@@ -280,6 +382,7 @@ class App {
     await this.loadAllRecords();
     this.openFromLocation(true);
     window.addEventListener('popstate', () => this.openFromLocation());
+    this.handleDiscogsReturn();
     this.fillMissingGenres();
     this.refreshCollectionFieldsIfNeeded()
       .then(() => this.fillMissingDetails())
@@ -333,15 +436,14 @@ class App {
 
   // Condition grades and notes come from Discogs collection fields; fetch them once for records that predate them
   async refreshCollectionFieldsIfNeeded() {
-    const token = localStorage.getItem('discogs_token');
-    const username = localStorage.getItem('discogs_username');
-    if (!token || !username) return;
+    if (!isDiscogsConnected() || !this.crateBelongsToCurrentUser()) return;
+    const { username } = discogsState();
 
     const stale = this.allRecords.some((r) => r.discogsId && !String(r.id).startsWith('discogs_mock_') && r.mediaCondition === undefined);
     if (!stale) return;
 
     try {
-      await refreshCollectionFields(username, token);
+      await refreshCollectionFields(username);
       await this.loadAllRecords();
     } catch {
       // Try again next load
@@ -350,13 +452,12 @@ class App {
 
   // Full Discogs release (label, credits, pressing, videos) for the album inspector, fetched once per record
   async fillMissingDetails() {
-    const token = localStorage.getItem('discogs_token');
-    if (!token) return;
+    if (!isDiscogsConnected()) return;
 
     const needsDetails = this.allRecords.filter((r) => r.discogsId && !r.details && !String(r.id).startsWith('discogs_mock_'));
     if (needsDetails.length === 0) return;
 
-    await enrichDetailsInBackground(needsDetails, token);
+    await enrichDetailsInBackground(needsDetails);
     await this.loadAllRecords();
   }
 
@@ -368,8 +469,7 @@ class App {
   }
 
   fillMissingTracklists() {
-    const token = localStorage.getItem('discogs_token');
-    if (!token) return;
+    if (!isDiscogsConnected()) return;
 
     const needsEnrichment = this.allRecords.filter((r) => {
       if (!r.discogsId) return false;
@@ -378,7 +478,7 @@ class App {
     });
     if (needsEnrichment.length === 0) return;
 
-    enrichTracklistsInBackground(needsEnrichment, token).then(() => this.loadAllRecords());
+    enrichTracklistsInBackground(needsEnrichment).then(() => this.loadAllRecords());
   }
 
   setBrowseOpen(open) {
@@ -668,22 +768,30 @@ class App {
   }
 
   async handleSync() {
-    const username = this.usernameInput?.value.trim();
-    const token = this.tokenInput?.value.trim();
+    // Typed-in token: save it first (this is the fallback path; signed-in users skip straight to syncing)
+    if (discogsState().mode !== 'oauth') {
+      const username = this.usernameInput?.value.trim();
+      const token = this.tokenInput?.value.trim();
+      if (username && token) {
+        await saveToken(username, token);
+      } else if (!isDiscogsConnected()) {
+        this.setSyncStatus('Connect Discogs, or provide a username and personal token.', 'error');
+        return;
+      }
+    }
 
-    if (!username || !token) {
-      this.setSyncStatus('Please provide both username and personal token.', 'error');
+    const { username } = discogsState();
+    if (!(await this.claimCrateFor(username))) {
+      this.setSyncStatus('Sync cancelled. Your crate is unchanged.', '');
       return;
     }
 
-    localStorage.setItem('discogs_username', username);
-    localStorage.setItem('discogs_token', token);
-
-    this.syncBtn.disabled = true;
+    const buttons = [this.syncBtn, this.syncTokenBtn].filter(Boolean);
+    buttons.forEach((b) => { b.disabled = true; });
     this.setSyncStatus('Starting Discogs collection sync...', '');
 
     try {
-      await syncDiscogsCollection(username, token, ({ page, totalPages, count }) => {
+      await syncDiscogsCollection(username, ({ page, totalPages, count }) => {
         this.setSyncStatus(`Syncing page ${page} of ${totalPages} (${count} albums)...`, '');
       });
 
@@ -692,12 +800,15 @@ class App {
 
       this.setSyncStatus('Sync complete! Crate updated.', 'success');
       await this.loadAllRecords();
-      this.fillMissingDetails();
+      // One request per release supplies its details and tracklist; durations still missing are filled from the master after
+      this.fillMissingDetails().then(() => this.fillMissingTracklists());
     } catch (err) {
       console.error(err);
-      this.setSyncStatus(`Sync failed: ${err.message}`, 'error');
+      this.setSyncStatus(err.message === 'Not connected to Discogs'
+        ? 'Your Discogs connection has ended. Please connect again.'
+        : `Sync failed: ${err.message}`, 'error');
     } finally {
-      this.syncBtn.disabled = false;
+      buttons.forEach((b) => { b.disabled = false; });
     }
   }
 

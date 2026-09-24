@@ -1,5 +1,6 @@
 // sync.js - Discogs syncing and iTunes art enrichment
 import { upsertRecords, updateRecord, getAllRecords } from './db.js';
+import { discogsFetch, paceMs } from './discogs.js';
 
 // Known band names or entities that shouldn't be split into "Last, First"
 const KNOWN_BANDS = new Set([
@@ -399,11 +400,9 @@ export function calculateTotalDuration(tracks) {
 // each identified by a field id. Read them by name so condition grades never masquerade as notes.
 const DEFAULT_FIELD_NAMES = new Map([[1, 'Media Condition'], [2, 'Sleeve Condition'], [3, 'Notes']]);
 
-export async function fetchCollectionFieldNames(username, token) {
+export async function fetchCollectionFieldNames(username) {
   try {
-    const res = await fetch(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/fields`, {
-      headers: { 'User-Agent': 'VinylCrate/1.0', Authorization: `Discogs token=${token}` },
-    });
+    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/fields`);
     if (!res.ok) return DEFAULT_FIELD_NAMES;
     const data = await res.json();
     const map = new Map((data.fields || []).map((f) => [f.id, f.name]));
@@ -427,16 +426,13 @@ export function parseCollectionFields(notes, fieldNames = DEFAULT_FIELD_NAMES) {
 }
 
 // Refresh only the condition grades and notes on records that are already in the crate (one request per 100 records)
-export async function refreshCollectionFields(username, token) {
-  const fieldNames = await fetchCollectionFieldNames(username, token);
+export async function refreshCollectionFields(username) {
+  const fieldNames = await fetchCollectionFieldNames(username);
   let page = 1;
   let totalPages = 1;
 
   while (page <= totalPages) {
-    const res = await fetch(
-      `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=100`,
-      { headers: { 'User-Agent': 'VinylCrate/1.0', Authorization: `Discogs token=${token}` } }
-    );
+    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=100`);
     if (!res.ok) return;
     const data = await res.json();
     totalPages = data.pagination?.pages || 1;
@@ -458,7 +454,7 @@ export async function refreshCollectionFields(username, token) {
   }
 }
 
-export async function syncDiscogsCollection(username, token, onProgress) {
+export async function syncDiscogsCollection(username, onProgress) {
   let page = 1;
   let totalPages = 1;
   const perPage = 100;
@@ -466,18 +462,10 @@ export async function syncDiscogsCollection(username, token, onProgress) {
 
   const existingRecords = await getAllRecords();
   const existingMap = new Map(existingRecords.map((r) => [r.id, r]));
-  const fieldNames = await fetchCollectionFieldNames(username, token);
+  const fieldNames = await fetchCollectionFieldNames(username);
 
   while (page <= totalPages) {
-    const res = await fetch(
-      `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}`,
-      {
-        headers: {
-          'User-Agent': 'VinylCrate/1.0',
-          Authorization: `Discogs token=${token}`,
-        },
-      }
-    );
+    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}`);
 
     if (!res.ok) {
       throw new Error(`Discogs fetch error: ${res.statusText}`);
@@ -562,11 +550,10 @@ export async function syncDiscogsCollection(username, token, onProgress) {
 
   await upsertRecords(fetchedRecords);
   enrichArtInBackground(fetchedRecords);
-  enrichTracklistsInBackground(fetchedRecords, token);
   return fetchedRecords;
 }
 
-export async function enrichTracklistsInBackground(records, token) {
+export async function enrichTracklistsInBackground(records) {
   // Fetch release tracklist, and if durations are missing, match by title against master release
   // Respect Discogs API rate limits: max 60 requests/minute (~1 req/second)
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -584,12 +571,7 @@ export async function enrichTracklistsInBackground(records, token) {
       if (currentTracklist.length === 0) {
         let res = null;
         try {
-          res = await fetch(`https://api.discogs.com/releases/${record.discogsId}`, {
-            headers: {
-              'User-Agent': 'VinylCrate/1.0',
-              Authorization: `Discogs token=${token}`,
-            },
-          });
+          res = await discogsFetch(`/releases/${record.discogsId}`);
         } catch {
           // Network / CORS / preflight failure
           continue;
@@ -618,7 +600,7 @@ export async function enrichTracklistsInBackground(records, token) {
         }
 
         // Throttle ~1.1s between Discogs API calls to stay comfortably under 60 req/min
-        await delay(1100);
+        await delay(paceMs());
       }
 
       // If Discogs returned no tracks or was rate-limited / unavailable, attempt iTunes fallback for full tracklist
@@ -660,12 +642,7 @@ export async function enrichTracklistsInBackground(records, token) {
 
       if (missingDurations && record.masterId) {
         try {
-          const masterRes = await fetch(`https://api.discogs.com/masters/${record.masterId}`, {
-            headers: {
-              'User-Agent': 'VinylCrate/1.0',
-              Authorization: `Discogs token=${token}`,
-            },
-          });
+          const masterRes = await discogsFetch(`/masters/${record.masterId}`);
 
           if (masterRes.status === 429) {
             console.warn('Discogs rate limit reached (429). Pausing background tracklist enrichment.');
@@ -733,7 +710,7 @@ export async function enrichTracklistsInBackground(records, token) {
         }
 
         // Throttle ~1.1s between Discogs API calls
-        await delay(1100);
+        await delay(paceMs());
       }
 
       // 3. Fallback: For any tracks still missing durations, try matching against iTunes album tracks
@@ -1160,12 +1137,10 @@ export function groupCredits(details) {
 }
 
 // Fetch one release from Discogs. `status` is 'ok', 'throttled' (429) or 'error'.
-export async function fetchReleaseDetails(record, token) {
+export async function fetchReleaseDetails(record) {
   let res;
   try {
-    res = await fetch(`https://api.discogs.com/releases/${record.discogsId}`, {
-      headers: { 'User-Agent': 'VinylCrate/1.0', Authorization: `Discogs token=${token}` },
-    });
+    res = await discogsFetch(`/releases/${record.discogsId}`);
   } catch {
     return { status: 'error' };
   }
@@ -1182,13 +1157,13 @@ export async function fetchReleaseDetails(record, token) {
 }
 
 // Backfill full release details, one gentle request at a time. Stops if throttled and resumes next load.
-export async function enrichDetailsInBackground(records, token, onEach) {
+export async function enrichDetailsInBackground(records, onEach) {
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   for (const record of records) {
     if (!record.discogsId || record.details) continue;
 
-    const result = await fetchReleaseDetails(record, token);
+    const result = await fetchReleaseDetails(record);
     if (result.status === 'throttled') break;
     if (result.status === 'ok') {
       const updates = { details: result.details };
@@ -1199,16 +1174,14 @@ export async function enrichDetailsInBackground(records, token, onEach) {
       await updateRecord(record.id, updates);
       if (onEach) onEach(record.id);
     }
-    await delay(1100);
+    await delay(paceMs());
   }
 }
 
 // Links for an artist (official site, YouTube, Bandcamp...) from their Discogs profile
-export async function fetchArtistLinks(artistId, token) {
+export async function fetchArtistLinks(artistId) {
   try {
-    const res = await fetch(`https://api.discogs.com/artists/${artistId}`, {
-      headers: { 'User-Agent': 'VinylCrate/1.0', Authorization: `Discogs token=${token}` },
-    });
+    const res = await discogsFetch(`/artists/${artistId}`);
     if (!res.ok) return null;
     const data = await res.json();
     return (data.urls || []).slice(0, 12);

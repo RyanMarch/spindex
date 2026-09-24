@@ -1,4 +1,4 @@
-const CACHE_NAME = 'crate-cache-v20';
+const CACHE_NAME = 'crate-cache-v24';
 const ASSETS = [
   '/',
   '/index.html',
@@ -9,6 +9,7 @@ const ASSETS = [
   '/js/crate.js',
   '/js/notes.js',
   '/js/wiki.js',
+  '/js/discogs.js',
   '/js/mock-data.js',
   '/manifest.webmanifest'
 ];
@@ -33,6 +34,8 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Server functions (Discogs sign-in, the Discogs proxy) carry per-user data: never cache them
+  if (new URL(event.request.url).pathname.startsWith('/api/')) return;
   // Network-first for application core assets to prevent stale dev / update caching
   event.respondWith(
     fetch(event.request)

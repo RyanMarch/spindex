@@ -11,6 +11,7 @@ import {
   fetchArtistLinks,
 } from './sync.js';
 import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover } from './wiki.js';
+import { isDiscogsConnected } from './discogs.js';
 
 const COMPACT = '(max-width: 960px)';
 
@@ -228,9 +229,8 @@ export class GatefoldController {
   }
 
   async loadDetails(record, token) {
-    const discogsToken = localStorage.getItem('discogs_token');
-    if (!record.details && record.discogsId && discogsToken) {
-      const result = await fetchReleaseDetails(record, discogsToken);
+    if (!record.details && record.discogsId && isDiscogsConnected()) {
+      const result = await fetchReleaseDetails(record);
       if (result.status === 'ok') {
         const updates = { details: result.details };
         if ((!record.tracklist || record.tracklist.length === 0) && result.tracklist.length > 0) {
@@ -270,9 +270,8 @@ export class GatefoldController {
 
     // Official site, YouTube, Bandcamp... from the artist's Discogs profile
     const artistId = record.details?.artists?.[0]?.id;
-    const discogsToken = localStorage.getItem('discogs_token');
-    if (artistId && discogsToken && record.context?.artistLinks === undefined) {
-      const urls = await fetchArtistLinks(artistId, discogsToken);
+    if (artistId && isDiscogsConnected() && record.context?.artistLinks === undefined) {
+      const urls = await fetchArtistLinks(artistId);
       if (urls) await this.saveContext(record, { artistLinks: urls });
     }
     if (this.isCurrent(record, token)) this.renderBand(record);

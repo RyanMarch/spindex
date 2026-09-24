@@ -352,7 +352,10 @@ body {
   border-radius: 4px;
   overflow: hidden;
   background-color: #15151b;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.7),
+    0 8px 18px -4px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   z-index: 5;
 }
@@ -366,12 +369,15 @@ body {
   background: #111;
 }
 
-/* Shifting Surface Glare */
+/* Shifting Surface Glare, plus soft falloff toward the edges so the jacket reads as a slightly curved sheet */
 .sleeve-sheen-overlay {
   position: absolute;
   inset: 0;
   border-radius: 4px;
   pointer-events: none;
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 0 22px rgba(0, 0, 0, 0.16);
 }
 
 /* Active Center Album: Standing upright, crisp, clean natural depth */
@@ -380,22 +386,27 @@ body {
   pointer-events: auto;
 }
 
+/* The active cover is the one lifted off the stack: contact, mid and ambient shadows */
 .sleeve.active .sleeve-cover-wrap {
   box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.5),
+    0 1px 2px rgba(0, 0, 0, 0.7),
+    0 10px 20px -4px rgba(0, 0, 0, 0.55),
+    0 30px 50px -14px rgba(0, 0, 0, 0.6),
     inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
 .sleeve.active:hover .sleeve-cover-wrap {
   transform: translateY(-4px) scale(1.015);
   box-shadow:
-    0 12px 24px rgba(0, 0, 0, 0.55),
+    0 1px 2px rgba(0, 0, 0, 0.7),
+    0 14px 26px -4px rgba(0, 0, 0, 0.55),
+    0 40px 60px -16px rgba(0, 0, 0, 0.65),
     inset 0 0 0 1px rgba(255, 255, 255, 0.24);
 }
 
 .sleeve.active .sleeve-sheen-overlay {
   background:
-    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.14) 0%, transparent 60%),
+    radial-gradient(circle at var(--glare-x, 50%) var(--glare-y, 35%), rgba(255, 255, 255, 0.14) 0%, transparent 60%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
     linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, 0.28) 100%);
 }
@@ -406,7 +417,10 @@ body {
 }
 
 .sleeve.flow-above .sleeve-cover-wrap {
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow:
+    0 -1px 1px rgba(0, 0, 0, 0.6),
+    0 -6px 12px -2px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 .sleeve.flow-above .sleeve-sheen-overlay {
@@ -419,51 +433,14 @@ body {
 }
 
 .sleeve.flow-below .sleeve-cover-wrap {
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow:
+    0 -1px 1px rgba(0, 0, 0, 0.6),
+    0 -7px 12px -2px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 .sleeve.flow-below .sleeve-sheen-overlay {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, transparent 60%);
-}
-
-/* Faux Spine with scannable typography */
-.faux-spine {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 22px;
-  background: linear-gradient(90deg, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.12) 60%, transparent 100%);
-  border-right: 1px solid rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-  border-radius: 4px 0 0 4px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  padding: 6px 3px;
-}
-
-.spine-title,
-.spine-artist {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  font-size: 0.52rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-height: 48%;
-  color: rgba(255, 255, 255, 0.7);
-  line-height: 1;
-}
-
-.spine-artist {
-  color: rgba(255, 255, 255, 0.4);
-  font-weight: 500;
-  font-size: 0.46rem;
 }
 
 /* Fallback cover */
@@ -2822,4 +2799,77 @@ body.sleeve-open .app-header > * {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.35rem;
   }
+}
+
+/* ==========================================================================
+   Crate stack: a real jacket edge, in place of text drawn over the artwork
+   ========================================================================== */
+.sleeve-edge {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  left: -5px;
+  width: 5px;
+  border-radius: 2px 0 0 2px;
+  background: linear-gradient(90deg, rgba(14, 14, 18, 0.95) 0%, rgba(88, 88, 98, 0.6) 55%, rgba(255, 255, 255, 0.2) 100%);
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.16), -3px 0 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+/* Jacket thickness: the top edge catches the light, so each strip in the stack reads as a physical sleeve */
+.sleeve-lip {
+  position: absolute;
+  top: -3px;
+  left: -5px;
+  right: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.1) 100%);
+  pointer-events: none;
+}
+
+/* Active cover follows the pointer: a slight tilt and a moving highlight (mouse and trackpad only) */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .sleeve.active:hover .sleeve-cover-wrap {
+    transform: perspective(1000px) rotateX(calc(var(--tilt-y, 0) * -5deg)) rotateY(calc(var(--tilt-x, 0) * 6deg)) translateY(-4px) scale(1.015);
+    transition: transform 0.12s ease-out, box-shadow 0.2s ease;
+  }
+}
+
+/* Settings: Discogs connection */
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.1rem;
+}
+
+a.btn {
+  text-decoration: none;
+}
+
+.settings-advanced {
+  margin-top: 1.5rem;
+}
+
+.settings-advanced summary {
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.settings-advanced summary:hover {
+  color: var(--text-main);
+}
+
+.settings-advanced[open] summary {
+  margin-bottom: 0.5rem;
+}
+
+.settings-desc strong {
+  color: var(--text-main);
+  font-weight: 700;
 }
