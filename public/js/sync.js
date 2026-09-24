@@ -1,6 +1,7 @@
 // sync.js - Discogs syncing and iTunes art enrichment
 import { upsertRecords, updateRecord, getAllRecords } from './db.js';
 import { discogsFetch } from './discogs.js';
+import { masterYearUpdates, itunesYearUpdates, isEditionTitle } from './years.js';
 
 // Known band names or entities that shouldn't be split into "Last, First"
 const KNOWN_BANDS = new Set([
@@ -501,12 +502,6 @@ export async function syncDiscogsCollection(username, onProgress) {
         ? existing.artwork
         : discogsArtwork;
 
-      const isEditionTitle = (t) =>
-        /\b2\.0\b/i.test(t) ||
-        /\b\d+(?:th)?\s+anniversary\b/i.test(t) ||
-        /\bdeluxe\b/i.test(t) ||
-        /\bexpanded\b/i.test(t);
-
       const titleStr = basic.title || 'Untitled';
       const isExpandedEdition = isEditionTitle(titleStr);
       const chosenYear = (isExpandedEdition && basic.year)
@@ -552,6 +547,38 @@ export async function syncDiscogsCollection(username, onProgress) {
   await upsertRecords(fetchedRecords);
   enrichArtInBackground(fetchedRecords);
   return fetchedRecords;
+}
+
+// Find each record's original release year from its Discogs master. This decides where a record files in the crate, so it
+// runs before the other background work. Records that share a master cost one request between them.
+export async function enrichYearsInBackground(records, onEach) {
+  const byMaster = new Map();
+  for (const record of records) {
+    if (!record.masterId || record.masterYear != null || record.masterChecked) continue;
+    if (!byMaster.has(record.masterId)) byMaster.set(record.masterId, []);
+    byMaster.get(record.masterId).push(record);
+  }
+
+  for (const [masterId, group] of byMaster) {
+    let res;
+    try {
+      res = await discogsFetch(`/masters/${masterId}`, {}, 'low');
+    } catch {
+      continue;
+    }
+    if (res.status === 429) break;
+    if (res.status === 404) {
+      for (const record of group) await updateRecord(record.id, { masterChecked: true });
+    } else if (res.ok) {
+      const master = await res.json();
+      for (const record of group) {
+        const updates = masterYearUpdates(record, master);
+        await updateRecord(record.id, updates);
+        Object.assign(record, updates);
+      }
+    }
+    if (onEach) onEach(group.length);
+  }
 }
 
 export async function enrichTracklistsInBackground(records) {
@@ -653,34 +680,9 @@ export async function enrichTracklistsInBackground(records) {
             const masterTracks = (masterData.tracklist || []).filter((t) => (!t.type_ || t.type_ === 'track') && t.duration);
 
             if (masterData.year) {
-              record.masterYear = masterData.year;
-
-              // Check if release title diverges significantly from master title (e.g. "Millennium 2.0" vs "Millennium")
-              const clean = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-              const normRel = clean(record.title);
-              const normMas = clean(masterData.title);
-              const isDivergent = normRel !== normMas && (
-                /\b2\.0\b/i.test(record.title) ||
-                /\b\d+(?:th)?\s+anniversary\b/i.test(record.title) ||
-                /\bdeluxe\b/i.test(record.title) ||
-                /\bexpanded\b/i.test(record.title) ||
-                (normRel.startsWith(normMas) && normRel.length >= normMas.length + 2)
-              );
-
-              if (isDivergent && record.pressingYear) {
-                // Keep the edition release year as primary
-                record.originalYear = record.pressingYear;
-                record.year = record.pressingYear;
-              } else {
-                record.originalYear = masterData.year;
-                record.year = masterData.year;
-              }
-
-              await updateRecord(record.id, {
-                masterYear: record.masterYear,
-                originalYear: record.originalYear,
-                year: record.year,
-              });
+              const updates = masterYearUpdates(record, masterData);
+              Object.assign(record, updates);
+              await updateRecord(record.id, updates);
             }
 
             const normalizeTitle = (str) =>
@@ -939,13 +941,7 @@ export async function enrichArtInBackground(records) {
 
         if (best.releaseDate) {
           updates.releaseDate = best.releaseDate;
-          const itunesYear = parseInt(String(best.releaseDate).slice(0, 4), 10);
-          if (itunesYear && !record.masterYear) {
-            updates.originalYear = itunesYear;
-            if (!record.year || record.year === record.pressingYear) {
-              updates.year = itunesYear;
-            }
-          }
+          Object.assign(updates, itunesYearUpdates(record, parseInt(String(best.releaseDate).slice(0, 4), 10)));
         }
         await updateRecord(record.id, updates);
       } else {
@@ -1149,6 +1145,37 @@ export async function fetchReleaseDetails(record, priority = 'high') {
     tracklist: mapDiscogsTracklist(data.tracklist),
     masterId: data.master_id || null,
   };
+}
+
+export const DETAILS_MAX_AGE_DAYS = 30;
+
+// Saved details older than this are quietly fetched again the next time the record is looked at
+export function detailsAreStale(record, now = Date.now()) {
+  if (!record.details) return false;
+  const fetched = Date.parse(record.details.fetchedAt || '');
+  return !Number.isFinite(fetched) || now - fetched > DETAILS_MAX_AGE_DAYS * 86400000;
+}
+
+const detailsInFlight = new Map();
+
+// Fetch a record's details and save them. One request per record at a time, however many callers ask. Resolves with
+// the saved fields, or null if Discogs didn't answer.
+export function loadRecordDetails(record, priority = 'high') {
+  if (!detailsInFlight.has(record.id)) {
+    const job = (async () => {
+      const result = await fetchReleaseDetails(record, priority);
+      if (result.status !== 'ok') return null;
+      const updates = { details: result.details };
+      if ((!record.tracklist || record.tracklist.length === 0) && result.tracklist.length > 0) {
+        updates.tracklist = result.tracklist;
+      }
+      if (!record.masterId && result.masterId) updates.masterId = result.masterId;
+      await updateRecord(record.id, updates);
+      return updates;
+    })().finally(() => detailsInFlight.delete(record.id));
+    detailsInFlight.set(record.id, job);
+  }
+  return detailsInFlight.get(record.id);
 }
 
 // Backfill full release details, one gentle request at a time. Stops if throttled and resumes next load.

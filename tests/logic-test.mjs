@@ -189,3 +189,45 @@ import { createLimiter, retryAfterMs } from '../public/js/limiter.js';
   await Promise.all([run(203), run(200), run(200)]);
   assert.deepEqual(starts, [0, 0, 1000], 'no wait after a cache hit, a full wait after a real request');
 }
+
+// ---- which year a record files under ---------------------------------------------------------------------------
+import { sortYear, masterYearUpdates, itunesYearUpdates, isEditionTitle } from '../public/js/years.js';
+
+{
+  // A 2023 vinyl issue of a 1999 album files under 1999 once its master is known
+  const reissue = { title: 'Millennium', pressingYear: 2023, year: 2023, originalYear: null, masterYear: null };
+  assert.equal(sortYear(reissue), 2023, 'before the master is known it files under the pressing');
+  const updates = masterYearUpdates(reissue, { title: 'Millennium', year: 1999 });
+  assert.deepEqual(updates, { masterYear: 1999, originalYear: 1999, year: 1999, masterChecked: true });
+  assert.equal(sortYear({ ...reissue, ...updates }), 1999);
+
+  // Special editions keep their own year
+  const deluxe = { title: 'Millennium (Deluxe)', pressingYear: 2023, year: 2023 };
+  const kept = masterYearUpdates(deluxe, { title: 'Millennium', year: 1999 });
+  assert.equal(kept.year, 2023);
+  assert.equal(sortYear({ ...deluxe, ...kept }), 2023, 'a deluxe edition files under its pressing year');
+
+  // A master with no year is marked checked so it is not asked for again
+  assert.deepEqual(masterYearUpdates(reissue, { title: 'X', year: 0 }), { masterChecked: true });
+
+  assert.equal(isEditionTitle('Abbey Road 50th Anniversary'), true);
+  assert.equal(isEditionTitle('Abbey Road'), false);
+
+  // iTunes dates only fill gaps: never for a record with a master, and never later than what we have
+  assert.deepEqual(itunesYearUpdates({ masterId: 5, pressingYear: 2023, year: 2023 }, 1999), {}, 'the master decides');
+  assert.deepEqual(itunesYearUpdates({ pressingYear: 1975, year: 1975 }, 2011), {}, "a remaster's date never pushes an album later");
+  assert.deepEqual(itunesYearUpdates({ pressingYear: 2023, year: 2023 }, 1999), { originalYear: 1999, year: 1999 });
+  assert.deepEqual(itunesYearUpdates({ pressingYear: 2023, year: 2023 }, NaN), {});
+}
+
+// ---- stale release details ---------------------------------------------------------------------------------------
+import { detailsAreStale } from '../public/js/sync.js';
+
+{
+  const now = Date.parse('2026-09-24T00:00:00Z');
+  const day = 86400000;
+  assert.equal(detailsAreStale({}, now), false, 'nothing saved yet is missing, not stale');
+  assert.equal(detailsAreStale({ details: { fetchedAt: new Date(now - 5 * day).toISOString() } }, now), false);
+  assert.equal(detailsAreStale({ details: { fetchedAt: new Date(now - 31 * day).toISOString() } }, now), true);
+  assert.equal(detailsAreStale({ details: {} }, now), true, 'no timestamp counts as stale');
+}

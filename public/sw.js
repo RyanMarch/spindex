@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spindex-cache-v6';
+const CACHE_NAME = 'spindex-cache-v10';
 const ASSETS = [
   '/',
   '/index.html',
@@ -13,6 +13,7 @@ const ASSETS = [
   '/js/vinyl.js',
   '/js/values.js',
   '/js/limiter.js',
+  '/js/years.js',
   '/js/mock-data.js',
   '/manifest.webmanifest'
 ];

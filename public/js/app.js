@@ -3,7 +3,8 @@ import { openDB, getAllRecords, clearRecords, deleteRecords, getRecord, upsertRe
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
-import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, refreshCollectionFields } from './sync.js';
+import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, loadRecordDetails, refreshCollectionFields } from './sync.js';
+import { sortYear } from './years.js';
 import { initDiscogs, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
 
 const DEFAULT_TITLE = 'Spindex | Your record collection';
@@ -392,6 +393,7 @@ class App {
     this.handleDiscogsReturn();
     this.fillMissingGenres();
     this.refreshCollectionFieldsIfNeeded()
+      .then(() => this.fillMissingYears())
       .then(() => this.fillMissingDetails())
       .then(() => this.fillMissingTracklists());
   }
@@ -473,12 +475,33 @@ class App {
     } finally {
       this.fill = null;
     }
-    await this.loadAllRecords();
+    await this.refreshInPlace();
+  }
+
+  // Where a record files in the crate depends on its original release year, which only its Discogs master knows
+  async fillMissingYears() {
+    if (!isDiscogsConnected()) return;
+
+    const needsYear = this.allRecords.filter((r) => r.masterId && r.masterYear == null && !r.masterChecked && !String(r.id).startsWith('discogs_mock_'));
+    if (needsYear.length === 0) return;
+
+    this.fill = { label: 'Finding original release years…', total: needsYear.length, done: 0 };
+    try {
+      await enrichYearsInBackground(needsYear, (count) => {
+        this.fill.done += count;
+        this.renderFillStatus();
+      });
+    } finally {
+      this.fill = null;
+    }
+    await this.refreshInPlace();
   }
 
   // A small pill that says what the background Discogs work is doing, so a slow first load reads as intentional
   initFillStatus() {
     this.fillStatusEl = document.getElementById('fill-status');
+    this.reorderPill = document.getElementById('reorder-pill');
+    this.reorderPill?.addEventListener('click', () => this.applyFiltersAndSort());
     this.queueStats = { low: 0, pausedUntil: 0 };
     onDiscogsQueue((stats) => {
       this.queueStats = stats;
@@ -496,7 +519,7 @@ class App {
     el.textContent = pausedUntil > 0
       ? 'Discogs asked us to slow down. Resuming shortly…'
       : this.fill?.total
-        ? `Filling in details… ${this.fill.done} of ${this.fill.total}`
+        ? `${this.fill.label || 'Filling in details…'} ${this.fill.done} of ${this.fill.total}`
         : 'Finishing track lists…';
   }
 
@@ -504,7 +527,7 @@ class App {
     const needsGenre = this.allRecords.filter((r) => !r.genreChecked || r.itunesUrl === undefined);
     if (needsGenre.length === 0) return;
 
-    enrichGenresInBackground(needsGenre).then(() => this.loadAllRecords());
+    enrichGenresInBackground(needsGenre).then(() => this.refreshInPlace());
   }
 
   fillMissingTracklists() {
@@ -517,7 +540,7 @@ class App {
     });
     if (needsEnrichment.length === 0) return;
 
-    enrichTracklistsInBackground(needsEnrichment).then(() => this.loadAllRecords());
+    enrichTracklistsInBackground(needsEnrichment).then(() => this.refreshInPlace());
   }
 
   setBrowseOpen(open) {
@@ -582,7 +605,8 @@ class App {
     return fold(this.searchQuery).split(/\s+/).filter(Boolean).every((word) => haystack.includes(word));
   }
 
-  applyFiltersAndSort() {
+  // The crate's contents in the current filter and sort, without touching the screen
+  computeList() {
     let list = [...this.allRecords];
 
     // Filter by tag: a record shows under every genre tag it carries
@@ -593,12 +617,7 @@ class App {
 
     if (this.searchQuery.trim()) list = list.filter((r) => this.matchesSearch(r));
 
-    const getSortYear = (r) => {
-      if (r.year && r.masterYear && r.year !== r.masterYear) {
-        return r.year;
-      }
-      return r.masterYear || r.originalYear || r.year || 0;
-    };
+    const getSortYear = sortYear;
 
     // Sort list
     if (this.currentSort === 'artist-last-year' || this.currentSort === 'artist') {
@@ -649,11 +668,36 @@ class App {
       });
     }
 
+    return list;
+  }
+
+  applyFiltersAndSort() {
+    const list = this.computeList();
     const currentActiveId = this.filteredRecords[this.crate?.currentIndex]?.id || null;
     this.filteredRecords = list;
     this.crate.setRecords(list, this.currentSort, currentActiveId);
     const activeRecord = list[this.crate.currentIndex] || null;
     this.updateActiveMetadata(activeRecord);
+    if (this.reorderPill) this.reorderPill.hidden = true;
+  }
+
+  // Background work (years, details, genres) saves new data all the time. It must never move records around under
+  // someone's hands, so it refreshes the records in place, keeps the order, and offers a re-sort instead.
+  async refreshInPlace() {
+    this.allRecords = await getAllRecords();
+    const byId = new Map(this.allRecords.map((r) => [r.id, r]));
+    this.filteredRecords = this.filteredRecords.map((r) => byId.get(r.id) || r);
+    this.crate.refreshRecords(this.filteredRecords);
+    this.buildRoutes();
+    this.updateActiveMetadata(this.filteredRecords[this.crate.currentIndex] || null);
+    this.checkPendingOrder();
+  }
+
+  checkPendingOrder() {
+    if (!this.reorderPill) return;
+    const next = this.computeList();
+    const same = next.length === this.filteredRecords.length && next.every((r, i) => r.id === this.filteredRecords[i].id);
+    this.reorderPill.hidden = same;
   }
 
   onCrateIndexChange(currIndex, total, currentRecord) {
@@ -662,6 +706,8 @@ class App {
       this.updateActiveMetadata(currentRecord);
       return;
     }
+
+    this.prefetchDetails(currentRecord);
 
     if (this.stationMetadataCol) {
       clearTimeout(this.metaFadeTimeout);
@@ -673,6 +719,16 @@ class App {
     } else {
       this.updateActiveMetadata(currentRecord);
     }
+  }
+
+  // Resting on a record for a moment usually means its page is next, so fetch its Discogs details now. Opening it then
+  // shows the complete page straight away instead of filling in after.
+  prefetchDetails(record) {
+    clearTimeout(this.prefetchTimer);
+    if (!record?.discogsId || record.details || !isDiscogsConnected() || String(record.id).startsWith('discogs_mock_')) return;
+    this.prefetchTimer = setTimeout(() => {
+      loadRecordDetails(record, 'high').catch(() => { });
+    }, 400);
   }
 
   setGlow(url) {
@@ -717,9 +773,7 @@ class App {
 
     if (this.metaTitle) this.metaTitle.textContent = record.title || 'Untitled';
     if (this.metaArtist) this.metaArtist.textContent = record.artist || 'Unknown Artist';
-    const primaryYear = (record.year && record.masterYear && record.year !== record.masterYear)
-      ? record.year
-      : (record.masterYear || record.originalYear || record.year);
+    const primaryYear = sortYear(record);
     if (this.metaYear) this.metaYear.textContent = primaryYear ? String(primaryYear) : '';
 
     if (this.metaDuration) {
@@ -901,7 +955,7 @@ class App {
       this.setSyncStatus('Sync complete! Crate updated.', 'success');
       await this.loadAllRecords();
       // One request per release supplies its details and tracklist; durations still missing are filled from the master after
-      this.fillMissingDetails().then(() => this.fillMissingTracklists());
+      this.fillMissingYears().then(() => this.fillMissingDetails()).then(() => this.fillMissingTracklists());
     } catch (err) {
       console.error(err);
       this.setSyncStatus(err.message === 'Not connected to Discogs'

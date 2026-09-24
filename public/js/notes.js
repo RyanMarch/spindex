@@ -7,13 +7,17 @@ import {
   tagLabel,
   groupCredits,
   creditKinds,
-  fetchReleaseDetails,
+  loadRecordDetails,
+  detailsAreStale,
   fetchArtistLinks,
 } from './sync.js';
 import { usefulValue } from './values.js';
 import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover, findAlbumPage, isVariousArtists } from './wiki.js';
 import { isDiscogsConnected } from './discogs.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
+
+// How long opening an album waits for its Discogs details before showing what it has
+const SETTLE_MS = 600;
 
 const COMPACT = '(max-width: 960px) and (min-height: 521px)';
 
@@ -112,6 +116,7 @@ export class GatefoldController {
     this.right?.addEventListener('scroll', onScroll, { passive: true });
     this.workspace?.addEventListener('scroll', onScroll, { passive: true });
     window.matchMedia(COMPACT).addEventListener('change', () => this.observeHeader());
+    this.observePopIn();
 
     // Touch: swipe sideways for the next/previous record, pull down from the top to close
     let start = null;
@@ -162,9 +167,26 @@ export class GatefoldController {
     this.activeRecord = fresh;
     const token = ++this.renderToken;
 
+    // Details that are still missing shape the top of the page (label, producer, length). Give them a moment to arrive
+    // so the page appears complete instead of growing in front of you.
+    this.popInReady = false;
+    clearTimeout(this.popInTimer);
+    this.enrich(fresh, token);
+    const first = this.detailsSettled;
+    const waiting = !fresh.details && fresh.discogsId && isDiscogsConnected();
+    const settle = () => Promise.race([first, new Promise((resolve) => setTimeout(resolve, SETTLE_MS))]);
+    if (waiting && mode === 'replace') {
+      await settle();
+      if (this.renderToken !== token) return;
+    }
+
     this.resetView();
     this.renderAll(fresh);
     if (mode !== 'none') this.onRoute?.(fresh, mode);
+    if (waiting && mode !== 'replace') {
+      await settle();
+      if (this.renderToken !== token) return;
+    }
 
     if (this.workspace) {
       // Arriving straight from an address (refresh, shared link) shows the page at once; only opening from the crate fades in
@@ -177,18 +199,21 @@ export class GatefoldController {
       this.workspace.setAttribute('aria-hidden', 'false');
     }
 
+    // Once the page has finished appearing, late arrivals fade in
+    this.popInTimer = setTimeout(() => { this.popInReady = true; }, 500);
+
     // Trigger vinyl disc slide-out slightly after open
     setTimeout(() => {
       if (this.renderToken === token) this.vinylDisc?.classList.add('ejected');
     }, 180);
 
     this.observeHeader();
-    this.enrich(fresh, token);
   }
 
   // silent: the address bar already changed (Back button), so don't touch it again
   closeGatefold(silent = false) {
     this.renderToken++;
+    this.popInReady = false;
     this.vinylDisc?.classList.remove('ejected');
     if (this.workspace) {
       this.workspace.classList.remove('open');
@@ -229,19 +254,20 @@ export class GatefoldController {
   // Data: everything beyond what the crate already holds is fetched once, then kept on the record
   // ------------------------------------------------------------------------
 
-  async enrich(record, token) {
+  // The first phase decides the top of the page; the rest carries on behind it
+  enrich(record, token) {
     const run = (fn) => fn().catch(() => { });
 
     // Release details and the Wikipedia context come first; the band and back cover build on them
-    await Promise.all([
-      run(() => this.loadDetails(record, token)),
-      run(() => this.loadStory(record, token)),
-    ]);
-    await Promise.all([
+    const details = run(() => this.loadDetails(record, token));
+    const first = Promise.all([details, run(() => this.loadStory(record, token))]);
+    this.detailsSettled = details;
+    first.then(() => Promise.all([
       run(() => this.loadBand(record, token)),
       run(() => this.loadBackCover(record, token)),
       run(() => this.loadListen(record, token)),
-    ]);
+    ]));
+    return first;
   }
 
   // A Deezer page for the album, when Deezer has it (checked once, then kept on the record)
@@ -258,15 +284,13 @@ export class GatefoldController {
   }
 
   async loadDetails(record, token) {
-    if (!record.details && record.discogsId && isDiscogsConnected()) {
-      const result = await fetchReleaseDetails(record);
-      if (result.status === 'ok') {
-        const updates = { details: result.details };
-        if ((!record.tracklist || record.tracklist.length === 0) && result.tracklist.length > 0) {
-          updates.tracklist = result.tracklist;
-        }
-        await updateRecord(record.id, updates);
-        Object.assign(record, updates);
+    if (record.discogsId && isDiscogsConnected()) {
+      if (!record.details) {
+        const updates = await loadRecordDetails(record);
+        if (updates) Object.assign(record, updates);
+      } else if (detailsAreStale(record)) {
+        // Refresh in the background and keep it for next time; the page in front of you doesn't change under you
+        loadRecordDetails(record, 'low').catch(() => { });
       }
     }
     if (this.isCurrent(record, token)) this.renderAll(record);
@@ -771,6 +795,48 @@ export class GatefoldController {
   // ------------------------------------------------------------------------
 
   // Once the big title has scrolled away, the bar carries "Title · Artist" instead
+  // Anything that arrives after the page has finished opening (details, Wikipedia text, links) fades in instead of
+  // popping. Content that is re-rendered unchanged is left alone.
+  observePopIn() {
+    if (!this.workspace || typeof MutationObserver === 'undefined') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    // A node's markup without any fade class it may be carrying, so a re-render of the same content compares equal
+    const signature = (node) => {
+      if (!(node instanceof HTMLElement)) return null;
+      const copy = node.cloneNode(true);
+      for (const el of [copy, ...copy.querySelectorAll('.pop-in')]) {
+        el.classList.remove('pop-in');
+        if (!el.getAttribute('class')) el.removeAttribute('class');
+      }
+      return copy.outerHTML;
+    };
+
+    const fade = (el) => {
+      if (!(el instanceof HTMLElement) || el.closest('.pop-in')) return;
+      el.classList.add('pop-in');
+      // animationend can be skipped (background tab), so a timer clears the class too
+      const clear = () => el.classList.remove('pop-in');
+      el.addEventListener('animationend', clear, { once: true });
+      setTimeout(clear, 600);
+    };
+
+    new MutationObserver((records) => {
+      if (!this.popInReady) return;
+      for (const record of records) {
+        if (record.type === 'attributes') {
+          // A section that was hidden and now has something to show
+          if (record.oldValue !== null && !record.target.hidden) fade(record.target);
+          continue;
+        }
+        const before = new Set([...record.removedNodes].map(signature));
+        for (const node of record.addedNodes) {
+          if (!before.has(signature(node))) fade(node);
+        }
+      }
+    }).observe(this.workspace, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'], attributeOldValue: true });
+  }
+
   observeHeader() {
     this.headerObserver?.disconnect();
     if (!this.header || !this.bar || !this.isOpen()) return;

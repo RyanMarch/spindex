@@ -72,6 +72,17 @@ export class CrateController {
     this.buildSleeves();
   }
 
+  // Same records in the same order with fresher data: nothing moves, only artwork that changed is swapped
+  refreshRecords(records) {
+    if (records.length !== this.records.length) return;
+    this.records = records;
+    this.sleeveElements.forEach((item, i) => {
+      item.record = records[i];
+      const url = crateArtUrl(records[i]);
+      if (item.img && item.img.getAttribute('src') !== url) item.img.src = url;
+    });
+  }
+
   setIndex(index) {
     if (index >= 0 && index < this.records.length && index !== this.currentIndex) {
       this.currentIndex = index;
@@ -170,14 +181,14 @@ export class CrateController {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         if (i === this.currentIndex) {
-          if (this.onSelect) this.onSelect(record);
+          if (this.onSelect) this.onSelect(this.records[i]);
         } else {
           this.setIndex(i);
         }
       });
 
       this.container.appendChild(el);
-      this.sleeveElements.push({ el, dim, record, index: i });
+      this.sleeveElements.push({ el, dim, img, record, index: i });
     }
 
 
