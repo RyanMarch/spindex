@@ -123,3 +123,59 @@ assert.equal(calculateTotalDuration([]), null);
 assert.equal(calculateTotalDuration([{ duration: '3:00' }, { duration: '2:00' }]), '5 min');
 
 console.log('Logic tests passed.');
+
+// ---- Discogs request queue ------------------------------------------------------------------------------------
+import { createLimiter, retryAfterMs } from '../public/js/limiter.js';
+
+{
+  // Fake clock: sleeping just advances time, so the test runs instantly
+  let t = 0;
+  const clock = { now: () => t, sleep: async (ms) => { t += ms; } };
+  const res = (status, headers = {}) => ({ status, headers: { get: (k) => headers[k] ?? null } });
+
+  // Requests run one at a time, spaced by pace(), and 'high' jumps ahead of 'low'
+  const order = [];
+  const starts = [];
+  const limiter = createLimiter({ pace: () => 1000, ...clock });
+  const run = (name, priority) => limiter.schedule(async () => { order.push(name); starts.push(t); return res(200); }, priority);
+  await Promise.all([run('low1', 'low'), run('low2', 'low'), run('high1', 'high'), run('low3', 'low')]);
+  assert.deepEqual(order, ['low1', 'high1', 'low2', 'low3'], 'the first job starts at once, then high beats low');
+  assert.deepEqual(starts.slice(1).map((s, i) => s - starts[i]), [1000, 1000, 1000], 'requests are spaced by pace()');
+
+  // A 429 pauses the queue, honours Retry-After, and the caller only sees the eventual success
+  t = 0;
+  let calls = 0;
+  const throttled = createLimiter({ pace: () => 0, ...clock });
+  const out = await throttled.schedule(async () => (++calls === 1 ? res(429, { 'retry-after': '20' }) : res(200)));
+  assert.equal(out.status, 200);
+  assert.equal(calls, 2);
+  assert.ok(t >= 20000, 'waited out Retry-After');
+
+  // It gives up after maxRetries and hands back the 429
+  calls = 0;
+  const stubborn = createLimiter({ pace: () => 0, maxRetries: 2, ...clock });
+  const last = await stubborn.schedule(async () => { calls++; return res(429); });
+  assert.equal(last.status, 429);
+  assert.equal(calls, 3, 'one try plus two retries');
+
+  // A thrown request rejects that caller without stalling the queue
+  const flaky = createLimiter({ pace: () => 0, ...clock });
+  const bad = flaky.schedule(async () => { throw new Error('offline'); });
+  const good = flaky.schedule(async () => res(200));
+  await assert.rejects(bad, /offline/);
+  assert.equal((await good).status, 200);
+
+  // Subscribers hear about the queue, and the pause shows up in the stats
+  const seen = [];
+  const watched = createLimiter({ pace: () => 0, ...clock });
+  watched.subscribe((s) => seen.push(s));
+  let n = 0;
+  await watched.schedule(async () => (++n === 1 ? res(429, { 'retry-after': '5' }) : res(200)), 'low');
+  assert.ok(seen.some((s) => s.low === 1), 'reports queued background work');
+  assert.ok(seen.some((s) => s.pausedUntil > 0), 'reports the pause');
+  assert.equal(seen.at(-1).pending, 0, 'ends idle');
+
+  assert.equal(retryAfterMs(res(429)), 30000, 'default wait');
+  assert.equal(retryAfterMs(res(429, { 'retry-after': '500' })), 60000, 'capped');
+  console.log('Discogs queue tests passed.');
+}

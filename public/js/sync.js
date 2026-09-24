@@ -1,6 +1,6 @@
 // sync.js - Discogs syncing and iTunes art enrichment
 import { upsertRecords, updateRecord, getAllRecords } from './db.js';
-import { discogsFetch, paceMs } from './discogs.js';
+import { discogsFetch } from './discogs.js';
 
 // Known band names or entities that shouldn't be split into "Last, First"
 const KNOWN_BANDS = new Set([
@@ -465,15 +465,7 @@ export async function syncDiscogsCollection(username, onProgress) {
   const fieldNames = await fetchCollectionFieldNames(username);
 
   while (page <= totalPages) {
-    let res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}`);
-
-    // Discogs allows 60 requests a minute and background enrichment shares that budget: wait and retry
-    for (let attempt = 0; res.status === 429 && attempt < 3; attempt++) {
-      const wait = Math.min(Number(res.headers.get('retry-after')) || 30, 60);
-      onProgress?.({ message: `Discogs asked us to slow down. Retrying in ${wait}s…` });
-      await new Promise((resolve) => setTimeout(resolve, wait * 1000));
-      res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}`);
-    }
+    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}`);
 
     if (!res.ok) {
       const detail = await res.json().then((body) => body.error || body.message, () => '').catch(() => '');
@@ -580,7 +572,7 @@ export async function enrichTracklistsInBackground(records) {
       if (currentTracklist.length === 0) {
         let res = null;
         try {
-          res = await discogsFetch(`/releases/${record.discogsId}`);
+          res = await discogsFetch(`/releases/${record.discogsId}`, {}, 'low');
         } catch {
           // Network / CORS / preflight failure
           continue;
@@ -607,9 +599,6 @@ export async function enrichTracklistsInBackground(records) {
             await updateRecord(record.id, { masterId: data.master_id });
           }
         }
-
-        // Throttle ~1.1s between Discogs API calls to stay comfortably under 60 req/min
-        await delay(paceMs());
       }
 
       // If Discogs returned no tracks or was rate-limited / unavailable, attempt iTunes fallback for full tracklist
@@ -651,7 +640,7 @@ export async function enrichTracklistsInBackground(records) {
 
       if (missingDurations && record.masterId) {
         try {
-          const masterRes = await discogsFetch(`/masters/${record.masterId}`);
+          const masterRes = await discogsFetch(`/masters/${record.masterId}`, {}, 'low');
 
           if (masterRes.status === 429) {
             console.warn('Discogs rate limit reached (429). Pausing background tracklist enrichment.');
@@ -717,9 +706,6 @@ export async function enrichTracklistsInBackground(records) {
         } catch {
           // If master lookup fails, continue with whatever durations we have
         }
-
-        // Throttle ~1.1s between Discogs API calls
-        await delay(paceMs());
       }
 
       // 3. Fallback: For any tracks still missing durations, try matching against iTunes album tracks
@@ -1146,10 +1132,10 @@ export function groupCredits(details) {
 }
 
 // Fetch one release from Discogs. `status` is 'ok', 'throttled' (429) or 'error'.
-export async function fetchReleaseDetails(record) {
+export async function fetchReleaseDetails(record, priority = 'high') {
   let res;
   try {
-    res = await discogsFetch(`/releases/${record.discogsId}`);
+    res = await discogsFetch(`/releases/${record.discogsId}`, {}, priority);
   } catch {
     return { status: 'error' };
   }
@@ -1167,12 +1153,10 @@ export async function fetchReleaseDetails(record) {
 
 // Backfill full release details, one gentle request at a time. Stops if throttled and resumes next load.
 export async function enrichDetailsInBackground(records, onEach) {
-  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
   for (const record of records) {
     if (!record.discogsId || record.details) continue;
 
-    const result = await fetchReleaseDetails(record);
+    const result = await fetchReleaseDetails(record, 'low');
     if (result.status === 'throttled') break;
     if (result.status === 'ok') {
       const updates = { details: result.details };
@@ -1183,7 +1167,6 @@ export async function enrichDetailsInBackground(records, onEach) {
       await updateRecord(record.id, updates);
       if (onEach) onEach(record.id);
     }
-    await delay(paceMs());
   }
 }
 

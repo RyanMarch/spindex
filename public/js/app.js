@@ -4,7 +4,7 @@ import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './m
 import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
 import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, refreshCollectionFields } from './sync.js';
-import { initDiscogs, discogsState, isDiscogsConnected, onDiscogsChange, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
+import { initDiscogs, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
 
 const DEFAULT_TITLE = 'Spindex | Your record collection';
 
@@ -160,6 +160,7 @@ class App {
     }
 
     this.initSearch();
+    this.initFillStatus();
 
     // Genre tabs are rendered from the collection, so listen on the bar
     if (this.vibeBar) {
@@ -463,8 +464,40 @@ class App {
     const needsDetails = this.allRecords.filter((r) => r.discogsId && !r.details && !String(r.id).startsWith('discogs_mock_'));
     if (needsDetails.length === 0) return;
 
-    await enrichDetailsInBackground(needsDetails);
+    this.fill = { total: needsDetails.length, done: 0 };
+    try {
+      await enrichDetailsInBackground(needsDetails, () => {
+        this.fill.done++;
+        this.renderFillStatus();
+      });
+    } finally {
+      this.fill = null;
+    }
     await this.loadAllRecords();
+  }
+
+  // A small pill that says what the background Discogs work is doing, so a slow first load reads as intentional
+  initFillStatus() {
+    this.fillStatusEl = document.getElementById('fill-status');
+    this.queueStats = { low: 0, pausedUntil: 0 };
+    onDiscogsQueue((stats) => {
+      this.queueStats = stats;
+      this.renderFillStatus();
+    });
+  }
+
+  renderFillStatus() {
+    const el = this.fillStatusEl;
+    if (!el) return;
+    const { low, pausedUntil } = this.queueStats;
+    const active = low > 0 || pausedUntil > 0;
+    el.hidden = !active;
+    if (!active) return;
+    el.textContent = pausedUntil > 0
+      ? 'Discogs asked us to slow down. Resuming shortly…'
+      : this.fill?.total
+        ? `Filling in details… ${this.fill.done} of ${this.fill.total}`
+        : 'Finishing track lists…';
   }
 
   fillMissingGenres() {
