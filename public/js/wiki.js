@@ -80,6 +80,7 @@ function cleanWikiValue(raw) {
     .replace(/<[^>]+>/g, '')
     .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, '$1')
     .replace(/^\s*[*|]+\s*/gm, '')
+    .replace(/\s*\|\s*/g, ', ') // what is left of a list template's separators
     .replace(/\n+/g, ', ')
     .replace(/[{}]/g, '')
     .replace(/\s*,\s*(?:,\s*)+/g, ', ')
@@ -88,18 +89,23 @@ function cleanWikiValue(raw) {
 }
 
 // Label / producer / studio from the album infobox
+// One field of an album infobox ("| producer = [[Name]]"), cleaned up; '' when it is empty or not a usable value.
+// An empty field ("| producer =") must stay empty: it must not run on into the next line and take that field's name and
+// value as its own.
+export function infoboxField(wikitext, name) {
+  const m = String(wikitext || '').match(new RegExp(`\\|[ \\t]*${name}[ \\t]*=[ \\t]*([\\s\\S]*?)(?=\\n[ \\t]*\\|[ \\t]*[a-z_0-9 ]+=|\\n\\}\\})`, 'i'));
+  const value = m ? cleanWikiValue(m[1]) : '';
+  // Anything that still looks like another field ("prev_title = ...") is wiki markup, not a value
+  if (/^[a-z_0-9 ]+=/i.test(value)) return '';
+  return value.length > 0 && value.length < 200 ? value : '';
+}
+
 export async function fetchInfobox(title) {
   const data = await getJSON(`${WIKI_API}?action=parse&page=${encodeURIComponent(title)}&prop=wikitext&format=json&origin=*&redirects=1`);
   const wikitext = data?.parse?.wikitext?.['*'] || '';
   if (!wikitext) return {};
 
-  const field = (name) => {
-    const m = wikitext.match(new RegExp(`\\|\\s*${name}\\s*=\\s*([\\s\\S]*?)(?=\\n\\s*\\|\\s*[a-z_ ]+=|\\n\\}\\})`, 'i'));
-    const value = m ? cleanWikiValue(m[1]) : '';
-    return value.length > 0 && value.length < 200 ? value : '';
-  };
-
-  const out = { label: field('label'), producer: field('producer'), recorded: field('recorded') };
+  const out = { label: infoboxField(wikitext, 'label'), producer: infoboxField(wikitext, 'producer'), recorded: infoboxField(wikitext, 'recorded') };
   return Object.fromEntries(Object.entries(out).filter(([, v]) => v));
 }
 

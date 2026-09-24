@@ -16,18 +16,19 @@ export function sortYear(record) {
 
 const clean = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-// Given a record and its Discogs master, the fields to save. A master with no year is marked checked, so it is
-// not asked for again.
+// Given a record and its Discogs master, the fields to save (the master's title too: it is what other services usually call
+// the album). A master with no year is marked checked, so it is not asked for again.
 export function masterYearUpdates(record, master) {
   const masterYear = Number(master?.year) || 0;
-  if (!masterYear) return { masterChecked: true };
+  const masterTitle = String(master?.title || '').trim();
+  if (!masterYear) return { masterChecked: true, ...(masterTitle && { masterTitle }) };
 
   const relTitle = clean(record.title);
   const masTitle = clean(master.title);
   const diverges = relTitle !== masTitle && (isEditionTitle(record.title) || (relTitle.startsWith(masTitle) && relTitle.length >= masTitle.length + 2));
   const year = diverges && record.pressingYear ? record.pressingYear : masterYear;
 
-  return { masterYear, originalYear: year, year, masterChecked: true };
+  return { masterYear, originalYear: year, year, masterChecked: true, ...(masterTitle && { masterTitle }) };
 }
 
 // A year from iTunes is only a fallback for records with no Discogs master, and only if it is earlier than what we

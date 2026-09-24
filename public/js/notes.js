@@ -13,6 +13,7 @@ import {
 } from './sync.js';
 import { usefulValue } from './values.js';
 import { externalFetch } from './external.js';
+import { artControl, artChoiceUpdates } from './artwork.js';
 import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover, findAlbumPage, isVariousArtists } from './wiki.js';
 import { isDiscogsConnected } from './discogs.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
@@ -50,6 +51,8 @@ export class GatefoldController {
     this.flipper = $('gf-flipper');
     this.flipBtn = $('gf-flip-btn');
     this.artFixBtn = $('gf-art-fix');
+    this.artGroup = $('gf-art-group');
+    this.artNote = $('gf-art-note');
     this.flipLabel = $('gf-flip-label');
     this.labelArt = $('gatefold-label-art');
     this.vinylDisc = $('gatefold-vinyl-disc');
@@ -92,6 +95,7 @@ export class GatefoldController {
     this.prevBtn?.addEventListener('click', () => this.step(-1));
     this.nextBtn?.addEventListener('click', () => this.step(1));
     this.flipBtn?.addEventListener('click', () => this.toggleFlip());
+    this.backArt?.addEventListener('load', () => this.markSpread());
     this.artFixBtn?.addEventListener('click', () => this.toggleArtFix());
     this.jacketWrap?.addEventListener('click', () => {
       this.toggleFlip();
@@ -314,9 +318,10 @@ export class GatefoldController {
     if (this.isCurrent(record, token)) this.renderAll(record);
 
     const wikiTitle = record.context?.wikiTitle;
-    if (wikiTitle && !record.context.sectionsFetched) {
+    // infoboxVersion 2: an empty field no longer swallows the next one (a producer of "prev_title = ..."). Older saves are read again.
+    if (wikiTitle && (!record.context.sectionsFetched || record.context.infoboxVersion !== 2)) {
       const [sections, infobox] = await Promise.all([fetchAlbumSections(wikiTitle), fetchInfobox(wikiTitle)]);
-      await this.saveContext(record, { sections, infobox, sectionsFetched: true });
+      await this.saveContext(record, { sections, infobox, sectionsFetched: true, infoboxVersion: 2 });
       if (this.isCurrent(record, token)) this.renderAll(record);
     }
   }
@@ -430,7 +435,7 @@ export class GatefoldController {
       .filter((p) => p.roles.some((r) => /^(co-?)?producer$/i.test(r)))
       .map((p) => p.name);
     if (names.length > 0) return names.slice(0, 3).join(', ');
-    return record.context?.infobox?.producer || '';
+    return usefulValue(record.context?.infobox?.producer) || '';
   }
 
   renderSpecs(record) {
@@ -600,7 +605,7 @@ export class GatefoldController {
       parts.push(`<a class="gf-inline-link" href="https://www.discogs.com/release/${encodeURIComponent(record.discogsId)}" target="_blank" rel="noopener">View this pressing on Discogs <span aria-hidden="true">↗</span></a>`);
     }
 
-    this.copySection.hidden = parts.length === 0;
+    this.copySection.hidden = parts.length === 0 && !artControl(record);
     this.copyEl.innerHTML =  /*html*/ parts.join('');
   }
 
@@ -701,31 +706,38 @@ export class GatefoldController {
 
   // The sleeve always flips: it's how you see the whole record. Until (or unless) a real back cover turns up, the
   // back is the front art, dimmed.
-  // Cleaner artwork found elsewhere can be the wrong edition (a reissue, or the digital release of a record with its own
-  // cover). Discogs' image is the one for this pressing, so it is always one tap away, and once chosen it stays.
+  // Which cover to show is a choice the app makes by comparing pictures, so a person can always overrule it here
   renderArtFix(record) {
-    if (!this.artFixBtn) return;
-    const original = record.discogsArtwork?.highRes || record.discogsArtwork?.thumbnail;
-    const replaced = ['itunes', 'deezer'].includes(record.artwork?.source);
-    this.artFixBtn.hidden = !record.artworkLocked && !(replaced && original);
-    this.artFixBtn.textContent = record.artworkLocked ? 'Using the Discogs image. Try cleaner artwork again' : 'Not the right cover? Use the Discogs image';
+    if (!this.artGroup || !this.artFixBtn) return;
+    const control = artControl(record);
+    this.artGroup.hidden = !control;
+    if (!control) return;
+    this.artNote.textContent = control.note;
+    this.artFixBtn.textContent = control.label;
+    this.artFixBtn.dataset.action = control.action;
   }
 
   async toggleArtFix() {
     const record = this.activeRecord;
-    if (!record) return;
-    const retry = Boolean(record.artworkLocked);
-    if (!retry && !(record.discogsArtwork?.highRes || record.discogsArtwork?.thumbnail)) return; // nothing to go back to
-    const updates = retry
-      ? { artworkLocked: false, deezerChecked: false, fallbackArtChecked: false, artChecked: false }
-      : { artwork: record.discogsArtwork, artworkLocked: true };
+    const action = this.artFixBtn?.dataset.action;
+    const updates = record && action ? artChoiceUpdates(record, action) : null;
+    if (!updates) return;
     await updateRecord(record.id, updates);
     Object.assign(record, updates);
     this.renderFront(record);
     this.renderFlip(record);
     this.renderArtFix(record);
+    this.renderCopy(record);
     this.onArtworkChange?.();
-    if (retry) this.onArtworkRetry?.();
+    if (action === 'retry') this.onArtworkRetry?.();
+  }
+
+  // Some archived "back" images are the whole wraparound sleeve (back, spine and front side by side). Shown as a square
+  // they'd be cropped to the middle, so a wide picture is shown from its left edge: the back cover.
+  markSpread() {
+    const art = this.backArt;
+    if (!art?.naturalHeight) return;
+    art.closest('.gf-back')?.classList.toggle('is-spread', art.naturalWidth / art.naturalHeight > 1.4);
   }
 
   renderFlip(record) {
@@ -951,7 +963,7 @@ export class GatefoldController {
 
   async fetchLinerNotes(record) {
     // What we learned elsewhere (artist bio, back cover...) survives; only the album-article fields are redone
-    const WIKI_FIELDS = ['wikiExtract', 'wikiDescription', 'wikiUrl', 'wikiImage', 'wikiTitle', 'sections', 'infobox', 'sectionsFetched', 'releaseChecked'];
+    const WIKI_FIELDS = ['wikiExtract', 'wikiDescription', 'wikiUrl', 'wikiImage', 'wikiTitle', 'sections', 'infobox', 'sectionsFetched', 'infoboxVersion', 'releaseChecked'];
     const kept = Object.fromEntries(Object.entries(record.context || {}).filter(([k]) => !WIKI_FIELDS.includes(k)));
 
     try {

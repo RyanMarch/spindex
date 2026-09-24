@@ -3066,6 +3066,10 @@ html {
 .stat-growth-fill{fill:var(--color-accent);opacity:.14}
 .stat-axis{display:flex;justify-content:space-between;margin-top:.35rem;font-size:.7rem;color:var(--text-muted)}
 
-.gf-art-fix{display:block;margin:.85rem 0 0;padding:0;background:none;border:0;font:inherit;font-size:.72rem;color:var(--text-muted);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
-.gf-art-fix:hover{color:var(--text-main)}
-.gf-art-fix[hidden]{display:none}
+.gf-art-group{margin-top:1.6rem}
+.gf-art-group[hidden]{display:none}
+.gf-art-note{margin:0 0 .6rem;font-size:.85rem;line-height:1.5;color:var(--text-muted)}
+.gf-art-fix{padding:0;background:none;border:0;font:inherit;font-size:.82rem;color:var(--color-accent);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.gf-art-fix:hover{color:var(--color-accent-hover)}
+
+.gf-back.is-spread .gatefold-jacket-art{object-position:0% 50%}

@@ -112,9 +112,70 @@ import { onRequestGet as deezer } from '../functions/api/listen/deezer.js';
     assert.equal(second.headers.get('x-spindex-cache'), 'HIT');
     assert.equal((await second.json()).url, 'https://deezer/1');
     assert.equal(calls, 1, 'the second lookup never reached Deezer');
+    // A title the fielded search misses is found by the plain-text fallback, and only an exact artist and title is accepted
+    store.clear();
+    const seenQueries = [];
+    globalThis.fetch = async (url) => {
+      const q = decodeURIComponent(new URL(url).searchParams.get('q'));
+      seenQueries.push(q);
+      const albums = q.startsWith('artist:') ? [] : [
+        { title: 'TRON: Legacy - The Complete Edition (Original Motion Picture Soundtrack)', artist: { name: 'Daft Punk' }, link: 'https://deezer/complete', cover_xl: 'https://img/complete' },
+        { title: 'TRON: Legacy', artist: { name: 'Daft Punk' }, link: 'https://deezer/tron', cover_xl: 'https://img/1000x1000-tron.jpg' },
+        { title: 'TRON: Legacy', artist: { name: 'Somebody Else' }, link: 'https://deezer/wrong', cover_xl: 'https://img/wrong' },
+      ];
+      return new Response(JSON.stringify({ data: albums }), { status: 200 });
+    };
+    const tron = await deezer({ request: new Request('https://spindex.test/api/listen/deezer?artist=Daft%20Punk&title=' + encodeURIComponent('TRON: Legacy (Vinyl Edition Motion Picture Soundtrack)')), waitUntil: () => {} });
+    assert.deepEqual(await tron.json(), { url: 'https://deezer/tron', cover: 'https://img/1000x1000-tron.jpg' });
+    assert.equal(seenQueries.length, 2, 'the fielded search came up empty, then the plain-text one ran');
+    assert.equal(seenQueries[1], 'Daft Punk TRON: Legacy', 'without the bracketed qualifier');
+
+    // a failure on the second search is a failure, not a "no match" that would be remembered
+    store.clear();
+    let n = 0;
+    globalThis.fetch = async () => (++n === 1 ? new Response('{"data":[]}', { status: 200 }) : new Response('oops', { status: 500 }));
+    const failed = await deezer({ request: new Request('https://spindex.test/api/listen/deezer?artist=A&title=B'), waitUntil: () => {} });
+    assert.equal(failed.status, 502);
+    assert.equal(store.size, 0, 'nothing is cached from a failure');
     console.log('Deezer cache tests passed.');
   } finally {
     globalThis.fetch = realFetch;
     delete globalThis.caches;
+  }
+}
+
+// ---- the image relay ---------------------------------------------------------------------------------------------
+import { allowedImage, onRequestGet as image } from '../functions/api/img.js';
+{
+  assert.ok(allowedImage('https://i.discogs.com/abc/rs:fit/h:150/w:150/xyz'));
+  assert.equal(allowedImage('http://i.discogs.com/abc'), null, 'https only');
+  assert.equal(allowedImage('https://evil.example/abc'), null, 'one host only');
+  assert.equal(allowedImage('https://i.discogs.com.evil.example/abc'), null);
+  assert.equal(allowedImage('https://user:pw@i.discogs.com/abc'), null);
+  assert.equal(allowedImage('junk'), null);
+
+  const realFetch = globalThis.fetch;
+  let mode = 'image';
+  globalThis.fetch = async () => {
+    if (mode === 'html') return new Response('<html></html>', { headers: { 'content-type': 'text/html' } });
+    if (mode === 'missing') return new Response('nope', { status: 404 });
+    return new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/jpeg' } });
+  };
+  try {
+    const ask = (target, headers = { 'Sec-Fetch-Site': 'same-origin' }) => image({ request: new Request(`https://spindex.test/api/img?url=${encodeURIComponent(target)}`, { headers }) });
+    const ok = await ask('https://i.discogs.com/abc/xyz');
+    assert.equal(ok.status, 200);
+    assert.equal(ok.headers.get('content-type'), 'image/jpeg');
+    assert.equal(ok.headers.get('x-spindex-proxy'), '1');
+    assert.deepEqual([...new Uint8Array(await ok.arrayBuffer())], [1, 2, 3]);
+    assert.equal((await ask('https://evil.example/x')).status, 403);
+    assert.equal((await ask('https://i.discogs.com/abc', { 'Sec-Fetch-Site': 'cross-site' })).status, 403, 'only pages on this site');
+    mode = 'html';
+    assert.equal((await ask('https://i.discogs.com/abc')).status, 502, 'anything that is not an image is refused');
+    mode = 'missing';
+    assert.equal((await ask('https://i.discogs.com/abc')).status, 404);
+    console.log('Image relay tests passed.');
+  } finally {
+    globalThis.fetch = realFetch;
   }
 }

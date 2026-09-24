@@ -3,7 +3,7 @@ import { openDB, getAllRecords, clearRecords, deleteRecords, getRecord, upsertRe
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
-import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichDeezerArtInBackground, needsDeezerArt, needsItunesArt, loadRecordDetails, refreshCollectionFields } from './sync.js';
+import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichDeezerArtInBackground, verifyArtInBackground, recheckArtInBackground, needsArtRecheck, enrichMasterTitleArtInBackground, needsMasterTitleArt, needsDeezerArt, needsItunesArt, needsArtVerification, loadRecordDetails, refreshCollectionFields } from './sync.js';
 import { sortYear } from './years.js';
 import { computeStats } from './stats.js';
 import { statsHTML, valueHTML } from './statsview.js';
@@ -567,12 +567,18 @@ class App {
 
   // Records still showing a Discogs photo of the sleeve get clean cover art: Deezer first (fast), then iTunes for the rest
   async fillMissingArt() {
-    if (!this.allRecords.some((r) => needsDeezerArt(r) || needsItunesArt(r))) return;
+    if (!this.allRecords.some((r) => needsDeezerArt(r) || needsItunesArt(r) || needsArtVerification(r) || needsArtRecheck(r) || needsMasterTitleArt(r))) return;
 
     const onEach = () => this.scheduleRefresh();
+    await recheckArtInBackground(this.allRecords.filter(needsArtRecheck), onEach);
+    this.allRecords = await getAllRecords();
+    await verifyArtInBackground(this.allRecords.filter(needsArtVerification), onEach);
+    this.allRecords = await getAllRecords();
     await enrichDeezerArtInBackground(this.allRecords.filter(needsDeezerArt), onEach);
     this.allRecords = await getAllRecords();
     await enrichArtInBackground(this.allRecords.filter(needsItunesArt), onEach);
+    this.allRecords = await getAllRecords();
+    await enrichMasterTitleArtInBackground(this.allRecords.filter(needsMasterTitleArt), onEach);
     await this.refreshInPlace();
   }
 

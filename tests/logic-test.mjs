@@ -4,9 +4,9 @@ import {
   splitCreditRoles, creditKinds, groupCredits, parseCollectionFields, mapDiscogsTracklist, parseReleaseDetails,
   normalizeItunesGenre, getGenreTags, getRecordTags, tagLabel, calculateTotalDuration,
 } from '../public/js/sync.js';
-import { pickAlbumPage, isVariousArtists, pickBackCoverReleases, pickReleaseGroup } from '../public/js/wiki.js';
+import { pickAlbumPage, isVariousArtists, pickBackCoverReleases, pickReleaseGroup, infoboxField } from '../public/js/wiki.js';
 import { usefulValue } from '../public/js/values.js';
-import { pickDeezerAlbum, pickDeezerCover, normalize as deezerNormalize } from '../functions/_lib/deezer.js';
+import { pickDeezerAlbum, pickDeezerCover, searchTitle, normalize as deezerNormalize } from '../functions/_lib/deezer.js';
 
 // ---- credit roles ---------------------------------------------------------------------------------------------
 assert.deepEqual(splitCreditRoles('Producer, Engineer [Assistant, Studio X], Guitar'), [
@@ -198,7 +198,7 @@ import { sortYear, masterYearUpdates, itunesYearUpdates, isEditionTitle } from '
   const reissue = { title: 'Millennium', pressingYear: 2023, year: 2023, originalYear: null, masterYear: null };
   assert.equal(sortYear(reissue), 2023, 'before the master is known it files under the pressing');
   const updates = masterYearUpdates(reissue, { title: 'Millennium', year: 1999 });
-  assert.deepEqual(updates, { masterYear: 1999, originalYear: 1999, year: 1999, masterChecked: true });
+  assert.deepEqual(updates, { masterYear: 1999, originalYear: 1999, year: 1999, masterChecked: true, masterTitle: 'Millennium' });
   assert.equal(sortYear({ ...reissue, ...updates }), 1999);
 
   // Special editions keep their own year
@@ -208,7 +208,7 @@ import { sortYear, masterYearUpdates, itunesYearUpdates, isEditionTitle } from '
   assert.equal(sortYear({ ...deluxe, ...kept }), 2023, 'a deluxe edition files under its pressing year');
 
   // A master with no year is marked checked so it is not asked for again
-  assert.deepEqual(masterYearUpdates(reissue, { title: 'X', year: 0 }), { masterChecked: true });
+  assert.deepEqual(masterYearUpdates(reissue, { title: 'X', year: 0 }), { masterChecked: true, masterTitle: 'X' });
 
   assert.equal(isEditionTitle('Abbey Road 50th Anniversary'), true);
   assert.equal(isEditionTitle('Abbey Road'), false);
@@ -221,7 +221,7 @@ import { sortYear, masterYearUpdates, itunesYearUpdates, isEditionTitle } from '
 }
 
 // ---- stale release details ---------------------------------------------------------------------------------------
-import { detailsAreStale, needsDeezerArt, needsItunesArt, buildCollectionRecord } from '../public/js/sync.js';
+import { detailsAreStale, needsDeezerArt, needsItunesArt, buildCollectionRecord, scoreAlbumMatch, ART_SEARCH_VERSION, needsMasterTitleArt, titlesDiffer } from '../public/js/sync.js';
 
 {
   const now = Date.parse('2026-09-24T00:00:00Z');
@@ -392,12 +392,14 @@ import { fetchBackCover } from '../public/js/wiki.js';
 // ---- which artwork lookups a record still needs ------------------------------------------------------------------
 {
   const photo = { id: 'discogs_1', artwork: { source: 'discogs' } };
+  const searched = { deezerSearchVersion: ART_SEARCH_VERSION, itunesSearchVersion: ART_SEARCH_VERSION };
   assert.equal(needsDeezerArt(photo), true, 'a Discogs photo asks Deezer first');
   assert.equal(needsItunesArt(photo), true, 'and iTunes takes whatever is left');
-  assert.equal(needsDeezerArt({ ...photo, deezerChecked: true }), false, 'Deezer answered (a miss counts): never asked again');
-  assert.equal(needsDeezerArt({ ...photo, fallbackArtChecked: true }), false, 'records checked by the earlier version are not asked again');
-  assert.equal(needsItunesArt({ ...photo, deezerChecked: true }), true, 'a Deezer miss still goes to iTunes');
-  assert.equal(needsItunesArt({ ...photo, deezerChecked: true, artChecked: true }), false, 'both answered: nothing left to try');
+  assert.equal(needsDeezerArt({ ...photo, deezerSearchVersion: ART_SEARCH_VERSION }), false, 'Deezer answered (a miss counts): not asked again');
+  assert.equal(needsItunesArt({ ...photo, deezerSearchVersion: ART_SEARCH_VERSION }), true, 'a Deezer miss still goes to iTunes');
+  assert.equal(needsItunesArt({ ...photo, ...searched }), false, 'both answered: nothing left to try');
+  assert.equal(needsDeezerArt({ ...photo, deezerChecked: true, artChecked: true }), true, 'a miss recorded under the old, weaker matching is searched again, once');
+  assert.equal(needsItunesArt({ ...photo, deezerChecked: true, artChecked: true }), true);
   const clean = { id: 'discogs_2', artwork: { source: 'deezer' } };
   assert.equal(needsDeezerArt(clean) || needsItunesArt(clean), false, 'clean art is left alone');
   assert.equal(needsDeezerArt({ ...clean, artwork: { source: 'itunes' } }) || needsItunesArt({ ...clean, artwork: { source: 'itunes' } }), false);
@@ -440,4 +442,188 @@ import { fetchBackCover } from '../public/js/wiki.js';
   const fresh = buildCollectionRecord(item, undefined, []);
   assert.equal(fresh.id, 'discogs_42');
   assert.equal(fresh.artwork.source, 'discogs', 'a brand new record starts with the Discogs image');
+}
+
+// ---- is a candidate cover the same artwork as the Discogs image? ---------------------------------------------------
+import { readFileSync } from 'node:fs';
+import { fingerprint, scoreImages, decide, sameArtwork, SIZE } from '../public/js/imagematch.js';
+
+// A synthetic 96 x 96 picture from a function of (x, y) returning [r, g, b]
+const picture96 = (fn) => {
+  const px = new Uint8ClampedArray(SIZE * SIZE * 4);
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) { const [r, g, b] = fn(x, y); const i = (y * SIZE + x) * 4; px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = 255; }
+  return px;
+};
+const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+// a cover: a heart on a coloured ground with a text bar, so it has real structure
+const cover = (x, y) => {
+  const heart = Math.hypot(x - 48, y - 46) < 22;
+  const bar = y > 74 && y < 84 && x > 20 && x < 76;
+  if (bar) return [240, 220, 160];
+  return heart ? [200, 40, 50] : [40, 60, 130];
+};
+const checker = (x, y) => (Math.floor(x / 12) % 2 === Math.floor(y / 12) % 2 ? [230, 200, 60] : [30, 110, 40]); // a checkerboard
+{
+  const original = fingerprint(picture96(cover));
+  assert.equal(original.grey.length, SIZE * SIZE);
+  assert.ok(Math.abs([...original.hue].reduce((a, b) => a + b, 0) - 1) < 1e-6, 'the hue histogram adds up to 1');
+
+  // The same picture photographed badly: dimmer, a colour cast, a border, a tilt-ish shift, and glare
+  const photo = (x, y) => {
+    const inner = cover(Math.round((x - 8) * 1.12), Math.round((y - 6) * 1.12)); // smaller, shifted: margins around the sleeve
+    const outside = x < 8 || y < 6 || x > 88 || y > 90;
+    const glare = Math.max(0, 90 - Math.hypot(x - 70, y - 30) * 3);
+    const [r, g, b] = outside ? [90, 84, 78] : inner;
+    return [clamp(r * 0.75 + 20 + glare), clamp(g * 0.75 + 12 + glare), clamp(b * 0.7 + 18 + glare)];
+  };
+  assert.equal(sameArtwork(fingerprint(picture96(photo)), original), true, 'a dim, cast, framed, glared photo of the same cover still matches');
+  assert.equal(sameArtwork(fingerprint(picture96(checker)), original), false, 'a different picture does not');
+  const ramp = (x) => { const v = Math.round((x / SIZE) * 255); return [v, v, v]; };
+  assert.equal(sameArtwork(fingerprint(picture96(ramp)), original), false, 'a plain gradient does not');
+  const flat = (x, y) => [200, 200, 200];
+  assert.equal(sameArtwork(fingerprint(picture96(flat)), original), false, 'a flat grey picture matches nothing');
+  const scores = scoreImages(fingerprint(picture96(cover)), original);
+  assert.ok(scores.edge > 0.99 && scores.grey > 0.99, 'identical pictures score as identical');
+}
+
+{
+  // Real Discogs/Deezer scores, measured in a browser: the thresholds are pinned to what was measured
+  const fixture = JSON.parse(readFileSync(new URL('./fixtures/artwork-scores.json', import.meta.url), 'utf8'));
+  const scored = ([label, edge, grey, hue]) => ({ label, edge, grey, hue });
+  const accepted = fixture.positives.map(scored).filter(decide);
+  assert.ok(accepted.length >= 82, `real pressings of the right album are accepted (${accepted.length} of ${fixture.positives.length})`);
+  // the borderline true matches that the first version wrongly rejected: a photo of a sleeve with glare and margins
+  for (const [label, edge, grey, hue] of [['Star-Crossed photo', 0.486, 0.671, 0.858], ['NVM photo', 0.475, 0.736, 0.75], ['NVM photo 2', 0.497, 0.687, 0.814]]) {
+    assert.equal(decide({ edge, grey, hue }), true, `${label} is accepted`);
+  }
+  // photographs of the disc, or a test-pressing sheet, are not the cover
+  assert.equal(decide({ edge: 0.114, grey: 0.254, hue: 0.573 }), false);
+  for (const impostor of fixture.impostors.map(scored)) assert.equal(decide(impostor), false, `${impostor.label} is never matched`);
+  const worst = Math.max(...fixture.impostors.map((i) => i[1]));
+  assert.ok(worst < 0.5, `the closest mismatch (${worst}) stays clear of the edge threshold`);
+}
+
+// ---- judging a candidate cover, and the choice a person can make --------------------------------------------------
+import { judgeCandidate, needsArtVerification, needsArtRecheck, ART_MATCH_VERSION, deezerThumb, itunesThumb } from '../public/js/sync.js';
+import { artControl, artChoiceUpdates } from '../public/js/artwork.js';
+
+{
+  const record = { id: 'discogs_1', discogsArtwork: { thumbnail: 'https://i.discogs.com/a', highRes: 'https://i.discogs.com/b', source: 'discogs' }, artwork: { source: 'discogs' } };
+  const same = fingerprint(picture96(cover));
+  const other = fingerprint(picture96(checker));
+  const loader = (map) => async (url) => { if (!(url in map)) throw new Error('no such image'); return map[url]; };
+  const seen = [];
+  const relay = '/api/img?url=' + encodeURIComponent('https://i.discogs.com/a');
+
+  const judged = await judgeCandidate(record, 'https://cdn/deezer', async (url) => { seen.push(url); return same; });
+  assert.equal(judged, 'same');
+  assert.ok(seen.includes('/api/img?url=' + encodeURIComponent('https://i.discogs.com/a')), 'the Discogs image is read through our own address');
+  assert.equal(await judgeCandidate(record, 'https://cdn/x', loader({ [relay]: same, 'https://cdn/x': other })), 'different');
+  assert.equal(await judgeCandidate(record, 'https://cdn/missing', loader({ [relay]: same })), 'unknown', 'an image that will not load decides nothing');
+  assert.equal(await judgeCandidate({ id: 'x', artwork: { source: 'discogs' } }, 'https://cdn/x', async () => { throw new Error('unused'); }), 'same', 'no Discogs image, nothing to disagree with');
+
+  assert.equal(deezerThumb('https://cdn/1000x1000-000000-80-0-0.jpg'), 'https://cdn/250x250-000000-80-0-0.jpg');
+  assert.equal(itunesThumb('https://is1/thumb/cover.jpg/1200x1200bb.jpg'), 'https://is1/thumb/cover.jpg/250x250bb.jpg');
+
+  // covers swapped in before the comparison existed get checked once
+  const swapped = { ...record, artwork: { source: 'deezer', highRes: 'x' } };
+  assert.equal(needsArtVerification(swapped), true);
+  assert.equal(needsArtVerification({ ...swapped, artVerified: true }), false);
+  assert.equal(needsArtVerification({ ...swapped, artworkLocked: true }), false, 'a cover a person chose is never second-guessed');
+  assert.equal(needsArtVerification(record), false, 'a Discogs image needs no check');
+
+  // covers turned down by the earlier, stricter comparison are judged once more
+  const turnedDown = { ...record, artCandidate: { source: 'deezer', highRes: 'https://cdn/d.jpg' } };
+  assert.equal(needsArtRecheck(turnedDown), true);
+  assert.equal(needsArtRecheck({ ...turnedDown, artMatchVersion: ART_MATCH_VERSION }), false, 'only once');
+  assert.equal(needsArtRecheck({ ...turnedDown, artworkLocked: true }), false, 'a chosen cover is not second-guessed');
+  assert.equal(needsArtRecheck(record), false, 'no candidate, nothing to recheck');
+
+  // the control
+  const cleaner = { ...record, artwork: { source: 'deezer', highRes: 'https://cdn/d.jpg' } };
+  assert.equal(artControl(cleaner).action, 'discogs');
+  assert.match(artControl(cleaner).note, /matched to the Discogs image/);
+  assert.match(artControl({ ...cleaner, artworkLocked: true }).note, /you chose/, 'a hand-picked cover is not described as auto-matched');
+  assert.equal(artControl(record), null, 'nothing to choose between');
+  const rejected = { ...record, artCandidate: { source: 'deezer', highRes: 'https://cdn/d.jpg' } };
+  assert.equal(artControl(rejected).action, 'candidate');
+  assert.match(artControl(rejected).label, /Deezer/);
+  assert.equal(artControl({ ...record, artworkLocked: true }).action, 'retry');
+
+  // choosing switches between the two covers and pins the record; nothing is lost
+  const toDiscogs = artChoiceUpdates(cleaner, 'discogs');
+  assert.equal(toDiscogs.artwork.source, 'discogs');
+  assert.equal(toDiscogs.artworkLocked, true);
+  assert.equal(toDiscogs.artCandidate.source, 'deezer', 'the cleaner cover is kept so it can be brought back');
+  const back = artChoiceUpdates({ ...cleaner, ...toDiscogs }, 'candidate');
+  assert.equal(back.artwork.source, 'deezer', 'and the person can change their mind');
+  assert.equal(artChoiceUpdates({ id: 'x', artwork: { source: 'deezer' } }, 'discogs'), null, 'no Discogs image to go back to');
+  assert.equal(artChoiceUpdates(record, 'retry').artworkLocked, false);
+  assert.equal(artChoiceUpdates(record, 'bogus'), null);
+}
+
+// ---- Wikipedia infobox fields ------------------------------------------------------------------------------------
+{
+  // The real "NVM" infobox: the producer field is empty and the next line is another field
+  const nvm = [
+    '{{Infobox album', '| name       = NVM', '| released   = {{Start date|2014|02|25}}', '| recorded   =', '| studio     =',
+    '| genre      = [[Pop punk]]', '| length     = {{Duration|m=27|s=47}}', '| label      = [[Hardly Art]]', '| producer   =',
+    '| prev_title = Shame Spiral', '| prev_year  = 2008', '| next_title = [[Lost Time (Tacocat album)|Lost Time]]', '}}',
+  ].join('\n');
+  assert.equal(infoboxField(nvm, 'producer'), '', 'an empty field stays empty, and does not take the next line');
+  assert.equal(infoboxField(nvm, 'recorded'), '', 'the same for a field before another empty one');
+  assert.equal(infoboxField(nvm, 'label'), 'Hardly Art', 'links are cleaned');
+
+  const full = ['{{Infobox album', '| label    = [[Sub Pop]]', '| producer = [[Steve Albini]]<ref>cite</ref>', '| recorded = Electrical Audio, Chicago', '}}'].join('\n');
+  assert.equal(infoboxField(full, 'producer'), 'Steve Albini');
+  assert.equal(infoboxField(full, 'recorded'), 'Electrical Audio, Chicago', 'the last field before the closing braces');
+
+  const list = ['{{Infobox album', '| producer = {{Plainlist|', '* [[Butch Vig]]', '* [[Nirvana]]', '}}', '| label = DGC', '}}'].join('\n');
+  assert.equal(infoboxField(list, 'producer'), 'Butch Vig, Nirvana', 'a multi-line list is joined');
+  assert.equal(infoboxField(list, 'missing'), '');
+  assert.equal(infoboxField('', 'producer'), '');
+
+  // Something already saved on a record that still has the leaked text is never shown
+  assert.equal(usefulValue('prev_title = Shame Spiral'), '');
+  assert.equal(usefulValue('Steve Albini'), 'Steve Albini');
+  assert.equal(usefulValue('Hardly Art'), 'Hardly Art');
+}
+
+{
+  const ubl = ['{{Infobox album', '| producer = {{Unbulleted list|[[Butch Vig]]|[[Nirvana]]}}', '| label = DGC', '}}'].join('\n');
+  assert.equal(infoboxField(ubl, 'producer'), 'Butch Vig, Nirvana', 'a template list is separated by commas, not bars');
+}
+
+// ---- the same album under different bracketed titles ---------------------------------------------------------------
+{
+  assert.equal(searchTitle('TRON: Legacy (Vinyl Edition Motion Picture Soundtrack)'), 'TRON: Legacy');
+  assert.equal(searchTitle('Homework [25th Anniversary]'), 'Homework');
+  assert.equal(searchTitle('(What\'s the Story) Morning Glory?'), "(What's the Story) Morning Glory?", 'a title that is only brackets is left alone');
+  assert.equal(searchTitle('Abbey Road'), 'Abbey Road');
+
+  // iTunes: "(Vinyl Edition ...)" and "(Original ...)" are the same album; a different album is not
+  const tron = 'TRON: Legacy (Vinyl Edition Motion Picture Soundtrack)';
+  assert.ok(scoreAlbumMatch('Daft Punk', tron, 'Daft Punk', 'TRON: Legacy (Original Motion Picture Soundtrack)') >= 100, 'the digital release of the soundtrack matches');
+  assert.equal(scoreAlbumMatch('Daft Punk', tron, 'Daft Punk', 'TRON: Legacy Reconfigured'), -1, 'the remix album does not');
+  assert.equal(scoreAlbumMatch('Daft Punk', tron, 'Daft Punk', 'Random Access Memories'), -1);
+  assert.equal(scoreAlbumMatch('Daft Punk', tron, 'Nine Inch Nails', 'TRON: Ares (Original Motion Picture Soundtrack)'), -1);
+  assert.ok(scoreAlbumMatch('Daft Punk', 'Homework', 'Daft Punk', 'Homework') > scoreAlbumMatch('Daft Punk', 'Homework', 'Daft Punk', 'Homework (25th Anniversary Edition)'), 'the exact title still ranks first');
+}
+
+// ---- searching again with the master's title ---------------------------------------------------------------------
+{
+  const searched = { deezerSearchVersion: ART_SEARCH_VERSION, itunesSearchVersion: ART_SEARCH_VERSION };
+  const base = { id: 'discogs_7', masterId: 291615, artwork: { source: 'discogs' }, ...searched };
+  assert.equal(needsMasterTitleArt(base), true, 'both searches missed and there is a master');
+  assert.equal(needsMasterTitleArt({ ...base, masterId: null }), false, 'a custom entry has no master to ask');
+  assert.equal(needsMasterTitleArt({ ...base, deezerSearchVersion: undefined }), false, 'not before the first two searches are done');
+  assert.equal(needsMasterTitleArt({ ...base, artCandidate: { source: 'deezer' } }), false, 'a cover is already on offer');
+  assert.equal(needsMasterTitleArt({ ...base, masterTitleSearchVersion: ART_SEARCH_VERSION }), false, 'only once');
+  assert.equal(needsMasterTitleArt({ ...base, artwork: { source: 'deezer' } }), false, 'clean art is left alone');
+  assert.equal(needsMasterTitleArt({ ...base, artworkLocked: true }), false);
+
+  assert.equal(titlesDiffer('Saga', 'Music From The Twilight Saga'), true);
+  assert.equal(titlesDiffer('TRON: Legacy (Vinyl Edition Motion Picture Soundtrack)', 'TRON: Legacy (Original Motion Picture Soundtrack)'), false, 'a different bracketed subtitle is already handled by the earlier searches');
+  assert.equal(titlesDiffer('Abbey Road', 'abbey road'), false);
+  assert.equal(titlesDiffer('Abbey Road', ''), false, 'no master title, nothing to try');
 }

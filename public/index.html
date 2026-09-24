@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="Spindex">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
   <title>Spindex | Your record collection</title>
-  <link rel="stylesheet" href="/css/style.css?v=75">
+  <link rel="stylesheet" href="/css/style.css?v=78">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%23121214%22 stroke=%22%23e4e4e7%22 stroke-width=%224%22/><circle cx=%2250%22 cy=%2250%22 r=%2220%22 fill=%22%23e11d48%22/><circle cx=%2250%22 cy=%2250%22 r=%224%22 fill=%22%23fff%22/></svg>">
@@ -201,7 +201,6 @@
               </svg>
               <span id="gf-flip-label">Flip to back cover</span>
             </button>
-            <button class="gf-art-fix" id="gf-art-fix" type="button" hidden></button>
             <nav class="gf-rail" id="gf-rail" aria-label="Sections"></nav>
           </div>
 
@@ -247,6 +246,11 @@
             <section class="gf-section" id="gf-copy-section" data-nav="Your copy" hidden>
               <h3 class="gatefold-section-label">Your copy</h3>
               <div class="gf-copy" id="gf-copy"></div>
+              <div class="gf-copy-group gf-art-group" id="gf-art-group" hidden>
+                <h4>Artwork</h4>
+                <p class="gf-art-note" id="gf-art-note"></p>
+                <button class="gf-art-fix" id="gf-art-fix" type="button"></button>
+              </div>
             </section>
 
             <section class="gf-section" id="gf-band-section" data-nav="The artist" hidden>
@@ -379,7 +383,7 @@
     </div>
   </aside>
 
-  <script type="module" src="/js/app.js?v=70"></script>
+  <script type="module" src="/js/app.js?v=79"></script>
 </body>
 
 </html>

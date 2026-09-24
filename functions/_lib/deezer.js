@@ -30,3 +30,12 @@ export const pickDeezerCover = (albums, artist, title) => {
   const album = matchDeezerAlbum(albums, artist, title);
   return album?.cover_xl || album?.cover_big || null;
 };
+
+// The title without its bracketed qualifiers ("(Vinyl Edition Motion Picture Soundtrack)"): the same album is often titled
+// differently on the pressing and the digital release, so the search uses the part they share
+export function searchTitle(title) {
+  let text = String(title || '').trim();
+  const trailing = /\s*[([][^)\]]*[)\]]\s*$/; // only at the end: "(What's the Story) Morning Glory?" keeps its opening bracket
+  while (trailing.test(text) && text.replace(trailing, '').trim()) text = text.replace(trailing, '').trim();
+  return text;
+}
