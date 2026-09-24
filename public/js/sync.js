@@ -1,8 +1,25 @@
 // sync.js - Discogs syncing and iTunes art enrichment
 import { upsertRecords, updateRecord, getAllRecords, deleteRecords } from './db.js';
 import { discogsFetch } from './discogs.js';
+import { createLimiter } from './limiter.js';
 import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds } from './syncplan.js';
 import { masterYearUpdates, itunesYearUpdates, isEditionTitle } from './years.js';
+
+// Apple allows roughly 20 iTunes searches a minute per address, and when it says no, it leaves out the CORS header, so
+// the browser reports a rejected request rather than a 429. Everything goes through one paced queue, and a rejection
+// pauses it and retries instead of ending the whole pass.
+const itunesLimiter = createLimiter({ pace: () => 3200, maxRetries: 2 });
+
+function itunesFetch(url, priority = 'low') {
+  return itunesLimiter.schedule(async () => {
+    try {
+      return await fetch(url);
+    } catch {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('offline');
+      return { status: 429, ok: false, headers: { get: () => null } };
+    }
+  }, priority);
+}
 
 // Known band names or entities that shouldn't be split into "Last, First"
 const KNOWN_BANDS = new Set([
@@ -660,7 +677,7 @@ export async function enrichTracklistsInBackground(records) {
       if (currentTracklist.length === 0) {
         try {
           const query = encodeURIComponent(`${record.artist} ${record.title}`);
-          const itunesRes = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=50`);
+          const itunesRes = await itunesFetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=50`);
           if (itunesRes.ok) {
             const itunesData = await itunesRes.json();
             const songs = (itunesData.results || []).filter((s) => s.trackName);
@@ -743,7 +760,7 @@ export async function enrichTracklistsInBackground(records) {
       if (stillMissing) {
         try {
           const query = encodeURIComponent(`${record.artist} ${record.title}`);
-          const itunesRes = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=50`);
+          const itunesRes = await itunesFetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=50`);
           if (itunesRes.ok) {
             const itunesData = await itunesRes.json();
             const normalizeTitle = (str) =>
@@ -920,13 +937,13 @@ function uniqueTags(list) {
 async function findItunesAlbum(record) {
   const cleanTitle = (record.title || '').replace(/\.{2,}$/, '').trim();
   const query = encodeURIComponent(`${record.artist} ${cleanTitle}`);
-  let res = await fetch(`https://itunes.apple.com/search?term=${query}&entity=album&limit=10`);
+  let res = await itunesFetch(`https://itunes.apple.com/search?term=${query}&entity=album&limit=10`);
   if (!res.ok) return { ok: false, item: null };
   let data = await res.json();
 
   // Fallback: If entity=album returns 0 results, query with media=music (Apple frequently omits new releases from entity=album)
   if (!data || data.resultCount === 0) {
-    const fallbackRes = await fetch(`https://itunes.apple.com/search?term=${query}&media=music&limit=15`);
+    const fallbackRes = await itunesFetch(`https://itunes.apple.com/search?term=${query}&media=music&limit=15`);
     if (fallbackRes.ok) {
       data = await fallbackRes.json();
     }
@@ -984,7 +1001,6 @@ export async function enrichArtInBackground(records, onEach) {
     } catch {
       break;
     }
-    await new Promise((resolve) => setTimeout(resolve, 400));
   }
 }
 
@@ -1026,7 +1042,6 @@ export async function enrichGenresInBackground(records) {
     } catch {
       break;
     }
-    await new Promise((resolve) => setTimeout(resolve, 400));
   }
 }
 
