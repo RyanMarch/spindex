@@ -27,9 +27,10 @@ export class GatefoldController {
   // onJump(recordId): bring another record to the front of the crate and open it.
   // getPosition(): { index, total } of the record on show, for the "17 / 51" counter.
   // onRoute(record|null, mode): keep the address bar in step ('push' | 'replace' | 'close').
-  constructor({ onStep, onJump, getPosition, onRoute, onArtworkChange } = {}) {
+  constructor({ onStep, onJump, getPosition, onRoute, onArtworkChange, onArtworkRetry } = {}) {
     this.onRoute = onRoute;
     this.onArtworkChange = onArtworkChange;
+    this.onArtworkRetry = onArtworkRetry;
     this.onStep = onStep;
     this.onJump = onJump;
     this.getPosition = getPosition;
@@ -48,6 +49,7 @@ export class GatefoldController {
     this.backArt = $('gf-back-art');
     this.flipper = $('gf-flipper');
     this.flipBtn = $('gf-flip-btn');
+    this.artFixBtn = $('gf-art-fix');
     this.flipLabel = $('gf-flip-label');
     this.labelArt = $('gatefold-label-art');
     this.vinylDisc = $('gatefold-vinyl-disc');
@@ -90,6 +92,7 @@ export class GatefoldController {
     this.prevBtn?.addEventListener('click', () => this.step(-1));
     this.nextBtn?.addEventListener('click', () => this.step(1));
     this.flipBtn?.addEventListener('click', () => this.toggleFlip());
+    this.artFixBtn?.addEventListener('click', () => this.toggleArtFix());
     this.jacketWrap?.addEventListener('click', () => {
       this.toggleFlip();
     });
@@ -362,7 +365,7 @@ export class GatefoldController {
   renderAll(record) {
     const steps = [
       'renderFront', 'renderSpecs', 'renderTracklist', 'renderCredits', 'renderStory', 'renderVideos', 'renderListen',
-      'renderCopy', 'renderBand', 'renderAttribution', 'renderFlip', 'renderConnections', 'renderNav',
+      'renderCopy', 'renderBand', 'renderAttribution', 'renderFlip', 'renderArtFix', 'renderConnections', 'renderNav',
     ];
     for (const step of steps) {
       try {
@@ -698,6 +701,33 @@ export class GatefoldController {
 
   // The sleeve always flips: it's how you see the whole record. Until (or unless) a real back cover turns up, the
   // back is the front art, dimmed.
+  // Cleaner artwork found elsewhere can be the wrong edition (a reissue, or the digital release of a record with its own
+  // cover). Discogs' image is the one for this pressing, so it is always one tap away, and once chosen it stays.
+  renderArtFix(record) {
+    if (!this.artFixBtn) return;
+    const original = record.discogsArtwork?.highRes || record.discogsArtwork?.thumbnail;
+    const replaced = ['itunes', 'deezer'].includes(record.artwork?.source);
+    this.artFixBtn.hidden = !record.artworkLocked && !(replaced && original);
+    this.artFixBtn.textContent = record.artworkLocked ? 'Using the Discogs image. Try cleaner artwork again' : 'Not the right cover? Use the Discogs image';
+  }
+
+  async toggleArtFix() {
+    const record = this.activeRecord;
+    if (!record) return;
+    const retry = Boolean(record.artworkLocked);
+    if (!retry && !(record.discogsArtwork?.highRes || record.discogsArtwork?.thumbnail)) return; // nothing to go back to
+    const updates = retry
+      ? { artworkLocked: false, deezerChecked: false, fallbackArtChecked: false, artChecked: false }
+      : { artwork: record.discogsArtwork, artworkLocked: true };
+    await updateRecord(record.id, updates);
+    Object.assign(record, updates);
+    this.renderFront(record);
+    this.renderFlip(record);
+    this.renderArtFix(record);
+    this.onArtworkChange?.();
+    if (retry) this.onArtworkRetry?.();
+  }
+
   renderFlip(record) {
     const back = record.context?.backCover;
     const frontArt = record.artwork?.highRes || record.artwork?.thumbnail || '';

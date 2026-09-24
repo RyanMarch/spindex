@@ -473,6 +473,68 @@ export async function refreshCollectionFields(username) {
   }
 }
 
+// One item from Discogs' collection list, merged over the record we already have for it (if any)
+export function buildCollectionRecord(item, existing, fieldNames) {
+  const basic = item.basic_information || {};
+  const artistName = basic.artists && basic.artists.length > 0
+    ? basic.artists[0].name
+    : 'Unknown Artist';
+  const recordId = `discogs_${item.id}`;
+  const fields = parseCollectionFields(item.notes, fieldNames);
+
+  const existingTracklist = existing?.tracklist && existing.tracklist.length > 0
+    ? existing.tracklist
+    : [];
+
+  const discogsArtwork = {
+    thumbnail: basic.thumb || '',
+    highRes: basic.cover_image || '',
+    source: 'discogs',
+  };
+
+  // Keep validated high-res artwork if already enriched, otherwise use Discogs artwork
+  const existingArtwork = (['itunes', 'deezer'].includes(existing?.artwork?.source) && existing?.artwork?.highRes)
+    ? existing.artwork
+    : discogsArtwork;
+
+  const titleStr = basic.title || 'Untitled';
+  const isExpandedEdition = isEditionTitle(titleStr);
+  const chosenYear = (isExpandedEdition && basic.year)
+    ? basic.year
+    : (existing?.year || existing?.originalYear || basic.master_year || existing?.masterYear || basic.year || 0);
+
+  // Start from what the crate already knows (details, checked flags, art from other sources) and lay the fresh Discogs
+  // fields over it. Saving only the fresh fields would silently throw away everything gathered since the last sync.
+  return {
+    ...existing,
+    id: recordId,
+    discogsId: item.id,
+    masterId: basic.master_id || existing?.masterId || null,
+    title: titleStr,
+    artist: artistName.replace(/\s\(\d+\)$/, '').trim(),
+    sortArtist: parseSortArtist(artistName),
+    year: chosenYear,
+    masterYear: basic.master_year || existing?.masterYear || null,
+    originalYear: isExpandedEdition && basic.year
+      ? basic.year
+      : (existing?.originalYear || basic.master_year || existing?.masterYear || null),
+    pressingYear: basic.year || existing?.pressingYear || null,
+    releaseDate: existing?.releaseDate || null,
+    genres: basic.genres || [],
+    styles: basic.styles || [],
+    format: basic.formats ? basic.formats.map((f) => f.name) : ['Vinyl'],
+    dateAdded: item.date_added || new Date().toISOString(),
+    notes: fields.collectionNotes.map((n) => n.value).join('\n'),
+    mediaCondition: fields.mediaCondition,
+    sleeveCondition: fields.sleeveCondition,
+    collectionNotes: fields.collectionNotes,
+    tracklist: existingTracklist,
+    artwork: existingArtwork,
+    discogsArtwork,
+    context: existing?.context || null,
+  };
+}
+
 // A full sync reads the whole collection and picks up edits and removals. Otherwise it reads only as far as the newest
 // records we don't have yet (usually one request), and falls back to a full read whenever the numbers don't add up.
 export async function syncDiscogsCollection(username, onProgress, { full = false } = {}) {
@@ -502,64 +564,7 @@ export async function syncDiscogsCollection(username, onProgress, { full = false
       totalPages = data.pagination.pages;
     }
 
-    const parsed = (data.releases || []).map((item) => {
-      const basic = item.basic_information || {};
-      const artistName = basic.artists && basic.artists.length > 0
-        ? basic.artists[0].name
-        : 'Unknown Artist';
-      const recordId = `discogs_${item.id}`;
-      const existing = existingMap.get(recordId);
-      const fields = parseCollectionFields(item.notes, fieldNames);
-
-      const existingTracklist = existing?.tracklist && existing.tracklist.length > 0
-        ? existing.tracklist
-        : [];
-
-      const discogsArtwork = {
-        thumbnail: basic.thumb || '',
-        highRes: basic.cover_image || '',
-        source: 'discogs',
-      };
-
-      // Keep validated high-res artwork if already enriched, otherwise use Discogs artwork
-      const existingArtwork = (['itunes', 'deezer'].includes(existing?.artwork?.source) && existing?.artwork?.highRes)
-        ? existing.artwork
-        : discogsArtwork;
-
-      const titleStr = basic.title || 'Untitled';
-      const isExpandedEdition = isEditionTitle(titleStr);
-      const chosenYear = (isExpandedEdition && basic.year)
-        ? basic.year
-        : (existing?.year || existing?.originalYear || basic.master_year || existing?.masterYear || basic.year || 0);
-
-      return {
-        id: recordId,
-        discogsId: item.id,
-        masterId: basic.master_id || existing?.masterId || null,
-        title: titleStr,
-        artist: artistName.replace(/\s\(\d+\)$/, '').trim(),
-        sortArtist: parseSortArtist(artistName),
-        year: chosenYear,
-        masterYear: basic.master_year || existing?.masterYear || null,
-        originalYear: isExpandedEdition && basic.year
-          ? basic.year
-          : (existing?.originalYear || basic.master_year || existing?.masterYear || null),
-        pressingYear: basic.year || existing?.pressingYear || null,
-        releaseDate: existing?.releaseDate || null,
-        genres: basic.genres || [],
-        styles: basic.styles || [],
-        format: basic.formats ? basic.formats.map((f) => f.name) : ['Vinyl'],
-        dateAdded: item.date_added || new Date().toISOString(),
-        notes: fields.collectionNotes.map((n) => n.value).join('\n'),
-        mediaCondition: fields.mediaCondition,
-        sleeveCondition: fields.sleeveCondition,
-        collectionNotes: fields.collectionNotes,
-        tracklist: existingTracklist,
-        artwork: existingArtwork,
-        discogsArtwork,
-        context: existing?.context || null,
-      };
-    });
+    const parsed = (data.releases || []).map((item) => buildCollectionRecord(item, existingMap.get(`discogs_${item.id}`), fieldNames));
 
     fetchedRecords.push(...parsed);
     total = data.pagination?.items ?? total;
@@ -1008,8 +1013,8 @@ export async function enrichArtInBackground(records, onEach) {
 // it has clean square covers, no tight rate limit, and answers are cached at the edge. Whatever Deezer doesn't have goes
 // on to iTunes. (fallbackArtChecked is what an earlier version called deezerChecked.)
 const isDemo = (record) => String(record.id).startsWith('discogs_mock_');
-export const needsDeezerArt = (record) => record.artwork?.source === 'discogs' && !isDemo(record) && !record.deezerChecked && !record.fallbackArtChecked;
-export const needsItunesArt = (record) => record.artwork?.source === 'discogs' && !isDemo(record) && !record.artChecked;
+export const needsDeezerArt = (record) => record.artwork?.source === 'discogs' && !record.artworkLocked && !isDemo(record) && !record.deezerChecked && !record.fallbackArtChecked;
+export const needsItunesArt = (record) => record.artwork?.source === 'discogs' && !record.artworkLocked && !isDemo(record) && !record.artChecked;
 
 // Each record is marked once Deezer has actually answered, whether or not it had the album. A failure (Deezer down, or no
 // server here) marks nothing and stops the pass: it says nothing about the album, so the next load asks again.

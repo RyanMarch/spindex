@@ -221,7 +221,7 @@ import { sortYear, masterYearUpdates, itunesYearUpdates, isEditionTitle } from '
 }
 
 // ---- stale release details ---------------------------------------------------------------------------------------
-import { detailsAreStale, needsDeezerArt, needsItunesArt } from '../public/js/sync.js';
+import { detailsAreStale, needsDeezerArt, needsItunesArt, buildCollectionRecord } from '../public/js/sync.js';
 
 {
   const now = Date.parse('2026-09-24T00:00:00Z');
@@ -402,4 +402,42 @@ import { fetchBackCover } from '../public/js/wiki.js';
   assert.equal(needsDeezerArt(clean) || needsItunesArt(clean), false, 'clean art is left alone');
   assert.equal(needsDeezerArt({ ...clean, artwork: { source: 'itunes' } }) || needsItunesArt({ ...clean, artwork: { source: 'itunes' } }), false);
   assert.equal(needsDeezerArt({ id: 'discogs_mock_1', artwork: { source: 'discogs' } }), false, 'demo records are skipped');
+}
+
+// A pinned cover is left alone by the background passes
+{
+  const pinned = { id: 'discogs_5', artworkLocked: true, artwork: { source: 'discogs' } };
+  assert.equal(needsDeezerArt(pinned), false);
+  assert.equal(needsItunesArt(pinned), false);
+}
+
+// ---- syncing must not throw away what the crate has learned since the last sync ------------------------------------
+{
+  const item = {
+    id: 42,
+    date_added: '2024-05-01T00:00:00-07:00',
+    notes: [],
+    basic_information: { title: 'Saga', year: 2023, master_id: 7, artists: [{ name: 'The City of Prague Philharmonic Orchestra' }], genres: ['Stage & Screen'], styles: ['Score'], formats: [{ name: 'Vinyl' }], thumb: 't.jpg', cover_image: 'c.jpg' },
+  };
+  const existing = {
+    id: 'discogs_42', title: 'Old title', year: 2008, masterYear: 2008, masterChecked: true,
+    details: { labels: [{ name: 'Silva Screen' }], fetchedAt: '2026-09-01T00:00:00Z' },
+    tracklist: [{ title: 'Track', duration: '3:00' }],
+    primaryGenre: 'Soundtrack', itunesUrl: 'https://music.apple.com/x', genreChecked: true, artChecked: true, deezerChecked: true, artworkLocked: true,
+    artwork: { source: 'deezer', highRes: 'https://cdn/deezer.jpg', thumbnail: 'https://cdn/deezer-small.jpg' },
+    context: { backCover: 'https://caa/back.jpg' },
+  };
+  const merged = buildCollectionRecord(item, existing, []);
+  assert.equal(merged.title, 'Saga', 'fresh Discogs fields win');
+  assert.equal(merged.pressingYear, 2023);
+  for (const kept of ['details', 'primaryGenre', 'itunesUrl', 'genreChecked', 'artChecked', 'deezerChecked', 'artworkLocked', 'masterChecked']) {
+    assert.deepEqual(merged[kept], existing[kept], `${kept} survives a sync`);
+  }
+  assert.equal(merged.artwork.source, 'deezer', 'cleaner artwork found elsewhere survives a sync');
+  assert.deepEqual(merged.context, existing.context);
+  assert.equal(merged.tracklist.length, 1);
+
+  const fresh = buildCollectionRecord(item, undefined, []);
+  assert.equal(fresh.id, 'discogs_42');
+  assert.equal(fresh.artwork.source, 'discogs', 'a brand new record starts with the Discogs image');
 }

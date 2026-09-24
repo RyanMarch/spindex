@@ -3065,3 +3065,7 @@ html {
 .stat-growth-line{fill:none;stroke:var(--color-accent);stroke-width:2;vector-effect:non-scaling-stroke}
 .stat-growth-fill{fill:var(--color-accent);opacity:.14}
 .stat-axis{display:flex;justify-content:space-between;margin-top:.35rem;font-size:.7rem;color:var(--text-muted)}
+
+.gf-art-fix{display:block;margin:.85rem 0 0;padding:0;background:none;border:0;font:inherit;font-size:.72rem;color:var(--text-muted);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.gf-art-fix:hover{color:var(--text-main)}
+.gf-art-fix[hidden]{display:none}

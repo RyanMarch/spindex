@@ -143,6 +143,7 @@ class App {
       getPosition: () => ({ index: this.crate.currentIndex, total: this.filteredRecords.length }),
       onRoute: (record, mode) => this.syncUrl(record, mode),
       onArtworkChange: () => this.refreshInPlace(),
+      onArtworkRetry: () => this.fillMissingArt(),
     });
   }
 
