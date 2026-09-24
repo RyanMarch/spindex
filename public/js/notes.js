@@ -12,6 +12,7 @@ import {
   fetchArtistLinks,
 } from './sync.js';
 import { usefulValue } from './values.js';
+import { externalFetch } from './external.js';
 import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover, findAlbumPage, isVariousArtists } from './wiki.js';
 import { isDiscogsConnected } from './discogs.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
@@ -304,8 +305,8 @@ export class GatefoldController {
     if (!record.context || record.context.matchVersion !== 2) {
       await this.fetchLinerNotes(record);
     } else if (!record.context.releaseChecked && (!record.releaseDate || record.year === record.pressingYear)) {
-      await this.resolveStructuredReleaseDate(record, record.context.wikiTitle || null);
-      await this.saveContext(record, { releaseChecked: true });
+      const complete = await this.resolveStructuredReleaseDate(record, record.context.wikiTitle || null);
+      if (complete) await this.saveContext(record, { releaseChecked: true });
     }
     if (this.isCurrent(record, token)) this.renderAll(record);
 
@@ -342,8 +343,13 @@ export class GatefoldController {
   async loadBackCover(record, token) {
     // backCoverVersion 2: chosen by format (vinyl, then CD). Covers saved before that could be a cassette insert.
     if (record.context?.backCover === undefined || record.context.backCoverVersion !== 2) {
-      const url = isVariousArtists(record.artist) ? null : await fetchBackCover(record.artist, record.title);
-      await this.saveContext(record, { backCover: url || null, backCoverVersion: 2 });
+      let url = null;
+      try {
+        if (!isVariousArtists(record.artist)) url = await fetchBackCover(record.artist, record.title);
+        await this.saveContext(record, { backCover: url || null, backCoverVersion: 2 });
+      } catch {
+        // A source was unreachable or busy: leave it unchecked, so the next open tries again
+      }
     }
     if (this.isCurrent(record, token)) this.renderFlip(record);
   }
@@ -928,7 +934,7 @@ export class GatefoldController {
         return;
       }
 
-      const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(titleToFetch)}`);
+      const res = await externalFetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(titleToFetch)}`);
       if (!res.ok) throw new Error('No summary found');
 
       const data = await res.json();
@@ -951,15 +957,18 @@ export class GatefoldController {
     }
   }
 
+  // Returns false when a source couldn't be reached, so the record isn't marked as checked and is tried again later
   async resolveStructuredReleaseDate(record, wikiTitle) {
     let resolvedDate = null;
     let resolvedYear = null;
+    let complete = true;
 
     // 1. Check Wikipedia wikitext infobox `| released =`
     if (wikiTitle) {
       try {
         const parseUrl = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(wikiTitle)}&prop=wikitext&format=json&origin=*`;
-        const parseRes = await fetch(parseUrl);
+        const parseRes = await externalFetch(parseUrl);
+        if (!parseRes.ok && parseRes.status !== 404) complete = false;
         if (parseRes.ok) {
           const parseData = await parseRes.json();
           const wikitext = parseData?.parse?.wikitext?.['*'] || '';
@@ -992,6 +1001,7 @@ export class GatefoldController {
         }
       } catch {
         // Fall through to MusicBrainz
+        complete = false;
       }
     }
 
@@ -1000,7 +1010,8 @@ export class GatefoldController {
       try {
         const cleanTitle = record.title.replace(/\([^)]*\)/g, '').trim();
         const mbUrl = `https://musicbrainz.org/ws/2/release-group?query=artist:${encodeURIComponent(record.artist)}+AND+releasegroup:${encodeURIComponent(cleanTitle)}&fmt=json`;
-        const mbRes = await fetch(mbUrl);
+        const mbRes = await externalFetch(mbUrl);
+        if (!mbRes.ok && mbRes.status !== 404) complete = false;
         if (mbRes.ok) {
           const mbData = await mbRes.json();
           const groups = mbData?.['release-groups'] || [];
@@ -1018,6 +1029,7 @@ export class GatefoldController {
         }
       } catch {
         // Ignore MusicBrainz failure
+        complete = false;
       }
     }
 
@@ -1041,6 +1053,7 @@ export class GatefoldController {
       await updateRecord(record.id, updates);
       Object.assign(record, updates);
     }
+    return resolvedYear ? true : complete;
   }
 
   escapeHTML(str = '') {

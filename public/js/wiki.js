@@ -1,6 +1,8 @@
 // wiki.js - Wikipedia / Wikimedia / MusicBrainz / Cover Art Archive lookups for the album inspector.
 // All calls are anonymous and CORS-enabled; results are cached on the record by the caller.
 
+import { externalFetch, externalJSON } from './external.js';
+
 const WIKI_API = 'https://en.wikipedia.org/w/api.php';
 
 const BACKGROUND_SECTION = /^(background|recording|production|writing|composition|concept|development|writing and recording|recording and production|background and recording|background and production|production and recording|music and lyrics)\b/i;
@@ -8,7 +10,7 @@ const RECEPTION_SECTION = /^(critical reception|reception|critical response|revi
 
 async function getJSON(url) {
   try {
-    const res = await fetch(url);
+    const res = await externalFetch(url);
     return res.ok ? await res.json() : null;
   } catch {
     return null;
@@ -257,20 +259,20 @@ export function pickBackCoverReleases(releases) {
     .map((entry) => entry.release);
 }
 
+// The back cover's address, null when there isn't one. Throws when a source can't be reached or is busy, so the caller
+// tries again later instead of recording "no back cover".
 export async function fetchBackCover(artist, title) {
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const cleanTitle = title.replace(/\([^)]*\)/g, '').trim();
 
-  const groups = await getJSON(`https://musicbrainz.org/ws/2/release-group?query=${encodeURIComponent(`artist:"${artist}" AND releasegroup:"${cleanTitle}"`)}&limit=5&fmt=json`);
+  const groups = await externalJSON(`https://musicbrainz.org/ws/2/release-group?query=${encodeURIComponent(`artist:"${artist}" AND releasegroup:"${cleanTitle}"`)}&limit=5&fmt=json`);
   const group = pickReleaseGroup(groups?.['release-groups'], cleanTitle);
   if (!group) return null;
 
-  await wait(1100);
-  const listing = await getJSON(`https://musicbrainz.org/ws/2/release?release-group=${group.id}&inc=media&limit=100&fmt=json`);
+  const listing = await externalJSON(`https://musicbrainz.org/ws/2/release?release-group=${group.id}&inc=media&limit=100&fmt=json`);
 
   // Usually one release; a second is a fallback in case the archive's storage server has a hiccup
   for (const release of pickBackCoverReleases(listing?.releases).slice(0, 2)) {
-    const archive = await getJSON(`https://coverartarchive.org/release/${release.id}`);
+    const archive = await externalJSON(`https://coverartarchive.org/release/${release.id}`);
     const back = archive?.images?.find((img) => img.types?.includes('Back') && img.approved !== false);
     if (back) {
       const url = back.thumbnails?.['1200'] || back.thumbnails?.large || back.image;

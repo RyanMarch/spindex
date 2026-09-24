@@ -336,3 +336,55 @@ import { computeStats, durationSeconds, colorGroup } from '../public/js/stats.js
   assert.equal(allowedUpstream('users/Ryan/collection/value', new URLSearchParams(), session), '/users/Ryan/collection/value');
   assert.equal(allowedUpstream('users/someoneelse/collection/value', new URLSearchParams(), session), null);
 }
+
+// ---- reading outside sources: failures are not answers -----------------------------------------------------------
+import { externalFetch, externalJSON } from '../public/js/external.js';
+import { fetchBackCover } from '../public/js/wiki.js';
+
+{
+  const realFetch = globalThis.fetch;
+  const proxied = (body, { status = 200, hit = true } = {}) => new Response(body === undefined ? null : JSON.stringify(body), {
+    status,
+    headers: { 'x-spindex-proxy': '1', ...(hit ? { 'x-spindex-cache': 'HIT' } : {}) },
+  });
+  try {
+    // goes through the proxy, and falls back to the source when there is no server behind it
+    const seen = [];
+    globalThis.fetch = async (url) => { seen.push(String(url)); return String(url).startsWith('/api/ext') ? proxied({ ok: 1 }) : new Response('{}'); };
+    await externalFetch('https://en.wikipedia.org/w/api.php?x=1');
+    assert.equal(seen[0], `/api/ext?url=${encodeURIComponent('https://en.wikipedia.org/w/api.php?x=1')}`);
+    seen.length = 0;
+    await externalFetch('https://itunes.apple.com/search?term=a');
+    assert.equal(seen[0], 'https://itunes.apple.com/search?term=a', 'sources outside the list are not proxied');
+    seen.length = 0;
+    globalThis.fetch = async (url) => { seen.push(String(url)); return String(url).startsWith('/api/ext') ? new Response('<html>not found</html>', { status: 404 }) : new Response('{"direct":true}'); };
+    assert.deepEqual(await (await externalFetch('https://en.wikipedia.org/w/api.php')).json(), { direct: true }, 'no proxy answering: go direct');
+
+    // 404 is "not there"; anything else wrong throws
+    globalThis.fetch = async () => proxied({}, { status: 404 });
+    assert.equal(await externalJSON('https://coverartarchive.org/release/x'), null);
+    globalThis.fetch = async () => proxied({}, { status: 503 });
+    await assert.rejects(externalJSON('https://coverartarchive.org/release/x'), /503/);
+
+    // a back cover lookup: found, genuinely absent, and "couldn't ask" are three different outcomes
+    const mbGroup = { 'release-groups': [{ id: 'g1', title: 'Transatlanticism' }] };
+    const mbReleases = { releases: [{ id: 'r1', media: [{ format: '12" Vinyl' }], 'cover-art-archive': { back: true } }] };
+    const caa = { images: [{ types: ['Back'], approved: true, thumbnails: { 1200: 'http://img/back-1200.jpg' } }] };
+    const route = (url) => {
+      const target = decodeURIComponent(String(url).split('url=')[1]);
+      if (target.includes('release-group?')) return proxied(mbGroup);
+      if (target.includes('/release?')) return proxied(mbReleases);
+      return proxied(caa);
+    };
+    globalThis.fetch = async (url) => route(url);
+    assert.equal(await fetchBackCover('Death Cab for Cutie', 'Transatlanticism'), 'https://img/back-1200.jpg', 'found (and upgraded to https)');
+
+    globalThis.fetch = async (url) => (decodeURIComponent(String(url)).includes('release-group?') ? proxied({ 'release-groups': [] }) : route(url));
+    assert.equal(await fetchBackCover('Nobody', 'Nothing'), null, 'MusicBrainz has no such album: no back cover');
+
+    globalThis.fetch = async (url) => (decodeURIComponent(String(url)).includes('/release?') ? proxied({}, { status: 502 }) : route(url));
+    await assert.rejects(fetchBackCover('Death Cab for Cutie', 'Transatlanticism'), /502/, 'a source failing is thrown, never recorded as "no back cover"');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}

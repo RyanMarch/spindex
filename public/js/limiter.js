@@ -16,6 +16,7 @@ export function createLimiter({
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   now = () => Date.now(),
   maxRetries = 3,
+  throttled = (res) => res && res.status === 429, // MusicBrainz says 503
 } = {}) {
   const queues = { high: [], low: [] };
   const listeners = new Set();
@@ -58,7 +59,7 @@ export function createLimiter({
           continue;
         }
         nextAt = now() + pace(res);
-        if (res && res.status === 429 && job.tries < maxRetries) {
+        if (throttled(res) && job.tries < maxRetries) {
           job.tries++;
           pausedUntil = now() + retryAfterMs(res);
           queues[job.priority].unshift(job);
