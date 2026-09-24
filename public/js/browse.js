@@ -123,6 +123,7 @@ export class BrowseView {
     });
 
     this.bindRail();
+    this.bindHoverTilt();
     let ticking = false;
     root.addEventListener('scroll', () => {
       if (ticking) return;
@@ -158,6 +159,10 @@ export class BrowseView {
     if (!(this.onJump && this.onJump(g.index))) this.items[g.index]?.scrollIntoView({ block: 'start' });
     this.markRail(label);
     if (this.bubble) {
+      const activeBtn = this.rail.querySelector(`[data-label="${label}"]`);
+      if (activeBtn) {
+        this.bubble.style.top = `${activeBtn.offsetTop + activeBtn.offsetHeight / 2}px`;
+      }
       this.bubble.textContent = label;
       this.bubble.classList.add('is-on');
       clearTimeout(this.bubbleTimer);
@@ -167,12 +172,33 @@ export class BrowseView {
 
   bindRail() {
     if (!this.rail) return;
-    const labelAt = (e) => {
-      const key = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.bv-rail-key');
-      return key?.dataset.label || null;
-    };
     let dragging = false;
     let last = null;
+
+    const labelAt = (e) => {
+      const elAt = document.elementFromPoint(e.clientX, e.clientY);
+      const key = elAt?.closest?.('.bv-rail-key');
+      if (key?.dataset.label) return key.dataset.label;
+      if (dragging) {
+        const r = this.rail.getBoundingClientRect();
+        if (e.clientY >= r.top - 20 && e.clientY <= r.bottom + 20) {
+          const keys = [...this.rail.querySelectorAll('.bv-rail-key')];
+          let closest = null;
+          let minDist = Infinity;
+          for (const k of keys) {
+            const kr = k.getBoundingClientRect();
+            const dist = Math.abs(e.clientY - (kr.top + kr.height / 2));
+            if (dist < minDist) {
+              minDist = dist;
+              closest = k;
+            }
+          }
+          return closest?.dataset.label || null;
+        }
+      }
+      return null;
+    };
+
     const go = (e) => {
       const label = labelAt(e);
       if (label && label !== last) {
@@ -180,16 +206,97 @@ export class BrowseView {
         this.jumpTo(label);
       }
     };
+
     this.rail.addEventListener('pointerdown', (e) => {
       dragging = true;
       last = null;
       this.rail.setPointerCapture?.(e.pointerId);
       go(e);
     });
+
     this.rail.addEventListener('pointermove', (e) => { if (dragging) go(e); });
-    const stop = () => { dragging = false; };
+
+    const stop = () => {
+      dragging = false;
+      clearTimeout(this.bubbleTimer);
+      this.bubbleTimer = setTimeout(() => this.bubble?.classList.remove('is-on'), 400);
+    };
+
     this.rail.addEventListener('pointerup', stop);
     this.rail.addEventListener('pointercancel', stop);
+  }
+
+  // Tilt and subtle glare track the pointer over grid tiles
+  bindHoverTilt() {
+    const canHover = typeof window !== 'undefined' && Boolean(window.matchMedia?.('(hover: hover) and (pointer: fine)')?.matches);
+    if (!canHover) return;
+
+    let activeTile = null;
+    let frame = null;
+    let lastX = 0;
+    let lastY = 0;
+
+    const clearTile = (tile) => {
+      if (!tile) return;
+      tile.style.removeProperty('--tilt-x');
+      tile.style.removeProperty('--tilt-y');
+      tile.style.removeProperty('--glare-x');
+      tile.style.removeProperty('--glare-y');
+    };
+
+    const updateTilt = () => {
+      frame = null;
+      if (!activeTile) return;
+      const art = activeTile.querySelector('.bv-art') || activeTile;
+      const r = art.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        const x = Math.min(1, Math.max(0, (lastX - r.left) / r.width));
+        const y = Math.min(1, Math.max(0, (lastY - r.top) / r.height));
+        activeTile.style.setProperty('--tilt-x', (x - 0.5).toFixed(3));
+        activeTile.style.setProperty('--tilt-y', (y - 0.5).toFixed(3));
+        activeTile.style.setProperty('--glare-x', `${(x * 100).toFixed(1)}%`);
+        activeTile.style.setProperty('--glare-y', `${(y * 100).toFixed(1)}%`);
+      }
+    };
+
+    this.root.addEventListener('pointermove', (e) => {
+      if (this.view !== 'grid') {
+        if (activeTile) {
+          clearTile(activeTile);
+          activeTile = null;
+        }
+        return;
+      }
+
+      const tile = e.target.closest('.bv-tile');
+      if (tile !== activeTile) {
+        clearTile(activeTile);
+        activeTile = tile;
+      }
+      if (!tile) return;
+
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      if (!frame) {
+        frame = requestAnimationFrame(updateTilt);
+      }
+    });
+
+    const resetActive = () => {
+      if (frame) {
+        cancelAnimationFrame(frame);
+        frame = null;
+      }
+      clearTile(activeTile);
+      activeTile = null;
+    };
+
+    this.root.addEventListener('pointerleave', resetActive);
+    this.root.addEventListener('scroll', resetActive, { passive: true });
+    if (typeof window !== 'undefined') {
+      window.addEventListener('blur', resetActive);
+    }
   }
 
   groupFor(index) {
@@ -211,7 +318,7 @@ export class BrowseView {
     }
     if (label === this.railActive) return;
     this.railActive = label;
-    for (const key of this.rail.children) key.classList.toggle('is-on', key.dataset.label === label);
+    for (const key of this.rail.querySelectorAll('.bv-rail-key')) key.classList.toggle('is-on', key.dataset.label === label);
   }
 
   render(records, view, sort, activeIndex = -1, railKey = null) {
