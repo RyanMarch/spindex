@@ -70,7 +70,8 @@ export class GatefoldController {
     this.header = $('gf-header');
     this.tabsEl = $('gf-tabs');
     this.railEl = $('gf-rail');
-    this.listenEl = $('gf-listen');
+    this.listenSection = $('gf-listen-section');
+    this.listenLinksEl = $('gf-listen-links');
     this.navSignature = '';
     this.headerObserver = null;
 
@@ -236,7 +237,21 @@ export class GatefoldController {
     await Promise.all([
       run(() => this.loadBand(record, token)),
       run(() => this.loadBackCover(record, token)),
+      run(() => this.loadListen(record, token)),
     ]);
+  }
+
+  // A Deezer page for the album, when Deezer has it (checked once, then kept on the record)
+  async loadListen(record, token) {
+    if (record.context?.listen === undefined) {
+      try {
+        const res = await fetch(`/api/listen/deezer?artist=${encodeURIComponent(record.artist || '')}&title=${encodeURIComponent(record.title || '')}`);
+        if (res.ok) await this.saveContext(record, { listen: { deezer: (await res.json()).url || null } });
+      } catch {
+        // No server functions here, or offline: try again next time
+      }
+    }
+    if (this.isCurrent(record, token)) this.renderListen(record);
   }
 
   async loadDetails(record, token) {
@@ -309,7 +324,7 @@ export class GatefoldController {
   // Each section renders on its own: if one fails on an odd record, the rest of the page still appears
   renderAll(record) {
     const steps = [
-      'renderFront', 'renderSpecs', 'renderTracklist', 'renderCredits', 'renderStory', 'renderVideos',
+      'renderFront', 'renderSpecs', 'renderTracklist', 'renderCredits', 'renderStory', 'renderVideos', 'renderListen',
       'renderCopy', 'renderBand', 'renderAttribution', 'renderFlip', 'renderConnections', 'renderNav',
     ];
     for (const step of steps) {
@@ -463,6 +478,20 @@ export class GatefoldController {
       parts.push(`<p class="gf-source">From <a href="${this.escapeHTML(ctx.wikiUrl)}" target="_blank" rel="noopener">Wikipedia</a>, under CC BY-SA.</p>`);
     }
     this.wikiEl.innerHTML =  /*html*/ parts.join('');
+  }
+
+  // Places to hear the album: only links known to land on it (never a search page)
+  renderListen(record) {
+    if (!this.listenSection || !this.listenLinksEl) return;
+    const links = [
+      record.itunesUrl && { name: 'Apple Music', url: record.itunesUrl },
+      record.context?.listen?.deezer && { name: 'Deezer', url: record.context.listen.deezer },
+    ].filter(Boolean);
+    this.listenSection.hidden = links.length === 0;
+    if (links.length === 0) return;
+
+    const item = (l) => `<li><a href="${this.escapeHTML(l.url)}" target="_blank" rel="noopener"><span class="gf-link-name">${l.name}</span></a></li>`;
+    this.listenLinksEl.innerHTML =  /*html*/ `<div class="gf-links-row is-bare"><ul>${links.map(item).join('')}</ul></div>`;
   }
 
   // Videos open on YouTube: many music videos forbid embedding, and a player that silently fails is worse than a link
@@ -651,11 +680,6 @@ export class GatefoldController {
     this.jacketWrap?.classList.add('is-flippable');
     this.updateFlipLabel();
     this.syncDiscFront();
-
-    if (this.listenEl) {
-      this.listenEl.hidden = !record.itunesUrl;
-      if (record.itunesUrl) this.listenEl.href = record.itunesUrl;
-    }
   }
 
   updateFlipLabel() {

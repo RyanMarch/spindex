@@ -2204,29 +2204,6 @@ body.sleeve-open .app-header > * {
   }
 }
 
-.gf-listen {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.66rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--text-main);
-  text-decoration: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.28);
-  padding-bottom: 2px;
-  transition: border-color 0.15s ease;
-}
-
-.gf-listen[hidden] {
-  display: none;
-}
-
-.gf-listen:hover {
-  border-color: var(--color-accent);
-}
-
 /* Watch: link cards. Nothing loads from YouTube except the thumbnail. */
 .gf-videos {
   display: grid;
@@ -2391,7 +2368,6 @@ body.sleeve-open .app-header > * {
 }
 
 .gf-video:focus-visible,
-.gf-listen:focus-visible,
 .gf-rail button:focus-visible,
 .gf-tabs button:focus-visible,
 .gf-inline-link:focus-visible {
@@ -2503,6 +2479,10 @@ body.sleeve-open .app-header > * {
   grid-template-columns: 112px minmax(0, 1fr);
   align-items: baseline;
   gap: 1rem;
+}
+
+.gf-links-row.is-bare {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .gf-links-label {

@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="description" content="Tactile digital vinyl record crate and jukebox companion for hosting">
   <title>Crate | Vinyl Record Companion</title>
-  <link rel="stylesheet" href="/css/style.css?v=47">
+  <link rel="stylesheet" href="/css/style.css?v=49">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%23121214%22 stroke=%22%23e4e4e7%22 stroke-width=%224%22/><circle cx=%2250%22 cy=%2250%22 r=%2220%22 fill=%22%23e11d48%22/><circle cx=%2250%22 cy=%2250%22 r=%224%22 fill=%22%23fff%22/></svg>">
@@ -179,7 +179,6 @@
               </svg>
               <span id="gf-flip-label">Flip to back cover</span>
             </button>
-            <a class="gf-listen" id="gf-listen" target="_blank" rel="noopener" hidden>Listen on Apple Music <span aria-hidden="true">↗</span></a>
             <nav class="gf-rail" id="gf-rail" aria-label="Sections"></nav>
           </div>
 
@@ -215,6 +214,11 @@
             <section class="gf-section" id="gf-watch-section" data-nav="Watch" hidden>
               <h3 class="gatefold-section-label">Watch</h3>
               <div class="gf-videos" id="gf-videos"></div>
+            </section>
+
+            <section class="gf-section" id="gf-listen-section" hidden>
+              <h3 class="gatefold-section-label">Listen</h3>
+              <div class="gf-links" id="gf-listen-links"></div>
             </section>
 
             <section class="gf-section" id="gf-copy-section" data-nav="Your copy" hidden>
@@ -321,7 +325,7 @@
     </div>
   </aside>
 
-  <script type="module" src="/js/app.js?v=41"></script>
+  <script type="module" src="/js/app.js?v=43"></script>
 </body>
 
 </html>
