@@ -404,49 +404,104 @@ export class CrateController {
       }
     });
 
-    // Touch swipe gestures
-    let touchStartY = 0;
-    let touchStartTime = 0;
+    this.bindTouch();
+    this.bindWheel();
+  }
 
-    this.container.addEventListener('touchstart', (e) => {
-      const touch = e.touches[0];
-      touchStartY = touch.clientY;
-      touchStartTime = Date.now();
+  // Moves the stack to a whole album, keeping whatever speed it already has so the spring carries on smoothly
+  goTo(index, velocity = 0) {
+    const clamped = Math.max(0, Math.min(this.records.length - 1, index));
+    this.vel = velocity;
+    if (clamped === this.currentIndex) {
+      this.kick();
+      return;
+    }
+    this.currentIndex = clamped;
+    this.updatePositions();
+  }
+
+  // Touch: the stack follows the finger, and on release the fling's speed decides how many albums it glides past
+  bindTouch() {
+    const area = this.container.closest?.('.station-crate-col') || this.container;
+    const ROW = 46; // pixels of finger travel per album
+    const MAX_FLING = 24; // albums a single fling can skip
+    let start = null;
+    let samples = [];
+    let swallowClick = false;
+
+    area.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1 || !this.records.length) return;
+      cancelAnimationFrame(this.raf);
+      this.raf = null;
+      start = { y: e.touches[0].clientY, pos: this.pos, moved: false };
+      samples = [{ y: start.y, t: e.timeStamp }];
     }, { passive: true });
 
-    this.container.addEventListener('touchend', (e) => {
-      const touch = e.changedTouches[0];
-      const deltaY = touch.clientY - touchStartY;
-      const elapsedTime = Date.now() - touchStartTime;
+    area.addEventListener('touchmove', (e) => {
+      if (!start) return;
+      const y = e.touches[0].clientY;
+      if (!start.moved && Math.abs(y - start.y) < 6) return;
+      start.moved = true;
+      this.pos = Math.max(0, Math.min(this.records.length - 1, start.pos - (y - start.y) / ROW));
+      samples.push({ y, t: e.timeStamp });
+      if (samples.length > 6) samples.shift();
+      if (this.counter) this.counter.textContent = `${Math.round(this.pos) + 1} / ${this.records.length}`;
+      this.render();
+    }, { passive: true });
 
-      if (elapsedTime > 600) return;
+    const finish = (e) => {
+      if (!start) return;
+      const moved = start.moved;
+      start = null;
+      if (!moved) return; // a plain tap is left to the click handler
+      swallowClick = true;
+      setTimeout(() => { swallowClick = false; }, 350);
+      const last = samples[samples.length - 1];
+      const first = samples.find((s) => last.t - s.t <= 120) || samples[0];
+      const dt = Math.max(last.t - first.t, 1);
+      const rowsPerSecond = -((last.y - first.y) / dt) * 1000 / ROW; // finger up means forward
+      const stale = (e.timeStamp - last.t) > 120;
+      const fling = stale ? 0 : Math.max(-MAX_FLING, Math.min(MAX_FLING, rowsPerSecond * 0.22));
+      this.goTo(Math.round(this.pos + fling), stale ? 0 : rowsPerSecond * 0.5);
+    };
+    area.addEventListener('touchend', finish, { passive: true });
+    area.addEventListener('touchcancel', finish, { passive: true });
 
-      if (Math.abs(deltaY) > 28) {
-        if (deltaY < 0) {
-          this.next();
-        } else {
-          this.prev();
-        }
+    // A drag that ends over a sleeve must not also count as a tap on it
+    area.addEventListener('click', (e) => {
+      if (swallowClick) {
+        e.stopPropagation();
+        e.preventDefault();
       }
-    }, { passive: true });
+    }, true);
+  }
 
-    // Vertical mouse wheel with momentum debounce
-    let wheelDebounce = false;
+  // Wheel and trackpad: scroll distance adds up, so a hard flick travels several albums and a nudge moves one
+  bindWheel() {
+    const ROW = 70; // pixels of scrolling per album
+    let goal = 0;
+    let idleTimer = null;
+
     window.addEventListener('wheel', (e) => {
       if (document.querySelector('.gatefold-workspace.open') || document.querySelector('.settings-drawer.open')) return;
-      if (wheelDebounce) return;
+      if (!this.records.length) return;
 
-      const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      let delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      if (e.deltaMode === 1) delta *= 16; // lines
+      if (delta === 0) return;
 
-      if (Math.abs(delta) > 14) {
-        wheelDebounce = true;
-        if (delta > 0) {
-          this.next();
-        } else {
-          this.prev();
-        }
-        setTimeout(() => { wheelDebounce = false; }, 160);
+      if (Math.round(goal) !== this.currentIndex || goal < 0) goal = this.currentIndex; // moved by keys or clicks since
+      // A notched mouse wheel sends big whole steps: one album per click. A trackpad sends many small ones.
+      const rows = Math.abs(delta) >= 100 ? Math.sign(delta) : (delta * (1 + Math.min(Math.abs(delta) / 100, 0.5))) / ROW;
+      goal = Math.max(0, Math.min(this.records.length - 1, goal + rows));
+
+      const target = Math.round(goal);
+      if (target !== this.currentIndex) {
+        this.currentIndex = target;
+        this.updatePositions();
       }
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => { goal = this.currentIndex; }, 200);
     }, { passive: true });
   }
 

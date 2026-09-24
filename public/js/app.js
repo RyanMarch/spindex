@@ -862,28 +862,42 @@ class App {
     }, 400);
   }
 
+  // The glow is a wash of colour, so each cover is painted onto a 40px canvas and stretched: the smooth scaling does the
+  // blurring for free. It also waits for the stack to stop moving, so nothing competes with the animation.
   setGlow(url) {
     if (this.glowLayers.length < 2 || url === this.glowUrl) return;
     this.glowUrl = url;
+    clearTimeout(this.glowTimer);
 
     if (!url) {
       this.glowLayers.forEach((l) => { l.style.opacity = '0'; });
       return;
     }
 
-    const next = (this.glowActive + 1) % 2;
-    const incoming = this.glowLayers[next];
-    const outgoing = this.glowLayers[this.glowActive];
-    const show = () => {
-      if (this.glowUrl !== url) return;
-      incoming.style.opacity = '0.32';
-      if (outgoing) outgoing.style.opacity = '0';
-      this.glowActive = next;
-    };
-
-    incoming.onload = show;
-    incoming.src = url;
-    if (incoming.complete && incoming.naturalWidth > 0) show();
+    this.glowTimer = setTimeout(() => {
+      const next = (this.glowActive + 1) % 2;
+      const incoming = this.glowLayers[next];
+      const outgoing = this.glowLayers[this.glowActive];
+      const img = new Image();
+      img.onload = () => {
+        if (this.glowUrl !== url) return;
+        const ctx = incoming.getContext('2d');
+        if (!ctx) return;
+        try {
+          if ('filter' in ctx) ctx.filter = 'saturate(2) brightness(1.1)';
+          // Down to 10px and back up, so the wash is soft rather than a mosaic
+          const small = document.createElement('canvas');
+          small.width = small.height = 10;
+          small.getContext('2d').drawImage(img, 0, 0, 10, 10);
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(small, 0, 0, incoming.width, incoming.height);
+        } catch { return; }
+        incoming.style.opacity = '0.32';
+        if (outgoing) outgoing.style.opacity = '0';
+        this.glowActive = next;
+      };
+      img.src = url;
+    }, 220);
   }
 
   updateActiveMetadata(record) {
