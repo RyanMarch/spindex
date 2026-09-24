@@ -10,7 +10,7 @@ import {
   fetchReleaseDetails,
   fetchArtistLinks,
 } from './sync.js';
-import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover } from './wiki.js';
+import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover, findAlbumPage, isVariousArtists } from './wiki.js';
 import { isDiscogsConnected } from './discogs.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
 
@@ -252,7 +252,8 @@ export class GatefoldController {
   }
 
   async loadStory(record, token) {
-    if (!record.context) {
+    // matchVersion 2: the article must actually be this album. Older matches (often a wrong page) are looked up again.
+    if (!record.context || record.context.matchVersion !== 2) {
       await this.fetchLinerNotes(record);
     } else if (!record.context.releaseChecked && (!record.releaseDate || record.year === record.pressingYear)) {
       await this.resolveStructuredReleaseDate(record, record.context.wikiTitle || null);
@@ -270,6 +271,11 @@ export class GatefoldController {
 
   async loadBand(record, token) {
     // Version 2 = title-search lookup with Wikidata links; anything cached before that is refreshed once
+    if (isVariousArtists(record.artist)) {
+      if (record.context?.artistBioChecked !== 2) await this.saveContext(record, { artistBio: null, artistBioChecked: 2, artistLinks: null });
+      if (this.isCurrent(record, token)) this.renderBand(record);
+      return;
+    }
     if (record.context?.artistBioChecked !== 2) {
       const bio = await fetchArtistBio(record.artist);
       // undefined means Wikipedia was unreachable: leave it unchecked so the next open tries again
@@ -287,7 +293,7 @@ export class GatefoldController {
 
   async loadBackCover(record, token) {
     if (record.context?.backCover === undefined) {
-      const url = await fetchBackCover(record.artist, record.title);
+      const url = isVariousArtists(record.artist) ? null : await fetchBackCover(record.artist, record.title);
       await this.saveContext(record, { backCover: url || null });
     }
     if (this.isCurrent(record, token)) this.renderFlip(record);
@@ -536,6 +542,11 @@ export class GatefoldController {
   // The artist: bio, a freely licensed portrait, and links that say where they lead
   renderBand(record) {
     if (!this.bandSection || !this.bandEl) return;
+    // "Various" isn't a band: nothing to say about them, and no page to link to
+    if (isVariousArtists(record.artist)) {
+      this.bandSection.hidden = true;
+      return;
+    }
     const bio = record.context?.artistBio;
     const safe = (u) => (/^https?:\/\//i.test(u || '') ? u : '');
     const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
@@ -670,8 +681,8 @@ export class GatefoldController {
 
       let tier = 0;
       let reason = '';
-      const sameArtist = other.artist === record.artist ||
-        (other.details?.artists || []).some((a) => myArtistIds.has(a.id));
+      const sameArtist = !isVariousArtists(record.artist) && (other.artist === record.artist ||
+        (other.details?.artists || []).some((a) => myArtistIds.has(a.id)));
 
       if (sameArtist) {
         tier = 1;
@@ -789,35 +800,18 @@ export class GatefoldController {
   // ------------------------------------------------------------------------
 
   async fetchLinerNotes(record) {
+    // What we learned elsewhere (artist bio, back cover...) survives; only the album-article fields are redone
+    const WIKI_FIELDS = ['wikiExtract', 'wikiDescription', 'wikiUrl', 'wikiImage', 'wikiTitle', 'sections', 'infobox', 'sectionsFetched', 'releaseChecked'];
+    const kept = Object.fromEntries(Object.entries(record.context || {}).filter(([k]) => !WIKI_FIELDS.includes(k)));
+
     try {
-      // First try searching Wikipedia to find the exact article title
-      let titleToFetch = null;
-      const queries = [
-        `${record.artist || ''} ${record.title || ''} album`.trim(),
-        `${record.artist || ''} ${record.title || ''}`.trim(),
-        record.title || '',
-        record.artist || '',
-      ].filter(Boolean);
-
-      for (const query of queries) {
-        try {
-          const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=1&utf8=&format=json&origin=*`;
-          const sRes = await fetch(searchUrl);
-          if (sRes.ok) {
-            const sData = await sRes.json();
-            const topHit = sData?.query?.search?.[0]?.title;
-            if (topHit) {
-              titleToFetch = topHit;
-              break;
-            }
-          }
-        } catch {
-          // Continue to next query candidate
-        }
-      }
-
-      if (!titleToFetch) {
-        titleToFetch = `${record.artist || ''} ${record.title || ''}`.trim();
+      const titleToFetch = await findAlbumPage(record.artist, record.title);
+      if (titleToFetch === undefined) return;
+      if (titleToFetch === null) {
+        const context = { ...kept, matchVersion: 2, releaseChecked: true };
+        await updateRecord(record.id, { context });
+        record.context = context;
+        return;
       }
 
       const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(titleToFetch)}`);
@@ -830,6 +824,8 @@ export class GatefoldController {
         wikiUrl: data.content_urls?.desktop?.page || '',
         wikiImage: data.originalimage?.source || data.thumbnail?.source || null,
         wikiTitle: titleToFetch,
+        ...kept,
+        matchVersion: 2,
       };
 
       await updateRecord(record.id, { context });

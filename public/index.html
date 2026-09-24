@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="description" content="Tactile digital vinyl record crate and jukebox companion for hosting">
   <title>Crate | Vinyl Record Companion</title>
-  <link rel="stylesheet" href="/css/style.css?v=42">
+  <link rel="stylesheet" href="/css/style.css?v=44">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%23121214%22 stroke=%22%23e4e4e7%22 stroke-width=%224%22/><circle cx=%2250%22 cy=%2250%22 r=%2220%22 fill=%22%23e11d48%22/><circle cx=%2250%22 cy=%2250%22 r=%224%22 fill=%22%23fff%22/></svg>">
@@ -56,6 +56,16 @@
           </svg>
         </button>
 
+
+        <form class="crate-search" id="crate-search" role="search" autocomplete="off">
+          <button type="button" id="search-toggle-btn" class="icon-btn" aria-label="Search the crate" title="Search (/)">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round">
+              <circle cx="11" cy="11" r="7"></circle>
+              <line x1="16.5" y1="16.5" x2="21" y2="21"></line>
+            </svg>
+          </button>
+          <input id="search-input" class="search-input" type="search" placeholder="Title or artist" aria-label="Search by album title or artist" enterkeyhint="search" autocapitalize="off" spellcheck="false" />
+        </form>
 
         <button id="settings-toggle-btn" class="icon-btn" aria-label="Open settings" title="Sync & Collection Settings">
           <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2">
@@ -311,7 +321,7 @@
     </div>
   </aside>
 
-  <script type="module" src="/js/app.js?v=36"></script>
+  <script type="module" src="/js/app.js?v=38"></script>
 </body>
 
 </html>

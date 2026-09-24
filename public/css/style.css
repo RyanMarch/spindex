@@ -2634,7 +2634,11 @@ body.sleeve-open .app-header > * {
 }
 
 .gf-band.has-photo {
-  grid-template-columns: 200px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 200px;
+}
+
+.gf-band.has-photo .gf-band-photo {
+  order: 2;
 }
 
 .gf-band-photo img {
@@ -2659,7 +2663,6 @@ body.sleeve-open .app-header > * {
 }
 
 .gf-band-bio {
-  max-width: 60ch;
   font-family: var(--font-serif);
   font-size: 1.02rem;
   line-height: 1.7;
@@ -2758,6 +2761,10 @@ body.sleeve-open .app-header > * {
 
   .gf-band.has-photo {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gf-band.has-photo .gf-band-photo {
+    order: 0;
   }
 }
 
@@ -2943,4 +2950,63 @@ a.btn {
 /* A page that loads straight into an album appears at once: no fade that could stall and leave only the blur showing */
 .gatefold-workspace.instant {
   transition: none;
+}
+
+/* Search: an icon that opens into a field. "/" focuses it. */
+.crate-search {
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+
+.search-input {
+  width: 0;
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.85rem;
+  outline: none;
+  opacity: 0;
+  transition: width 0.25s ease, opacity 0.2s ease, padding 0.25s ease, border-color 0.2s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+
+body.search-open .search-input {
+  width: 11rem;
+  padding: 0.3rem 0.4rem;
+  opacity: 1;
+  border-bottom-color: var(--border-subtle);
+}
+
+body.search-open .search-input:focus {
+  border-bottom-color: var(--text-main);
+}
+
+@media (max-width: 960px) {
+  body.search-open .browse-toggle-btn,
+  body.search-open #settings-toggle-btn {
+    display: none;
+  }
+
+  body.search-open .header-actions,
+  body.search-open .crate-search {
+    flex: 1 1 auto;
+  }
+
+  body.search-open .search-input {
+    width: 100%;
+    font-size: 1rem; /* 16px: keeps iOS from zooming the page on focus */
+  }
 }

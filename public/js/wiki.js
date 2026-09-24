@@ -130,6 +130,32 @@ async function findArtistPage(artist) {
   return hit ? hit.title : null;
 }
 
+// "Various" / "Various Artists" is Discogs' placeholder for compilations, not a band
+export const isVariousArtists = (artist) => /^various(\s+artists)?$/i.test(String(artist || '').trim());
+
+const ALBUM_LIKE = /\b(album|ep|soundtrack|compilation|mixtape|lp|record|score|single)\b/i;
+
+// The Wikipedia article for an album, null when there isn't one, or undefined when Wikipedia couldn't be reached. Every hit must look like a record (by its short description), carry
+// the album's title, and name the artist, so a title like "Bodies" or a homemade record can't land on some other page.
+export async function findAlbumPage(artist, title) {
+  const wanted = normalizeName(String(title || '').replace(/\([^)]*\)/g, ''));
+  if (!wanted) return null;
+  const who = isVariousArtists(artist) ? '' : normalizeName(artist);
+
+  for (const q of [`${title} ${artist} album`, `${title} album`, String(title)]) {
+    const search = await getJSON(`https://en.wikipedia.org/w/rest.php/v1/search/title?q=${encodeURIComponent(q)}&limit=8`);
+    if (!search) return undefined; // couldn't reach Wikipedia: don't remember that as "no article"
+    const hit = (search.pages || []).find((page) => {
+      const pageTitle = normalizeName(String(page.title).replace(/\([^)]*\)/g, ''));
+      const description = page.description || '';
+      if (pageTitle !== wanted || !ALBUM_LIKE.test(description)) return false;
+      return !who || normalizeName(`${description} ${page.title}`).includes(who);
+    });
+    if (hit) return hit.title;
+  }
+  return null;
+}
+
 export async function fetchArtistBio(artist) {
   const title = await findArtistPage(artist);
   if (title === undefined) return undefined;

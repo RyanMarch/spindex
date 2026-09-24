@@ -67,6 +67,10 @@ class App {
     this.stackContainer = document.getElementById('crate-stack');
     this.counterEl = document.getElementById('crate-counter');
     this.sortSelect = document.getElementById('sort-select');
+    this.searchForm = document.getElementById('crate-search');
+    this.searchInput = document.getElementById('search-input');
+    this.searchToggleBtn = document.getElementById('search-toggle-btn');
+    this.searchQuery = '';
     this.prevBtn = document.getElementById('prev-btn');
     this.nextBtn = document.getElementById('next-btn');
 
@@ -154,6 +158,8 @@ class App {
         this.applyFiltersAndSort();
       });
     }
+
+    this.initSearch();
 
     // Genre tabs are rendered from the collection, so listen on the bar
     if (this.vibeBar) {
@@ -486,6 +492,63 @@ class App {
     if (this.browseToggleBtn) this.browseToggleBtn.setAttribute('aria-expanded', String(open));
   }
 
+  // Search: filters the crate by album title or artist. "/" focuses it, Escape clears it.
+  initSearch() {
+    if (!this.searchInput) return;
+    const setOpen = (open) => {
+      document.body.classList.toggle('search-open', open);
+      if (open) this.searchInput.focus();
+    };
+    const clear = () => {
+      this.searchInput.value = '';
+      this.searchQuery = '';
+      this.applyFiltersAndSort();
+    };
+
+    this.searchToggleBtn.addEventListener('click', () => {
+      if (document.body.classList.contains('search-open') && !this.searchQuery) setOpen(false);
+      else setOpen(true);
+    });
+
+    this.searchInput.addEventListener('input', () => {
+      this.searchQuery = this.searchInput.value;
+      this.applyFiltersAndSort();
+    });
+
+    // Enter hands the keyboard back to the crate, so the arrow keys move through the matches
+    this.searchForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.searchInput.blur();
+    });
+
+    this.searchInput.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      if (this.searchInput.value) clear();
+      else { this.searchInput.blur(); setOpen(false); }
+    });
+
+    this.searchInput.addEventListener('blur', () => {
+      if (!this.searchQuery) document.body.classList.remove('search-open');
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+      if (document.querySelector('.gatefold-workspace.open') || document.querySelector('.settings-drawer.open')) return;
+      e.preventDefault();
+      this.setBrowseOpen(false);
+      setOpen(true);
+      this.searchInput.select();
+    });
+  }
+
+  matchesSearch(record) {
+    const fold = (text) => String(text || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const haystack = fold(`${record.title} ${record.artist}`);
+    return fold(this.searchQuery).split(/\s+/).filter(Boolean).every((word) => haystack.includes(word));
+  }
+
   applyFiltersAndSort() {
     let list = [...this.allRecords];
 
@@ -494,6 +557,8 @@ class App {
       const target = this.activeVibe.toLowerCase();
       list = list.filter((r) => getGenreTags(r).some((t) => t.toLowerCase() === target));
     }
+
+    if (this.searchQuery.trim()) list = list.filter((r) => this.matchesSearch(r));
 
     const getSortYear = (r) => {
       if (r.year && r.masterYear && r.year !== r.masterYear) {

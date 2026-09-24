@@ -1,4 +1,4 @@
-const CACHE_NAME = 'crate-cache-v31';
+const CACHE_NAME = 'crate-cache-v34';
 const ASSETS = [
   '/',
   '/index.html',
