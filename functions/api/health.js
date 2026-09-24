@@ -1,10 +1,6 @@
+// GET /api/health - a cheap way to confirm the functions are deployed and running
+import { json } from '../_lib/http.js';
+
 export async function onRequestGet() {
-  return new Response(JSON.stringify({
-    status: "ok",
-    timestamp: new Date().toISOString()
-  }), {
-    headers: {
-      "Content-Type": "application/json"
-    }
-  });
+  return json({ status: 'ok', timestamp: new Date().toISOString() });
 }

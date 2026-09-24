@@ -15,7 +15,6 @@ export const MOCK_RECORDS = [
     styles: ['Modal Jazz', 'Hard Bop'],
     format: ['Vinyl', 'LP', 'Album', 'Reissue'],
     dateAdded: '2025-01-10T14:20:00Z',
-    notes: 'The definitive evening record. Essential listen when dinner is almost ready.',
     tracklist: [
       { position: 'A1', title: 'So What', duration: '9:22' },
       { position: 'A2', title: 'Freddie Freeloader', duration: '9:46' },
@@ -42,7 +41,6 @@ export const MOCK_RECORDS = [
     styles: ['Pop Rock', 'Soft Rock'],
     format: ['Vinyl', 'LP', 'Album'],
     dateAdded: '2025-01-12T19:40:00Z',
-    notes: 'First press copy from flea market. Pristine bassline on The Chain.',
     tracklist: [
       { position: 'A1', title: 'Second Hand News', duration: '2:53' },
       { position: 'A2', title: 'Dreams', duration: '4:14' },
@@ -75,7 +73,6 @@ export const MOCK_RECORDS = [
     styles: ['French House', 'Disco', 'Synth-pop'],
     format: ['Vinyl', '2xLP', 'Album'],
     dateAdded: '2025-01-20T22:15:00Z',
-    notes: 'Floor filler for late in the gathering. One More Time never fails.',
     tracklist: [
       { position: 'A1', title: 'One More Time', duration: '5:20' },
       { position: 'A2', title: 'Aerodynamic', duration: '3:27' },
@@ -111,7 +108,6 @@ export const MOCK_RECORDS = [
     styles: ['Art Pop', 'Synth-pop'],
     format: ['Vinyl', 'LP', 'Album'],
     dateAdded: '2025-02-01T11:05:00Z',
-    notes: 'Side B (The Ninth Wave suite) is best experienced with all the lights dimmed.',
     tracklist: [
       { position: 'A1', title: 'Running Up That Hill (A Deal with God)', duration: '5:00' },
       { position: 'A2', title: 'Hounds of Love', duration: '3:02' },
@@ -141,7 +137,6 @@ export const MOCK_RECORDS = [
     styles: ['Punk', 'Post-Punk', 'Ska'],
     format: ['Vinyl', '2xLP', 'Album'],
     dateAdded: '2025-02-14T17:30:00Z',
-    notes: 'Pennie Smith shot on the sleeve is unmatched. Upbeat rock energy.',
     tracklist: [
       { position: 'A1', title: 'London Calling', duration: '3:20' },
       { position: 'A2', title: 'Brand New Cadillac', duration: '2:08' },
@@ -171,7 +166,6 @@ export const MOCK_RECORDS = [
     styles: ['Smooth Soul', 'Sophisti-Pop'],
     format: ['Vinyl', 'LP', 'Album'],
     dateAdded: '2025-02-18T18:15:00Z',
-    notes: 'Warm audio pressing. Timeless accompaniment for cocktails.',
     tracklist: [
       { position: 'A1', title: 'Smooth Operator', duration: '4:59' },
       { position: 'A2', title: 'Your Love Is King', duration: '3:41' },
@@ -200,7 +194,6 @@ export const MOCK_RECORDS = [
     styles: ['Soul', 'R&B', 'Funk'],
     format: ['Vinyl', '2xLP', 'Album'],
     dateAdded: '2025-02-22T13:10:00Z',
-    notes: 'Sir Duke on Side A is an automatic crowd pleaser.',
     tracklist: [
       { position: 'A1', title: 'Love’s in Need of Love Today', duration: '7:06' },
       { position: 'A2', title: 'Have a Talk with God', duration: '2:42' },
@@ -239,7 +232,6 @@ export const MOCK_RECORDS = [
     styles: ['Art Rock', 'Alternative Rock'],
     format: ['Vinyl', 'LP', 'Album'],
     dateAdded: '2025-03-01T20:00:00Z',
-    notes: '180g pressing. Reckoner sounds breathtaking through open-back headphones or stereo pairs.',
     tracklist: [
       { position: 'A1', title: '15 Step', duration: '3:57' },
       { position: 'A2', title: 'Bodysnatchers', duration: '4:02' },
@@ -271,7 +263,6 @@ export const MOCK_RECORDS = [
     styles: ['Trip Hop', 'Downtempo'],
     format: ['Vinyl', 'LP', 'Album'],
     dateAdded: '2025-03-05T16:45:00Z',
-    notes: 'Bristol sound landmark. Moody Rhodes piano and heavy turntable crackle.',
     tracklist: [
       { position: 'A1', title: 'Mysterons', duration: '5:02' },
       { position: 'A2', title: 'Sour Times', duration: '4:11' },
@@ -303,7 +294,6 @@ export const MOCK_RECORDS = [
     styles: ['Glam Rock', 'Classic Rock'],
     format: ['Vinyl', 'LP', 'Album'],
     dateAdded: '2025-03-08T12:30:00Z',
-    notes: 'Moonage Daydream guitar solo is legendary. Starman is an instant singalong.',
     tracklist: [
       { position: 'A1', title: 'Five Years', duration: '4:42' },
       { position: 'A2', title: 'Soul Love', duration: '3:34' },
@@ -336,7 +326,6 @@ export const MOCK_RECORDS = [
     styles: ['Ambient Techno', 'IDM', 'Downtempo'],
     format: ['Vinyl', '2xLP', 'Album'],
     dateAdded: '2025-03-12T15:15:00Z',
-    notes: 'Sublime ambient textures recorded on cassette. Pulsewidth is pure magic.',
     tracklist: [
       { position: 'A1', title: 'Xtal', duration: '4:54' },
       { position: 'A2', title: 'Tha', duration: '9:06' },
@@ -365,7 +354,6 @@ export const MOCK_RECORDS = [
     styles: ['New Wave', 'Post-Punk', 'Afrobeat'],
     format: ['Vinyl', 'LP', 'Album'],
     dateAdded: '2025-03-15T21:10:00Z',
-    notes: 'Brian Eno production work. Once in a Lifetime and Born Under Punches.',
     tracklist: [
       { position: 'A1', title: 'Born Under Punches (The Heat Goes On)', duration: '5:49' },
       { position: 'A2', title: 'Crosseyed and Painless', duration: '4:48' },

@@ -3,8 +3,9 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="description" content="Tactile digital vinyl record crate and jukebox companion for hosting">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="Browse your Discogs record collection like flipping through a crate">
   <meta name="theme-color" content="#0c0c10">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -38,7 +39,7 @@
           <span class="browse-sheet-title">Browse the crate</span>
         </div>
         <div class="vibe-filter-bar" role="group" aria-label="Filed under">
-          <button class="vibe-pill active" data-vibe="all">All Records</button>
+          <button class="vibe-pill active" data-vibe="all">All</button>
         </div>
         <div class="sort-selector-wrap">
           <label for="sort-select" class="sort-label">Sorted by</label>
@@ -55,7 +56,7 @@
       <!-- Header Controls -->
       <div class="header-actions">
         <button id="browse-toggle-btn" class="browse-toggle-btn" aria-expanded="false" aria-controls="browse-nav">
-          <span id="browse-toggle-label">All Records</span>
+          <span id="browse-toggle-label">All</span>
           <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2.5">
             <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
@@ -63,13 +64,17 @@
 
 
         <form class="crate-search" id="crate-search" role="search" autocomplete="off">
-          <button type="button" id="search-toggle-btn" class="icon-btn" aria-label="Search the crate" title="Search (/)">
-            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round">
+          <button type="button" id="search-toggle-btn" class="icon-btn" aria-label="Search the crate"
+            title="Search (/)">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
+              stroke-linecap="round">
               <circle cx="11" cy="11" r="7"></circle>
               <line x1="16.5" y1="16.5" x2="21" y2="21"></line>
             </svg>
           </button>
-          <input id="search-input" class="search-input" type="search" placeholder="Title or artist" aria-label="Search by album title or artist" enterkeyhint="search" autocapitalize="off" spellcheck="false" />
+          <input id="search-input" class="search-input" type="search" placeholder="Title or artist"
+            aria-label="Search by album title or artist" enterkeyhint="search" autocapitalize="off"
+            spellcheck="false" />
         </form>
 
         <button id="settings-toggle-btn" class="icon-btn" aria-label="Open settings" title="Sync & Collection Settings">
@@ -150,7 +155,7 @@
               </svg>
             </button>
           </div>
-        <nav class="gf-tabs" id="gf-tabs" aria-label="Sections"></nav>
+          <nav class="gf-tabs" id="gf-tabs" aria-label="Sections"></nav>
         </div>
 
         <div class="gatefold-stage" id="gatefold-stage">
@@ -237,7 +242,8 @@
             </section>
 
             <footer class="gf-attribution" id="gf-attribution" hidden>
-              <a id="gf-attribution-link" href="https://www.discogs.com" target="_blank" rel="noopener">Data provided by Discogs</a>
+              <a id="gf-attribution-link" href="https://www.discogs.com" target="_blank" rel="noopener">Data provided by
+                Discogs</a>
               <p>This application uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs.
                 ‘Discogs’ is a trademark of Zink Media, LLC.</p>
             </footer>
@@ -273,7 +279,11 @@
           <h3>Your Crate</h3>
         </div>
         <button id="settings-close-btn" class="modal-close" aria-label="Close settings">
-          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
+            stroke-linecap="round" aria-hidden="true">
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+          </svg>
         </button>
       </div>
 
@@ -308,31 +318,34 @@
             <input type="password" id="discogs-token" placeholder="Discogs User Token" autocomplete="off" />
             <small class="settings-hint">Generate one at discogs.com/settings/developers</small>
 
-            <button id="sync-token-btn" class="btn btn-secondary" style="margin-top: 1.25rem;">Save token &amp; sync</button>
+            <button id="sync-token-btn" class="btn btn-secondary" style="margin-top: 1.25rem;">Save token &amp;
+              sync</button>
           </details>
 
           <div id="sync-status" class="sync-status"></div>
 
-          <p class="discogs-notice">This application uses Discogs’ API but is not affiliated with, sponsored or endorsed by
+          <p class="discogs-notice">This application uses Discogs’ API but is not affiliated with, sponsored or endorsed
+            by
             Discogs. ‘Discogs’ is a trademark of Zink Media, LLC.</p>
         </div>
 
         <div class="settings-group">
           <h4>Demo Collection</h4>
-          <p class="settings-desc">Reload the built-in 12-album vinyl listening flight with high-resolution artwork.</p>
+          <p class="settings-desc">Reload the built-in 12-album sample crate.</p>
           <button id="reset-demo-btn" class="btn btn-secondary">Reload Demo Crate</button>
         </div>
 
         <div class="settings-group">
           <h4>Storage</h4>
-          <p class="settings-desc">All records and liner notes are preserved offline in your browser's IndexedDB.</p>
+          <p class="settings-desc">Your crate is saved in this browser, so it works offline and never leaves your
+            device.</p>
           <button id="clear-cache-btn" class="btn btn-danger">Clear Local Cache</button>
         </div>
       </div>
     </div>
   </aside>
 
-  <script type="module" src="/js/app.js?v=45"></script>
+  <script type="module" src="/js/app.js?v=47"></script>
 </body>
 
 </html>

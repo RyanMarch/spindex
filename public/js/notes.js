@@ -10,6 +10,7 @@ import {
   fetchReleaseDetails,
   fetchArtistLinks,
 } from './sync.js';
+import { usefulValue } from './values.js';
 import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover, findAlbumPage, isVariousArtists } from './wiki.js';
 import { isDiscogsConnected } from './discogs.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
@@ -395,17 +396,11 @@ export class GatefoldController {
     return record.context?.infobox?.producer || '';
   }
 
-  // Discogs and Wikipedia fill gaps with placeholders ("None", "Not On Label"); treat those as no value
-  usefulValue(value) {
-    const text = String(value ?? '').trim();
-    return /^(none|not on label.*|unknown|n\/?a|-+|\?+)$/i.test(text) ? '' : text;
-  }
-
   renderSpecs(record) {
     const label = record.details?.labels?.[0];
     const rows = [
       ['Released', this.formatDate(record)],
-      ['Label', this.usefulValue(label?.name) || this.usefulValue(record.context?.infobox?.label)],
+      ['Label', usefulValue(label?.name) || usefulValue(record.context?.infobox?.label)],
       ['Length', calculateTotalDuration(record.tracklist) || ''],
       ['Produced by', this.producers(record)],
     ].filter(([, value]) => value);

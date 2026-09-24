@@ -1,57 +1,66 @@
 # Crate
 
-A tactile, local-first vinyl record companion and guest browsing web application.
+Browse your Discogs record collection like flipping through a crate. Local-first: your collection is saved in your
+browser, and works offline once loaded.
 
 ## Overview
 
-- **Stack**: Vanilla HTML5, CSS custom properties, and modern ES6 JavaScript modules. No client-side frameworks or bundlers.
-- **Storage Layer**: Native browser IndexedDB (`vinyl_vault_db`, `records` store). Operates offline-first with zero hosted database dependencies.
-- **Integrations**:
-  - Discogs API: Syncs your collection and release metadata. Sign in with Discogs (OAuth) through Cloudflare Pages Functions, or use a personal access token for local use. See **Discogs sign-in** below.
-  - iTunes Search API: Asynchronously enriches album cover art up to 1200x1200 resolution without authentication tokens.
-  - Wikimedia REST API: On-demand liner notes and band history loaded into the slide-over drawer.
-- **Hosting Target**: Cloudflare Pages static hosting.
+- **Stack**: Vanilla HTML, CSS custom properties and ES modules. No client-side framework or bundler.
+- **Storage**: Browser IndexedDB (`vinyl_vault_db`, `records` store). No hosted database.
+- **Server**: Cloudflare Pages Functions (`functions/`) for Discogs sign-in, a read-only Discogs proxy, and a Deezer lookup.
+- **Data sources**:
+  - Discogs: your collection, release details, tracklists, credits, pressings and condition grades.
+  - iTunes Search: high-resolution cover art, primary genre and Apple Music links.
+  - Wikipedia, Wikidata and Wikimedia Commons: liner notes, artist bios, links and portraits.
+  - MusicBrainz and the Cover Art Archive: back covers.
+  - Deezer: album links.
 
 ## Features
 
-- **3D Flipping Crate**: Tactile digging perspective using pure CSS 3D transforms (`perspective: 1200px`, `transform-style: preserve-3d`).
-- **Input Gestures**: Supports left/right and up/down arrow keys, touch swipe gestures on mobile and tablets, and debounced mouse wheel scrolling.
-- **Divider Tabs & Staff Picks**: Record store category tabs poking above sleeve clusters, plus host pick notes.
-- **Liner Notes Drawer**: Slide-over drawer with Side A/Side B track splits and Wikipedia context extracts.
-- **Offline & Demo Mode**: Built-in 12-album curated collection loads automatically if the database is unpopulated.
+- **3D crate**: a flip-through stack built from CSS 3D transforms. Arrow keys, letter jumps, mouse wheel and touch swipes.
+- **Browse**: genre tabs built from your collection (a record can carry several genre tags), sorting, and search by
+  title or artist (press `/`).
+- **Album page** (`/album/<artist>/<title>/`): tracklist, credits, liner notes, your copy (condition and added date),
+  the artist, videos, listening links, a flippable sleeve with the pressing's real disc colour, and links to other
+  records in your crate. Sections with nothing to show are hidden.
+- **Phones and tablets**: touch-sized controls, safe-area support, and layouts for portrait and landscape.
+- **Demo crate**: a built-in 12-album collection loads when the database is empty.
 
-## Local Development
+## Local development
 
-Start the local server (via Wrangler):
 ```bash
-npm run dev
-```
-
-Run test suite:
-```bash
+npm install
+npm run dev      # http://localhost:8780
 npm test
 ```
 
-## Directory Structure
+`npm test` runs syntax checks for every source file, the parsers and matching logic, the demo data, and an end-to-end
+test of the Discogs sign-in against a mock Discogs server.
+
+## Directory structure
 
 ```
-├── public/
-│   ├── index.html            Shell layout, 3D crate stage, footer, and drawers
-│   ├── manifest.webmanifest   PWA manifest
-│   ├── sw.js                 Offline Service Worker
-│   ├── css/
-│   │   └── style.css         3D perspective math, sleeve sheen, and modal layout
+├── public/                    Static site
+│   ├── index.html             Page shell, crate stage, album page, settings
+│   ├── manifest.webmanifest, sw.js, 404.html, _redirects, assets/
+│   ├── css/style.css
 │   └── js/
-│       ├── app.js            Application orchestration and event binding
-│       ├── db.js             Local IndexedDB persistence engine
-│       ├── sync.js           Discogs API fetcher and iTunes artwork enrichment
-│       ├── crate.js          CrateController for 3D physics and gestures
-│       ├── notes.js          RecordDetailModal for sleeve notes and Wikipedia integration
-│       └── mock-data.js      Curated default collection for testing
-├── tests/
-│   └── basic-test.js         Syntax, schema integrity, and rule validation
-├── package.json
-└── wrangler.toml
+│       ├── app.js             Orchestration: browse, search, routing, settings
+│       ├── crate.js           The 3D crate: physics, gestures, keyboard
+│       ├── notes.js           The album page
+│       ├── sync.js            Discogs sync, iTunes enrichment, credits and genre logic
+│       ├── discogs.js         How this browser talks to Discogs (sign-in or token)
+│       ├── wiki.js            Wikipedia, Wikidata, MusicBrainz and cover-art lookups
+│       ├── vinyl.js           Pressing description to disc colour and finish
+│       ├── values.js          Placeholder-value helper
+│       ├── db.js              IndexedDB
+│       └── mock-data.js       Demo crate
+├── functions/                 Cloudflare Pages Functions
+│   ├── _lib/                  Shared: OAuth, sessions, proxy allowlist, Deezer matching
+│   └── api/                   discogs/*, listen/deezer, health
+├── tests/                     syntax, basic, vinyl, logic and OAuth tests
+├── package.json, wrangler.toml
+└── .dev.vars.example          Local secrets template
 ```
 
 ## Discogs sign-in
@@ -78,4 +87,16 @@ token instead") still works as a local fallback.
 - One crate per browser: connecting a different Discogs account asks before replacing the local crate.
 - The proxy is read-only and allowlisted (your own collection, releases, masters, artists). Nothing is cached server-side.
 - `npm test` includes an end-to-end OAuth test against a mock Discogs server (`tests/oauth-test.mjs`).
+
+## Deploying (Cloudflare Pages)
+
+1. Create a Pages project from this repo: no build command, output directory `public`.
+2. Register a production Discogs application with callback `https://<your-domain>/api/discogs/callback`.
+3. Set `DISCOGS_CONSUMER_KEY`, `DISCOGS_CONSUMER_SECRET` and `SESSION_SECRET` (a new `openssl rand -base64 32`) as
+   encrypted Production variables.
+4. Add the custom domain (sign-in needs HTTPS).
+5. Check `/api/health`, then connect Discogs from a phone, sync, and open an album from a direct `/album/...` URL.
+
+Pages keeps every deploy, so a bad release can be rolled back from the dashboard. The service worker is network-first;
+bump `CACHE_NAME` in `sw.js` if a change must reach returning visitors immediately.
 

@@ -426,12 +426,12 @@ class App {
     const tabs = top
       .map((tag) => `<button class="vibe-pill" data-vibe="${this.escapeHTML(tag)}">${this.escapeHTML(tagLabel(tag))}</button>`)
       .join('');
-    this.vibeBar.innerHTML =  /*html*/ `<button class="vibe-pill" data-vibe="all">All Records</button>${tabs}`;
+    this.vibeBar.innerHTML =  /*html*/ `<button class="vibe-pill" data-vibe="all">All</button>${tabs}`;
     this.syncVibeTabs();
   }
 
   syncVibeTabs() {
-    let label = 'All Records';
+    let label = 'All';
     this.vibeBar?.querySelectorAll('.vibe-pill').forEach((pill) => {
       const active = pill.dataset.vibe === this.activeVibe;
       pill.classList.toggle('active', active);

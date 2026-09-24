@@ -1,4 +1,4 @@
-const CACHE_NAME = 'crate-cache-v57';
+const CACHE_NAME = 'crate-cache-v59';
 const ASSETS = [
   '/',
   '/index.html',
@@ -11,6 +11,7 @@ const ASSETS = [
   '/js/wiki.js',
   '/js/discogs.js',
   '/js/vinyl.js',
+  '/js/values.js',
   '/js/mock-data.js',
   '/manifest.webmanifest'
 ];

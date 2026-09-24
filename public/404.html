@@ -1,16 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Page Not Found - vinylCrate</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <meta name="theme-color" content="#0c0c10">
+  <title>Not found | Crate</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+    }
+
+    body {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 2rem;
+      background: #0c0c10;
+      color: #f4f4f6;
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      text-align: center;
+    }
+
+    .code {
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #f43f5e;
+    }
+
+    h1 {
+      margin: 0.6rem 0 0.5rem;
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    p {
+      color: #a0a0aa;
+    }
+
+    a {
+      display: inline-block;
+      margin-top: 1.75rem;
+      padding: 0.75rem 1.4rem;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 9999px;
+      color: inherit;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      text-decoration: none;
+    }
+
+    a:hover {
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+  </style>
 </head>
+
 <body>
-  <div class="app-container" style="text-align: center; margin-top: 5rem;">
-    <h2>404</h2>
-    <p>The requested page was not found.</p>
-    <p><a href="/" class="btn btn-primary">Return Home</a></p>
-  </div>
+  <main>
+    <div class="code">404</div>
+    <h1>We can't find that record.</h1>
+    <p>Maybe we should listen to something else?</p>
+    <a href="/">Back to the crate</a>
+  </main>
 </body>
+
 </html>
