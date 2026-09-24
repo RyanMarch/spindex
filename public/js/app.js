@@ -2,6 +2,7 @@
 import { openDB, getAllRecords, clearRecords, deleteRecords, getRecord, upsertRecords } from './db.js';
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
+import { BrowseView, normalizeView } from './browse.js';
 import { GatefoldController } from './notes.js';
 import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichDeezerArtInBackground, verifyArtInBackground, recheckArtInBackground, needsArtRecheck, enrichMasterTitleArtInBackground, needsMasterTitleArt, needsDeezerArt, needsItunesArt, needsArtVerification, loadRecordDetails, needsDetails, refreshCollectionFields } from './sync.js';
 import { sortYear } from './years.js';
@@ -24,6 +25,37 @@ const slugify = (text) => String(text || '')
   .replace(/^-+|-+$/g, '') || 'untitled';
 
 const MAX_GENRE_TABS = 6;
+
+// The ambient glow: the cover is squeezed onto a small canvas and blurred there once (by averaging shifted copies of it),
+// then stretched across the screen. Nothing is filtered while the stack moves. No pixels are read, so covers from other
+// sites (which can't be read) work too.
+const GLOW_OFFSETS = [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3], [2, 2], [-2, 2], [2, -2], [-2, -2]];
+function paintGlow(canvas, img) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return false;
+  try {
+    const size = canvas.width;
+    const scratch = document.createElement('canvas');
+    scratch.width = scratch.height = size;
+    const sctx = scratch.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.globalAlpha = 1;
+    ctx.drawImage(img, 0, 0, size, size);
+    for (let pass = 0; pass < 4; pass++) {
+      sctx.globalAlpha = 1;
+      sctx.clearRect(0, 0, size, size);
+      sctx.drawImage(canvas, 0, 0);
+      GLOW_OFFSETS.forEach(([dx, dy], i) => {
+        ctx.globalAlpha = 1 / (i + 1);
+        ctx.drawImage(scratch, dx, dy);
+      });
+    }
+    ctx.globalAlpha = 1;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // Service worker registration: bypass on localhost to prevent stale asset caching during dev
 const isLocalhost = Boolean(
@@ -87,6 +119,11 @@ class App {
 
 
 
+    this.browseRoot = document.getElementById('browse-view');
+    this.viewButtons = [...document.querySelectorAll('.view-btn')];
+    this.view = 'stack';
+    try { this.view = normalizeView(localStorage.getItem('spindex_view')); } catch { /* storage can be unavailable */ }
+
     this.glowLayers = [
       document.getElementById('ambient-glow-img'),
       document.getElementById('ambient-glow-img-b'),
@@ -97,6 +134,7 @@ class App {
     // Active metadata column elements
     this.stationMetadataCol = document.getElementById('station-metadata-col');
     this.metaTitle = document.getElementById('meta-title');
+    this.metaLine = document.getElementById('meta-line');
     this.metaArtist = document.getElementById('meta-artist');
     this.metaYear = document.getElementById('meta-year');
     this.metaDuration = document.getElementById('meta-duration');
@@ -139,6 +177,35 @@ class App {
       (currIndex, total, currentRecord) => this.onCrateIndexChange(currIndex, total, currentRecord)
     );
 
+    this.browse = new BrowseView({
+      root: this.browseRoot,
+      rail: document.getElementById('browse-rail'),
+      describe: (record) => {
+        const year = sortYear(record);
+        const tags = getRecordTags(record);
+        return {
+          year: year ? String(year) : '',
+          genre: tags[0] ? tagLabel(tags[0]) : '',
+          length: calculateTotalDuration(record.tracklist) || '',
+        };
+      },
+      onOpen: (index) => {
+        this.crate.setIndex(index);
+        this.openRecordDetail(this.filteredRecords[index]);
+      },
+      onJump: (index) => {
+        if (this.view !== 'stack') return false;
+        this.crate.setIndex(index);
+        this.armJumpClose();
+        return true;
+      },
+      onSort: (sort) => {
+        if (this.sortSelect) this.sortSelect.value = sort;
+        this.currentSort = sort;
+        this.applyFiltersAndSort();
+      },
+    });
+
     this.gatefold = new GatefoldController({
       onStep: (direction) => this.stepInspector(direction),
       onJump: (id) => this.jumpToRecord(id),
@@ -165,6 +232,22 @@ class App {
         this.applyFiltersAndSort();
       });
     }
+
+    this.viewButtons.forEach((btn) => {
+      if (btn.dataset.view) btn.addEventListener('click', () => this.setView(btn.dataset.view));
+    });
+    // Phones: search and the letter jump live in the bottom bar, in reach of a thumb
+    document.getElementById('mobile-search-btn')?.addEventListener('click', () => this.searchToggleBtn?.click());
+    this.counterEl?.addEventListener('click', () => { if (window.matchMedia('(max-width: 640px)').matches) this.openJump(); });
+    document.addEventListener('pointerdown', (e) => {
+      if (document.body.classList.contains('jump-open') && !e.target.closest('#browse-rail, #crate-counter')) this.closeJump();
+    });
+    document.getElementById('settings-stats-btn')?.addEventListener('click', () => {
+      this.settingsDrawer?.classList.remove('open');
+      this.settingsDrawer?.setAttribute('aria-hidden', 'true');
+      this.openStats();
+    });
+    this.setView(this.view, { initial: true });
 
     this.initSearch();
     this.initFillStatus();
@@ -810,6 +893,73 @@ class App {
     const activeRecord = list[this.crate.currentIndex] || null;
     this.updateActiveMetadata(activeRecord);
     if (this.reorderPill) this.reorderPill.hidden = true;
+    this.browseDirty = true;
+    if (this.view !== 'stack') this.renderBrowse();
+  }
+
+  // Stack, grid or list. The choice is remembered; the record you were on stays in view across all three.
+  setView(view, { initial = false } = {}) {
+    this.view = normalizeView(view);
+    try { localStorage.setItem('spindex_view', this.view); } catch { /* fine */ }
+    document.body.dataset.view = this.view;
+    this.closeJump();
+    this.viewButtons.forEach((btn) => { if (btn.dataset.view) btn.setAttribute('aria-pressed', String(btn.dataset.view === this.view)); });
+    if (this.browseRoot) this.browseRoot.hidden = this.view === 'stack';
+    if (this.view === 'stack') {
+      if (!initial) this.crate.refreshLayout();
+      return;
+    }
+    if (!initial || this.filteredRecords.length) this.renderBrowse();
+  }
+
+  // What the jump rail is made of depends on the sort: letters for names, decades for years, nothing for the rest
+  railKey(record) {
+    const sort = this.currentSort;
+    if (sort === 'year') {
+      const year = sortYear(record);
+      return year ? `${Math.floor(year / 10) * 10}s` : '–';
+    }
+    if (sort === 'artist-last-year' || sort === 'artist' || sort === 'artist-first') {
+      const name = (sort === 'artist-first' ? record.artist : parseSortArtist(record.artist) || record.sortArtist || record.artist) || '';
+      const ch = name.trim().charAt(0).toUpperCase();
+      return /[A-Z]/.test(ch) ? ch : '#';
+    }
+    return null;
+  }
+
+  // Stack view on a phone: tapping the counter brings up the letter (or decade) strip to jump along the crate
+  openJump() {
+    if (this.view !== 'stack') return;
+    this.browse.buildRail(this.filteredRecords, (record) => this.railKey(record));
+    if (this.browse.groups.length < 2) return;
+    document.body.classList.add('jump-open');
+    this.browse.markRail(this.browse.groupFor(this.crate.currentIndex));
+    this.armJumpClose();
+  }
+
+  armJumpClose() {
+    clearTimeout(this.jumpTimer);
+    this.jumpTimer = setTimeout(() => this.closeJump(), 5000);
+  }
+
+  closeJump() {
+    clearTimeout(this.jumpTimer);
+    document.body.classList.remove('jump-open');
+  }
+
+  renderBrowse() {
+    if (!this.browseRoot || this.view === 'stack') return;
+    const modeChanged = this.browseRoot.dataset.mode !== this.view;
+    if (this.browseDirty || modeChanged) {
+      const scrollTop = this.browseRoot.scrollTop;
+      this.browse.render(this.filteredRecords, this.view, this.currentSort, this.crate.currentIndex, (record) => this.railKey(record));
+      this.browseRoot.scrollTop = modeChanged ? 0 : scrollTop;
+      this.browseDirty = false;
+      if (modeChanged) this.browse.scrollToActive();
+    } else {
+      this.browse.setActive(this.crate.currentIndex);
+      this.browse.scrollToActive();
+    }
   }
 
   // Background work (years, details, genres) saves new data all the time. It must never move records around under
@@ -819,6 +969,7 @@ class App {
     const byId = new Map(this.allRecords.map((r) => [r.id, r]));
     this.filteredRecords = this.filteredRecords.map((r) => byId.get(r.id) || r);
     this.crate.refreshRecords(this.filteredRecords);
+    if (this.view !== 'stack') this.browse.refresh(this.filteredRecords);
     this.buildRoutes();
     this.updateActiveMetadata(this.filteredRecords[this.crate.currentIndex] || null);
     this.checkPendingOrder();
@@ -832,6 +983,7 @@ class App {
   }
 
   onCrateIndexChange(currIndex, total, currentRecord) {
+    if (this.browse) this.browse.setActive(currIndex);
     const nextId = currentRecord?.id || null;
     if (nextId === this.lastMetaRecordId) {
       this.updateActiveMetadata(currentRecord);
@@ -862,8 +1014,7 @@ class App {
     }, 400);
   }
 
-  // The glow is a wash of colour, so each cover is painted onto a 40px canvas and stretched: the smooth scaling does the
-  // blurring for free. It also waits for the stack to stop moving, so nothing competes with the animation.
+  // The glow is a wash of colour, so each cover is blurred once on a small canvas (see paintGlow). It also waits for the stack to stop moving, so nothing competes with the animation.
   setGlow(url) {
     if (this.glowLayers.length < 2 || url === this.glowUrl) return;
     this.glowUrl = url;
@@ -881,18 +1032,8 @@ class App {
       const img = new Image();
       img.onload = () => {
         if (this.glowUrl !== url) return;
-        const ctx = incoming.getContext('2d');
-        if (!ctx) return;
-        try {
-          if ('filter' in ctx) ctx.filter = 'saturate(2) brightness(1.1)';
-          // Down to 10px and back up, so the wash is soft rather than a mosaic
-          const small = document.createElement('canvas');
-          small.width = small.height = 10;
-          small.getContext('2d').drawImage(img, 0, 0, 10, 10);
-          ctx.imageSmoothingQuality = 'high';
-          ctx.drawImage(small, 0, 0, incoming.width, incoming.height);
-        } catch { return; }
-        incoming.style.opacity = '0.32';
+        if (!paintGlow(incoming, img)) return;
+        incoming.style.opacity = '0.4';
         if (outgoing) outgoing.style.opacity = '0';
         this.glowActive = next;
       };
@@ -908,6 +1049,7 @@ class App {
 
     if (!record) {
       if (this.metaTitle) this.metaTitle.textContent = 'No records in crate';
+      if (this.metaLine) this.metaLine.textContent = '';
       if (this.metaArtist) this.metaArtist.textContent = '';
       if (this.metaYear) this.metaYear.textContent = '';
       if (this.metaDuration) this.metaDuration.textContent = '';
@@ -917,6 +1059,10 @@ class App {
     }
 
     if (this.metaTitle) this.metaTitle.textContent = record.title || 'Untitled';
+    if (this.metaLine) {
+      const firstTag = getRecordTags(record)[0];
+      this.metaLine.textContent = [sortYear(record) || '', firstTag ? tagLabel(firstTag) : ''].filter(Boolean).join(' · ');
+    }
     if (this.metaArtist) this.metaArtist.textContent = record.artist || 'Unknown Artist';
     const primaryYear = sortYear(record);
     if (this.metaYear) this.metaYear.textContent = primaryYear ? String(primaryYear) : '';

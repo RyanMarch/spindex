@@ -3,7 +3,7 @@ import { parseSortArtist } from './sync.js';
 
 // The stack shows covers at about 300 to 500 points wide, so 600px art is plenty; the album page keeps the 1200px version.
 // (Decoding 1200px art for every sleeve is what makes flipping through a big crate heavy on a phone.)
-function crateArtUrl(record) {
+export function crateArtUrl(record) {
   const url = record.artwork?.highRes || record.artwork?.thumbnail || '';
   return url.replace('1200x1200bb', '600x600bb').replace('/1000x1000-', '/500x500-');
 }
@@ -226,6 +226,8 @@ export class CrateController {
     // Each row below the active album takes about 42px, so only as many rows as fit the screen (plus a few) are drawn
     const screenHeight = typeof window !== 'undefined' ? window.innerHeight : 1000;
     this.visibleBelow = Math.min(45, Math.ceil(screenHeight / 40) + 3);
+    // On a phone the sliver of every album above only adds noise behind the controls
+    this.visibleAbove = typeof window !== 'undefined' && window.innerWidth <= 640 ? 5 : 12;
     this.gap = this.compactMq?.matches ? 64 : 0;
   }
 
@@ -385,6 +387,7 @@ export class CrateController {
     // Keyboard navigation: Up/Left = prev, Down/Right = next
     window.addEventListener('keydown', (e) => {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+      if (!this.inStack()) return;
       if (document.querySelector('.gatefold-workspace.open') || document.querySelector('.settings-drawer.open')) return;
 
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
@@ -406,6 +409,17 @@ export class CrateController {
 
     this.bindTouch();
     this.bindWheel();
+  }
+
+  inStack() {
+    const view = document.body.dataset.view;
+    return !view || view === 'stack';
+  }
+
+  // Sizes were measured while the stack was hidden, so coming back to it measures again
+  refreshLayout() {
+    this.measure();
+    this.render();
   }
 
   // Moves the stack to a whole album, keeping whatever speed it already has so the spring carries on smoothly
@@ -484,7 +498,7 @@ export class CrateController {
 
     window.addEventListener('wheel', (e) => {
       if (document.querySelector('.gatefold-workspace.open') || document.querySelector('.settings-drawer.open')) return;
-      if (!this.records.length) return;
+      if (!this.records.length || !this.inStack()) return;
 
       let delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
       if (e.deltaMode === 1) delta *= 16; // lines
