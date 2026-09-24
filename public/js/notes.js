@@ -9,9 +9,10 @@ import {
   creditKinds,
   loadRecordDetails,
   detailsAreStale,
+  needsDetails,
   fetchArtistLinks,
 } from './sync.js';
-import { usefulValue } from './values.js';
+import { usefulValue, isCustomRelease } from './values.js';
 import { externalFetch } from './external.js';
 import { artControl, artChoiceUpdates } from './artwork.js';
 import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover, findAlbumPage, isVariousArtists } from './wiki.js';
@@ -269,14 +270,17 @@ export class GatefoldController {
   enrich(record, token) {
     const run = (fn) => fn().catch(() => { });
 
-    // Release details and the Wikipedia context come first; the band and back cover build on them
+    // Release details and the Wikipedia context come first; the band and back cover build on them. A custom release (one
+    // only in someone's own Discogs catalogue) is known to nothing else, so its album is not looked up elsewhere: a search
+    // by its title could only find a different album.
     const details = run(() => this.loadDetails(record, token));
-    const first = Promise.all([details, run(() => this.loadStory(record, token))]);
+    const story = details.then(() => (isCustomRelease(record) ? null : run(() => this.loadStory(record, token))));
+    const first = Promise.all([details, story]);
     this.detailsSettled = details;
     first.then(() => Promise.all([
       run(() => this.loadBand(record, token)),
-      run(() => this.loadBackCover(record, token)),
-      run(() => this.loadListen(record, token)),
+      run(() => (isCustomRelease(record) ? Promise.resolve() : this.loadBackCover(record, token))),
+      run(() => (isCustomRelease(record) ? Promise.resolve() : this.loadListen(record, token))),
     ]));
     return first;
   }
@@ -296,7 +300,7 @@ export class GatefoldController {
 
   async loadDetails(record, token) {
     if (record.discogsId && isDiscogsConnected()) {
-      if (!record.details) {
+      if (needsDetails(record)) {
         const updates = await loadRecordDetails(record);
         if (updates) Object.assign(record, updates);
       } else if (detailsAreStale(record)) {
@@ -502,8 +506,9 @@ export class GatefoldController {
     if (!this.wikiEl) return;
     const ctx = record.context;
     // Nothing to show (still looking, or no article): the section stays out of the way
-    if (this.storySection) this.storySection.hidden = !ctx?.wikiExtract;
-    if (!ctx?.wikiExtract) return;
+    const show = Boolean(ctx?.wikiExtract) && !isCustomRelease(record);
+    if (this.storySection) this.storySection.hidden = !show;
+    if (!show) return;
 
     const paragraphs = (text) => text.split('\n\n').map((p) => `<p>${this.escapeHTML(p)}</p>`).join('');
     const parts = [`<div class="gf-lede">${ctx.wikiExtract}</div>`];
@@ -522,7 +527,7 @@ export class GatefoldController {
   // Places to hear the album: only links known to land on it (never a search page)
   renderListen(record) {
     if (!this.listenSection || !this.listenLinksEl) return;
-    const links = [
+    const links = isCustomRelease(record) ? [] : [
       record.itunesUrl && { name: 'Apple Music', url: record.itunesUrl },
       record.context?.listen?.deezer && { name: 'Deezer', url: record.context.listen.deezer },
     ].filter(Boolean);

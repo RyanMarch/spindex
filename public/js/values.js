@@ -7,3 +7,10 @@ export function usefulValue(value) {
   if (/^(none|not on label.*|unknown|n\/?a|-+|\?+)$/i.test(text)) return '';
   return /^[a-z][a-z_0-9]*\s*=/i.test(text) ? '' : text; // "prev_title = ..." is wiki markup that leaked, not a value
 }
+
+// A release that lives only in someone's own catalogue: Discogs never accepted it into the database (its status is "Draft" or
+// similar) and it has no master. Nothing outside Discogs can know about it, so lookups by its title can only find a wrong album.
+export function isCustomRelease(record) {
+  const status = record?.details?.status;
+  return Boolean(status) && status !== 'Accepted' && !record.masterId;
+}

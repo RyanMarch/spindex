@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spindex-cache-v29';
+const CACHE_NAME = 'spindex-cache-v30';
 const ASSETS = [
   '/',
   '/index.html',

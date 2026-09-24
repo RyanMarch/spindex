@@ -5,7 +5,7 @@ import {
   normalizeItunesGenre, getGenreTags, getRecordTags, tagLabel, calculateTotalDuration,
 } from '../public/js/sync.js';
 import { pickAlbumPage, isVariousArtists, pickBackCoverReleases, pickReleaseGroup, infoboxField } from '../public/js/wiki.js';
-import { usefulValue } from '../public/js/values.js';
+import { usefulValue, isCustomRelease } from '../public/js/values.js';
 import { pickDeezerAlbum, pickDeezerCover, searchTitle, normalize as deezerNormalize } from '../functions/_lib/deezer.js';
 
 // ---- credit roles ---------------------------------------------------------------------------------------------
@@ -221,7 +221,7 @@ import { sortYear, masterYearUpdates, itunesYearUpdates, isEditionTitle } from '
 }
 
 // ---- stale release details ---------------------------------------------------------------------------------------
-import { detailsAreStale, needsDeezerArt, needsItunesArt, buildCollectionRecord, scoreAlbumMatch, ART_SEARCH_VERSION, needsMasterTitleArt, titlesDiffer } from '../public/js/sync.js';
+import { detailsAreStale, needsDeezerArt, needsItunesArt, buildCollectionRecord, scoreAlbumMatch, ART_SEARCH_VERSION, needsMasterTitleArt, titlesDiffer, needsDetails } from '../public/js/sync.js';
 
 {
   const now = Date.parse('2026-09-24T00:00:00Z');
@@ -626,4 +626,34 @@ import { artControl, artChoiceUpdates } from '../public/js/artwork.js';
   assert.equal(titlesDiffer('TRON: Legacy (Vinyl Edition Motion Picture Soundtrack)', 'TRON: Legacy (Original Motion Picture Soundtrack)'), false, 'a different bracketed subtitle is already handled by the earlier searches');
   assert.equal(titlesDiffer('Abbey Road', 'abbey road'), false);
   assert.equal(titlesDiffer('Abbey Road', ''), false, 'no master title, nothing to try');
+}
+
+// ---- custom releases ---------------------------------------------------------------------------------------------
+{
+  // the wedding record's release, as Discogs describes it: a draft, no master, no label
+  const draft = parseReleaseDetails({ status: 'Draft', country: 'US', labels: [{ name: 'None', catno: '' }], formats: [{ name: 'Lathe Cut', qty: '1', descriptions: ['LP', 'Unofficial Release'] }] });
+  assert.equal(draft.status, 'Draft', 'the release status is kept');
+  assert.equal(parseReleaseDetails({ status: 'Accepted' }).status, 'Accepted');
+  assert.equal(parseReleaseDetails({}).status, '');
+
+  const wedding = { id: 'discogs_32124024', discogsId: 32124024, masterId: null, details: draft, artwork: { source: 'discogs' } };
+  assert.equal(isCustomRelease(wedding), true);
+  assert.equal(isCustomRelease({ ...wedding, details: { status: 'Accepted' } }), false, 'an accepted release is in the shared database');
+  assert.equal(isCustomRelease({ ...wedding, masterId: 291615 }), false, 'a release with a master is known to other services');
+  assert.equal(isCustomRelease({ ...wedding, details: undefined }), false, 'not known to be custom until its details arrive');
+  assert.equal(isCustomRelease({ ...wedding, details: { status: '' } }), false, 'details saved without a status say nothing');
+
+  // no cover searches for it, at any stage
+  const searched = { deezerSearchVersion: ART_SEARCH_VERSION, itunesSearchVersion: ART_SEARCH_VERSION };
+  assert.equal(needsDeezerArt(wedding), false);
+  assert.equal(needsItunesArt(wedding), false);
+  assert.equal(needsMasterTitleArt({ ...wedding, ...searched, masterId: null }), false);
+  assert.equal(needsDeezerArt({ ...wedding, details: undefined }), true, 'before its details are known it is treated like any other record');
+
+  // details saved before the status was kept are fetched again, but only for records that could be custom (no master)
+  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: null, details: { labels: [] } }), true);
+  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: 5, details: { labels: [] } }), false, 'a record with a master cannot be custom');
+  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: null, details: { status: 'Draft' } }), false);
+  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1 }), true, 'no details at all');
+  assert.equal(needsDetails({ id: 'discogs_mock_1', discogsId: 1 }), false, 'demo records have none to fetch');
 }

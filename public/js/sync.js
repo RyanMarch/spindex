@@ -4,6 +4,7 @@ import { discogsFetch } from './discogs.js';
 import { createLimiter } from './limiter.js';
 import { fingerprintFromUrl, sameArtwork, discogsImageUrl } from './imagematch.js';
 import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds } from './syncplan.js';
+import { isCustomRelease } from './values.js';
 import { masterYearUpdates, itunesYearUpdates, isEditionTitle } from './years.js';
 
 // Apple allows roughly 20 iTunes searches a minute per address, and when it says no, it leaves out the CORS header, so
@@ -1030,13 +1031,13 @@ const isDemo = (record) => String(record.id).startsWith('discogs_mock_');
 // The searches were made better at finding the same album under a differently bracketed title ("(Vinyl Edition ...)" against
 // "(Original ...)"). A record whose search came up empty under the old matching is searched once more.
 export const ART_SEARCH_VERSION = 2;
-export const needsDeezerArt = (record) => record.artwork?.source === 'discogs' && !record.artworkLocked && !isDemo(record) && record.deezerSearchVersion !== ART_SEARCH_VERSION;
-export const needsItunesArt = (record) => record.artwork?.source === 'discogs' && !record.artworkLocked && !isDemo(record) && record.itunesSearchVersion !== ART_SEARCH_VERSION;
+export const needsDeezerArt = (record) => record.artwork?.source === 'discogs' && !record.artworkLocked && !isDemo(record) && !isCustomRelease(record) && record.deezerSearchVersion !== ART_SEARCH_VERSION;
+export const needsItunesArt = (record) => record.artwork?.source === 'discogs' && !record.artworkLocked && !isDemo(record) && !isCustomRelease(record) && record.itunesSearchVersion !== ART_SEARCH_VERSION;
 // Both searches missed, the record has a Discogs master (custom entries have none), and the master is titled differently:
 // its title is what other services usually call the album, so it gets a third search. Once per record.
 const bareTitle = (text) => cleanAlphaNum(String(text || '').replace(/\s*[([][^)\]]*[)\]]\s*$/, ''));
 export const titlesDiffer = (a, b) => Boolean(bareTitle(a) && bareTitle(b)) && bareTitle(a) !== bareTitle(b);
-export const needsMasterTitleArt = (record) => record.artwork?.source === 'discogs' && !record.artworkLocked && !isDemo(record)
+export const needsMasterTitleArt = (record) => record.artwork?.source === 'discogs' && !record.artworkLocked && !isDemo(record) && !isCustomRelease(record)
   && Boolean(record.masterId) && !record.artCandidate
   && record.deezerSearchVersion === ART_SEARCH_VERSION && record.itunesSearchVersion === ART_SEARCH_VERSION
   && record.masterTitleSearchVersion !== ART_SEARCH_VERSION;
@@ -1045,8 +1046,8 @@ export const needsMasterTitleArt = (record) => record.artwork?.source === 'disco
 // that are judged again, once.
 export const ART_MATCH_VERSION = 2;
 export const needsArtRecheck = (record) => record.artwork?.source === 'discogs' && Boolean(record.artCandidate) && !record.artworkLocked
-  && !isDemo(record) && record.artMatchVersion !== ART_MATCH_VERSION;
-export const needsArtVerification = (record) => ['deezer', 'itunes'].includes(record.artwork?.source) && !record.artworkLocked && !record.artVerified && !isDemo(record)
+  && !isDemo(record) && !isCustomRelease(record) && record.artMatchVersion !== ART_MATCH_VERSION;
+export const needsArtVerification = (record) => ['deezer', 'itunes'].includes(record.artwork?.source) && !record.artworkLocked && !record.artVerified && !isDemo(record) && !isCustomRelease(record)
   && Boolean(record.discogsArtwork?.thumbnail || record.discogsArtwork?.highRes);
 
 // Small versions of a cover, enough to compare pictures
@@ -1230,6 +1231,7 @@ export function parseReleaseDetails(data) {
 
   return {
     labels,
+    status: data.status || '',
     country: data.country || '',
     released: data.released || '',
     formats: (data.formats || []).map((f) => ({
@@ -1396,10 +1398,16 @@ export function loadRecordDetails(record, priority = 'high') {
   return detailsInFlight.get(record.id);
 }
 
+// A record needs its release details when it has none. One without a master also needs them again if they were saved before
+// the release's status was kept: that status is what tells a custom release from an ordinary one, and only records without a
+// master can be custom.
+export const needsDetails = (record) => Boolean(record.discogsId) && !String(record.id).startsWith('discogs_mock_')
+  && (!record.details || (record.details.status === undefined && !record.masterId));
+
 // Backfill full release details, one gentle request at a time. Stops if throttled and resumes next load.
 export async function enrichDetailsInBackground(records, onEach) {
   for (const record of records) {
-    if (!record.discogsId || record.details) continue;
+    if (!needsDetails(record)) continue;
 
     const result = await fetchReleaseDetails(record, 'low');
     if (result.status === 'throttled') break;

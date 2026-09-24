@@ -3,7 +3,7 @@ import { openDB, getAllRecords, clearRecords, deleteRecords, getRecord, upsertRe
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
-import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichDeezerArtInBackground, verifyArtInBackground, recheckArtInBackground, needsArtRecheck, enrichMasterTitleArtInBackground, needsMasterTitleArt, needsDeezerArt, needsItunesArt, needsArtVerification, loadRecordDetails, refreshCollectionFields } from './sync.js';
+import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichDeezerArtInBackground, verifyArtInBackground, recheckArtInBackground, needsArtRecheck, enrichMasterTitleArtInBackground, needsMasterTitleArt, needsDeezerArt, needsItunesArt, needsArtVerification, loadRecordDetails, needsDetails, refreshCollectionFields } from './sync.js';
 import { sortYear } from './years.js';
 import { computeStats } from './stats.js';
 import { statsHTML, valueHTML } from './statsview.js';
@@ -505,12 +505,12 @@ class App {
   async fillMissingDetails() {
     if (!isDiscogsConnected()) return;
 
-    const needsDetails = this.allRecords.filter((r) => r.discogsId && !r.details && !String(r.id).startsWith('discogs_mock_'));
-    if (needsDetails.length === 0) return;
+    const missing = this.allRecords.filter(needsDetails);
+    if (missing.length === 0) return;
 
-    this.fill = { total: needsDetails.length, done: 0 };
+    this.fill = { total: missing.length, done: 0 };
     try {
-      await enrichDetailsInBackground(needsDetails, () => {
+      await enrichDetailsInBackground(missing, () => {
         this.fill.done++;
         this.renderFillStatus();
       });
