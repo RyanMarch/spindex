@@ -294,3 +294,45 @@ import { allowedUpstream } from '../functions/_lib/proxy.js';
   assert.deepEqual(removedRecordIds(local, ['discogs_1', 'discogs_1'], { total: 2, fetchedCount: 2 }), ['discogs_2', 'discogs_3'], 'two copies of one release count as two items');
   assert.deepEqual(removedRecordIds(local, ['discogs_1'], { total: null, fetchedCount: 1 }), [], 'no total reported, no deletion');
 }
+
+// ---- collection stats --------------------------------------------------------------------------------------------
+import { computeStats, durationSeconds, colorGroup } from '../public/js/stats.js';
+
+{
+  assert.equal(durationSeconds('3:02'), 182);
+  assert.equal(durationSeconds('1:02:03'), 3723);
+  assert.equal(durationSeconds(''), 0);
+  assert.equal(durationSeconds('n/a'), 0);
+
+  const rec = (id, artist, year, extra = {}) => ({ id, artist, title: id, year, genres: ['Rock'], dateAdded: '2021-03-05T00:00:00Z', tracklist: [{ duration: '10:00' }], ...extra });
+  const records = [
+    rec('a', 'AFI', 1999, { genres: ['Punk'], details: { formats: [{ name: 'Vinyl', descriptions: ['LP'], text: 'Black' }] } }),
+    rec('b', 'AFI', 2003, { genres: ['Punk'], dateAdded: '2021-03-20T00:00:00Z', details: { formats: [{ name: 'Vinyl', descriptions: ['LP'], text: 'Red Marbled' }] } }),
+    rec('c', 'Miles Davis', 1959, { genres: ['Jazz'], dateAdded: '2022-01-02T00:00:00Z' }),
+    rec('d', 'Various', 1985, { genres: [], dateAdded: 'not a date' }),
+    rec('discogs_mock_1', 'Demo', 1970),
+  ];
+  const s = computeStats(records);
+  assert.equal(s.total, 4, 'demo records are left out when real ones exist');
+  assert.equal(s.artistCount, 2, '"Various" is not an artist');
+  assert.deepEqual(s.topArtists[0], { name: 'AFI', count: 2 });
+  assert.deepEqual(s.decades.map((d) => [d.name, d.count]), [['1950s', 1], ['1980s', 1], ['1990s', 1], ['2000s', 1]]);
+  assert.equal(s.oldest.year, 1959);
+  assert.equal(s.newest.year, 2003);
+  assert.equal(s.genres.reduce((sum, g) => sum + g.count, 0), 4, 'genre bars add up to the collection');
+  assert.ok(s.genres.some((g) => g.name === 'Unfiled'), 'a record with no genre is unfiled, not dropped');
+  assert.deepEqual(s.colors.map((c) => [c.name, c.count]).sort(), [['Black', 1], ['Marbled', 1]]);
+  assert.deepEqual(s.colorCoverage, { known: 2, total: 4 }, 'colours are only known once details have loaded');
+  assert.equal(s.runtimeSeconds, 4 * 600);
+  assert.deepEqual(s.growth, [{ month: '2021-03', added: 2, total: 2 }, { month: '2022-01', added: 1, total: 3 }], 'growth is cumulative and skips bad dates');
+
+  // a demo-only crate still gets stats
+  assert.equal(computeStats([rec('discogs_mock_1', 'Demo', 1970)]).total, 1);
+  assert.equal(computeStats([]).total, 0);
+  assert.equal(colorGroup({ kind: 'translucent' }), 'Clear');
+
+  // the proxy allows the signed-in user's collection value, and only theirs
+  const session = { u: 'Ryan' };
+  assert.equal(allowedUpstream('users/Ryan/collection/value', new URLSearchParams(), session), '/users/Ryan/collection/value');
+  assert.equal(allowedUpstream('users/someoneelse/collection/value', new URLSearchParams(), session), null);
+}

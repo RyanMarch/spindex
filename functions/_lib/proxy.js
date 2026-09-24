@@ -19,7 +19,7 @@ export function allowedUpstream(path, searchParams, session) {
     /^releases\/\d+$/.test(clean) ||
     /^masters\/\d+$/.test(clean) ||
     /^artists\/\d+$/.test(clean) ||
-    (user && [`users/${user}/collection/fields`, `users/${user}/collection/folders/0/releases`].includes(clean.toLowerCase()));
+    (user && [`users/${user}/collection/fields`, `users/${user}/collection/value`, `users/${user}/collection/folders/0/releases`].includes(clean.toLowerCase()));
   if (!ok) return null;
 
   // Always the signed-in user's own name, exactly as Discogs reported it

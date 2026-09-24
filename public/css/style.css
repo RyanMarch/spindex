@@ -3041,3 +3041,27 @@ html {
 @keyframes gf-pop-in{from{opacity:0}to{opacity:1}}
 .link-btn{background:none;border:0;padding:0;font:inherit;color:var(--color-accent);text-decoration:underline;cursor:pointer}
 .link-btn:disabled{opacity:.5;cursor:default}
+
+/* Collection stats */
+.stats-drawer .drawer-card{width:min(94vw,560px)}
+.stats-content{padding-bottom:calc(1rem + var(--sab, 0px))}
+.stat-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.6rem;margin-bottom:1.6rem}
+.stat-tile{padding:.8rem .9rem;border:1px solid var(--border-subtle);border-radius:12px;background:rgba(255,255,255,.03)}
+.stat-tile strong{display:block;font-size:1.25rem;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+.stat-tile span{display:block;margin-top:.15rem;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.stat-section{margin-bottom:1.8rem}
+.stat-section h4{margin:0 0 .7rem;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted)}
+.stat-note{margin:.6rem 0 0;font-size:.75rem;color:var(--text-muted)}
+.stat-row{display:grid;grid-template-columns:minmax(72px,30%) 1fr auto;align-items:center;gap:.7rem;padding:.22rem 0;font-size:.85rem}
+.stat-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stat-bar{display:block;height:8px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden}
+.stat-bar i{display:block;height:100%;border-radius:4px;background:var(--color-accent)}
+.stat-count{min-width:2ch;text-align:right;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.stat-colors{display:flex;flex-wrap:wrap;gap:.5rem;margin:0;padding:0;list-style:none}
+.stat-colors li{display:flex;align-items:center;gap:.5rem;padding:.35rem .7rem .35rem .4rem;border:1px solid var(--border-subtle);border-radius:999px;font-size:.82rem}
+.stat-colors b{color:var(--text-muted);font-weight:600}
+.stat-disc{width:22px;height:22px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
+.stat-growth{display:block;width:100%;height:84px}
+.stat-growth-line{fill:none;stroke:var(--color-accent);stroke-width:2;vector-effect:non-scaling-stroke}
+.stat-growth-fill{fill:var(--color-accent);opacity:.14}
+.stat-axis{display:flex;justify-content:space-between;margin-top:.35rem;font-size:.7rem;color:var(--text-muted)}

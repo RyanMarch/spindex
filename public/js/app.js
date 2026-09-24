@@ -5,7 +5,9 @@ import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
 import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichFallbackArtInBackground, loadRecordDetails, refreshCollectionFields } from './sync.js';
 import { sortYear } from './years.js';
-import { initDiscogs, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
+import { computeStats } from './stats.js';
+import { statsHTML, valueHTML } from './statsview.js';
+import { initDiscogs, discogsFetch, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
 
 const DEFAULT_TITLE = 'Spindex | Your record collection';
 
@@ -199,6 +201,15 @@ class App {
       });
     }
 
+    // Collection stats
+    this.statsDrawer = document.getElementById('stats-drawer');
+    document.getElementById('stats-toggle-btn')?.addEventListener('click', () => this.openStats());
+    document.getElementById('stats-close-btn')?.addEventListener('click', () => this.closeStats());
+    this.statsDrawer?.addEventListener('click', (e) => { if (e.target === this.statsDrawer) this.closeStats(); });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.statsDrawer?.classList.contains('open')) this.closeStats();
+    });
+
     // Settings drawer toggling
     if (this.settingsToggleBtn) {
       this.settingsToggleBtn.addEventListener('click', () => {
@@ -295,6 +306,33 @@ class App {
         : `Using a personal access token for ${who}. Sync brings in your latest collection.`;
     }
     if (this.usernameInput && mode === 'token') this.usernameInput.value = username;
+  }
+
+  openStats() {
+    const content = document.getElementById('stats-content');
+    if (!content || !this.statsDrawer) return;
+    content.innerHTML =  /*html*/ statsHTML(computeStats(this.allRecords));
+    this.statsDrawer.classList.add('open');
+    this.statsDrawer.setAttribute('aria-hidden', 'false');
+    this.showCollectionValue();
+  }
+
+  closeStats() {
+    this.statsDrawer?.classList.remove('open');
+    this.statsDrawer?.setAttribute('aria-hidden', 'true');
+  }
+
+  // What Discogs says the collection is worth right now. Shown, never saved: prices go stale within hours.
+  async showCollectionValue() {
+    const slot = document.getElementById('stat-value');
+    if (!slot || !isDiscogsConnected() || !this.crateBelongsToCurrentUser()) return;
+    slot.innerHTML =  /*html*/ valueHTML('loading');
+    try {
+      const res = await discogsFetch(`/users/${encodeURIComponent(discogsState().username)}/collection/value`);
+      slot.innerHTML =  /*html*/ valueHTML(res.ok ? await res.json() : 'error');
+    } catch {
+      slot.innerHTML =  /*html*/ valueHTML('error');
+    }
   }
 
   openSettings() {
