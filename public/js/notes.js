@@ -18,9 +18,10 @@ import { artControl, artChoiceUpdates } from './artwork.js';
 import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover, findAlbumPage, isVariousArtists } from './wiki.js';
 import { isDiscogsConnected } from './discogs.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
+import { crateArtUrl } from './crate.js';
 
 // How long opening an album waits for its Discogs details before showing what it has
-const SETTLE_MS = 600;
+const SETTLE_MS = 160;
 
 const COMPACT = '(max-width: 960px) and (min-height: 521px)';
 
@@ -185,7 +186,9 @@ export class GatefoldController {
     clearTimeout(this.popInTimer);
     this.enrich(fresh, token);
     const first = this.detailsSettled;
-    const waiting = !fresh.details && fresh.discogsId && isDiscogsConnected();
+    const missingDetails = !fresh.details && fresh.discogsId && isDiscogsConnected();
+    const missingStory = !isCustomRelease(fresh) && (!fresh.context || fresh.context.matchVersion !== 2 || (fresh.context.wikiTitle && !fresh.context.sectionsFetched));
+    const waiting = Boolean(missingDetails || missingStory);
     const settle = () => Promise.race([first, new Promise((resolve) => setTimeout(resolve, SETTLE_MS))]);
     if (waiting && mode === 'replace') {
       await settle();
@@ -200,7 +203,25 @@ export class GatefoldController {
       if (this.renderToken !== token) return;
     }
 
+    // Everything fades in together: wait (briefly) for the cover to be ready rather than showing an empty square
+    if (mode !== 'none' && this.jacketArt) {
+      await Promise.race([this.jacketArt.decode().catch(() => { }), new Promise((resolve) => setTimeout(resolve, 120))]);
+      if (this.renderToken !== token) return;
+    }
+
+    // Let the browser lay out and paint the page while it is still invisible, so the fade doesn't stall on that work
+    if (mode !== 'none' && this.workspace && !this.workspace.classList.contains('open')) {
+      this.workspace.classList.add('warm');
+      await new Promise((resolve) => {
+        const done = () => resolve();
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(done));
+        setTimeout(done, 120);
+      });
+      if (this.renderToken !== token) { this.workspace.classList.remove('warm'); return; }
+    }
+
     if (this.workspace) {
+      this.workspace.classList.remove('warm');
       // Arriving straight from an address (refresh, shared link) shows the page at once; only opening from the crate fades in
       if (mode === 'none') {
         this.workspace.classList.add('instant');
@@ -276,7 +297,7 @@ export class GatefoldController {
     const details = run(() => this.loadDetails(record, token));
     const story = details.then(() => (isCustomRelease(record) ? null : run(() => this.loadStory(record, token))));
     const first = Promise.all([details, story]);
-    this.detailsSettled = details;
+    this.detailsSettled = first;
     first.then(() => Promise.all([
       run(() => this.loadBand(record, token)),
       run(() => (isCustomRelease(record) ? Promise.resolve() : this.loadBackCover(record, token))),
@@ -389,7 +410,18 @@ export class GatefoldController {
   renderFront(record) {
     const artUrl = record.artwork?.highRes || record.artwork?.thumbnail || '';
     if (this.jacketArt && this.jacketArt.getAttribute('src') !== artUrl) {
-      this.jacketArt.src = artUrl;
+      // The stack has already loaded a smaller copy of this cover, so start with that instead of an empty square,
+      // and swap in the large one when it has arrived (same picture, so nothing visibly changes)
+      const quick = crateArtUrl(record);
+      this.jacketTarget = artUrl;
+      if (quick && quick !== artUrl) {
+        this.jacketArt.src = quick;
+        const big = new Image();
+        big.onload = () => { if (this.jacketTarget === artUrl) this.jacketArt.src = artUrl; };
+        big.src = artUrl;
+      } else {
+        this.jacketArt.src = artUrl;
+      }
     }
     if (this.jacketArt) this.jacketArt.alt = `${record.artist} – ${record.title}`;
     if (this.labelArt && this.labelArt.getAttribute('src') !== artUrl) this.labelArt.src = artUrl;

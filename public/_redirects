@@ -1,2 +1,5 @@
 # Album pages are client-rendered: any /album/... address serves the app at "/", which opens that record
 /album/*  /  200
+
+# A shared, read-only crate: /s/<id> serves the app, which reads the snapshot for that id
+/s/*  /  200

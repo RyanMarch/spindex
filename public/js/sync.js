@@ -574,7 +574,7 @@ export async function syncDiscogsCollection(username, onProgress, { full = false
     fetchedRecords.push(...parsed);
     total = data.pagination?.items ?? total;
     if (onProgress) {
-      onProgress({ page, totalPages, count: fetchedRecords.length, quick: !readEverything });
+      onProgress({ page, totalPages, count: fetchedRecords.length, total, recent: parsed, quick: !readEverything });
     }
 
     if (!readEverything && canStopEarly({

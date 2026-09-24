@@ -142,3 +142,42 @@ export function vinylFill(v, art = '') {
       return flat(COLORS.black);
   }
 }
+
+// ---- the one-line summary under a title: "8 tracks · 2 discs · 45 rpm" -----------------------------------
+
+const isVinylFormat = (f) => /vinyl|^lp$|^12"|^10"|^7"/i.test(f?.name || '');
+
+// How many discs make up the pressing. Discogs states it outright (a "2 × Vinyl" format); without details it is
+// worked out from the track positions: "Disc 1", "Disc 2", or sides A to D, two sides to a disc.
+export function discCount(formats, sideKeys = []) {
+  const stated = (formats || []).filter(isVinylFormat).reduce((sum, f) => sum + (Number(f.qty) || 1), 0);
+  if (stated > 0) return stated;
+  const discs = sideKeys.filter((k) => /^Disc /.test(k)).length;
+  if (discs > 0) return discs;
+  const sides = sideKeys.filter((k) => k !== 'Other').length;
+  return sides > 0 ? Math.ceil(sides / 2) : 0;
+}
+
+// The speed to mention, only when it isn't the usual 33 ⅓
+export function unusualSpeed(formats) {
+  const text = (formats || []).filter(isVinylFormat).flatMap((f) => [f.text, ...(f.descriptions || [])]).filter(Boolean).join(' ');
+  const match = text.match(/\b(\d{2})\s*(?:⅓|1\/3)?\s*rpm\b/i);
+  const rpm = match ? Number(match[1]) : 0;
+  return rpm && rpm !== 33 ? `${rpm} rpm` : '';
+}
+
+// What sets this pressing apart, for the short line on a phone: "2 discs", "45 rpm"
+export function pressingNotes({ sideKeys = [], formats = [] } = {}) {
+  const notes = [];
+  const discs = discCount(formats, sideKeys);
+  if (discs >= 2) notes.push(`${discs} discs`);
+  const speed = unusualSpeed(formats);
+  if (speed) notes.push(speed);
+  return notes;
+}
+
+export function trackSummary({ trackCount = 0, sideKeys = [], formats = [] } = {}) {
+  const parts = [];
+  if (trackCount > 0) parts.push(`${trackCount} track${trackCount === 1 ? '' : 's'}`);
+  return [...parts, ...pressingNotes({ sideKeys, formats })].join(' · ');
+}

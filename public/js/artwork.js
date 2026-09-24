@@ -17,17 +17,17 @@ export function artControl(record) {
 
   if (CLEANER.includes(source) && original) {
     const why = record.artworkLocked ? 'you chose' : 'matched to the Discogs image';
-    return { action: 'discogs', note: `Showing cleaner artwork from ${sourceName(source)}, ${why}.`, label: 'Not the right cover? Use the Discogs image' };
+    return { action: 'discogs', note: `Showing artwork from ${sourceName(source)}, ${why}.`, label: 'Not the right cover? Use the Discogs image' };
   }
   if (source === 'discogs' && candidate) {
     return {
       action: 'candidate',
-      note: `Showing the Discogs image for your pressing. ${sourceName(candidate.source)} has a cover that looks different, so it wasn't swapped in.`,
+      note: `Showing the Discogs image for your pressing. ${sourceName(candidate.source)} has a cover that looks different.`,
       label: `Use the ${sourceName(candidate.source)} cover instead`,
     };
   }
   if (source === 'discogs' && record.artworkLocked) {
-    return { action: 'retry', note: 'Showing the Discogs image you chose.', label: 'Look for cleaner artwork again' };
+    return { action: 'retry', note: 'Showing the Discogs image you chose.', label: 'Look for other artwork.' };
   }
   return null;
 }

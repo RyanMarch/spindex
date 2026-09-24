@@ -122,6 +122,221 @@ assert.equal(tagLabel('Jazz'), 'Jazz');
 assert.equal(calculateTotalDuration([]), null);
 assert.equal(calculateTotalDuration([{ duration: '3:00' }, { duration: '2:00' }]), '5 min');
 
+
+// ---- grid and list views: jump rail, pressing tags, art sizes -------------------------------------------
+import { railLabel, groupRail, cardTags, smallArtUrl, normalizeView, VIEWS } from '../public/js/browse.js';
+
+{
+  assert.deepEqual(VIEWS, ['stack', 'grid', 'list']);
+  assert.equal(normalizeView('grid'), 'grid');
+  assert.equal(normalizeView('carousel'), 'stack', 'an unknown or missing view falls back to the stack');
+  assert.equal(normalizeView(null), 'stack');
+
+  // Letters follow the sort: "The Beatles" files under B for the artist sort, T for the first-name sort
+  const beatles = { artist: 'The Beatles', year: 1969 };
+  assert.equal(railLabel('artist-last-year', beatles), 'B');
+  assert.equal(railLabel('artist', beatles), 'B');
+  assert.equal(railLabel('artist-first', beatles), 'T');
+  assert.equal(railLabel('artist-last-year', { artist: '2Pac' }), '#', 'digits and symbols share one entry');
+  assert.equal(railLabel('artist-last-year', { artist: '  ' }), '#', 'an empty name does not crash');
+  assert.equal(railLabel('artist-last-year', { artist: 'Ólafur Arnalds' }), '#', 'non A-Z letters go under #');
+  assert.equal(railLabel('year', { masterYear: 1999 }), '1990s', 'years become decades');
+  assert.equal(railLabel('year', { year: 2025 }), '2020s');
+  assert.equal(railLabel('year', {}), '–', 'no year yet');
+  assert.equal(railLabel('genre', beatles), null, 'genre and recently-added sorts have no rail');
+  assert.equal(railLabel('added', beatles), null);
+
+  // A rail entry is where each run starts, in the order shown
+  const list = ['Aphex Twin', 'AFI', 'Bowie', 'Bush', 'Clash', 'The Clash', 'Zappa'].map((artist) => ({ artist }));
+  const groups = groupRail(list, (r) => railLabel('artist-first', r));
+  assert.deepEqual(groups, [{ label: 'A', index: 0 }, { label: 'B', index: 2 }, { label: 'C', index: 4 }, { label: 'T', index: 5 }, { label: 'Z', index: 6 }]);
+  assert.deepEqual(groupRail(list, () => null), [], 'no labels, no rail');
+  assert.deepEqual(groupRail(list, null), []);
+  assert.deepEqual(groupRail([], (r) => r.artist), []);
+}
+
+{
+  const rec = (formats) => ({ details: { formats } });
+  assert.deepEqual(cardTags({}), [], 'no details yet, no tags');
+  assert.deepEqual(cardTags(rec([])), []);
+  assert.deepEqual(cardTags(rec([{ name: 'Vinyl', qty: '1', descriptions: ['LP', 'Album'], text: '' }])), [], 'a plain black LP earns none');
+  assert.deepEqual(
+    cardTags(rec([{ name: 'Vinyl', qty: '2', descriptions: ['LP', 'Album', 'Limited Edition', 'Reissue', 'Remastered'], text: 'Red Marbled' }])),
+    ['2 × LP', 'Red Marbled', 'Limited'],
+    'double LP, colour, then the most telling words; never more than three',
+  );
+  assert.deepEqual(cardTags(rec([{ name: 'Vinyl', qty: '1', descriptions: ['7"', 'Single', '45 RPM'], text: '' }])), ['7"', 'Single']);
+  assert.deepEqual(cardTags(rec([{ name: 'Vinyl', qty: '1', descriptions: ['LP', 'Album', '180 Gram'], text: 'Black' }])), ['180g']);
+  assert.deepEqual(cardTags(rec([{ name: 'Vinyl', qty: '1', descriptions: ['LP', 'Picture Disc'], text: '' }])), ['Picture disc'], 'a picture disc says so once');
+  assert.deepEqual(
+    cardTags(rec([{ name: 'Vinyl', qty: '1', descriptions: ['LP'], text: 'Blue [Light Blue]' }])),
+    ['Blue'],
+    'a bracketed shade is dropped from the label',
+  );
+
+  // Big sleeves are for the stack; tiles and rows ask the source for less
+  const itunes = { artwork: { highRes: 'https://is1.mzstatic.com/x/1200x1200bb.jpg' } };
+  assert.equal(smallArtUrl(itunes, 300), 'https://is1.mzstatic.com/x/300x300bb.jpg');
+  const deezer = { artwork: { highRes: 'https://cdn-images.dzcdn.net/images/cover/abc/1000x1000-000000-80-0-0.jpg' } };
+  assert.ok(smallArtUrl(deezer, 250).includes('/250x250-'), 'Deezer sizes are switched too');
+  const discogs = { artwork: { highRes: 'https://i.discogs.com/abc/rs:fit/w:600/x.jpeg' } };
+  assert.equal(smallArtUrl(discogs, 300), discogs.artwork.highRes, 'other sources are left as they are');
+  assert.equal(smallArtUrl({}, 300), '', 'no art, no address');
+}
+
+
+// ---- the summary line: discs from two up, speed only when unusual ------------------------------------------
+import { discCount, unusualSpeed, trackSummary, pressingNotes } from '../public/js/vinyl.js';
+
+{
+  const lp = (extra = {}) => ({ name: 'Vinyl', qty: '1', descriptions: ['LP', 'Album'], text: '', ...extra });
+  assert.equal(trackSummary({ trackCount: 8, sideKeys: ['A', 'B'], formats: [lp()] }), '8 tracks', 'a single LP: no sides, no discs');
+  assert.equal(trackSummary({ trackCount: 1, sideKeys: ['A'], formats: [lp()] }), '1 track');
+  assert.equal(trackSummary({ trackCount: 17, sideKeys: ['A', 'B', 'C', 'D'], formats: [lp({ qty: '2' })] }), '17 tracks · 2 discs');
+  assert.equal(trackSummary({ trackCount: 12, sideKeys: ['A', 'B'], formats: [lp({ descriptions: ['LP', '45 RPM'] })] }), '12 tracks · 45 rpm');
+  assert.equal(trackSummary({ trackCount: 24, sideKeys: [], formats: [lp({ qty: '3', descriptions: ['LP', '33 ⅓ RPM'] })] }), '24 tracks · 3 discs', '33 ⅓ is never mentioned');
+  assert.equal(trackSummary({ trackCount: 4, formats: [{ name: 'Vinyl', qty: '1', descriptions: ['7"', '45 RPM'] }] }), '4 tracks · 45 rpm');
+  assert.equal(trackSummary({ trackCount: 2, formats: [{ name: 'Vinyl', qty: '1', descriptions: ['7"', '78 RPM'] }] }), '2 tracks · 78 rpm');
+  assert.equal(trackSummary({ trackCount: 0 }), '', 'nothing known, nothing shown');
+  assert.equal(trackSummary({ trackCount: 0, formats: [lp({ descriptions: ['12"', '45 RPM'] })] }), '45 rpm', 'the speed shows even before the tracks are known');
+
+  // Without details, the discs come from the track positions
+  assert.equal(discCount(undefined, ['A', 'B']), 1);
+  assert.equal(discCount(undefined, ['A', 'B', 'C', 'D']), 2);
+  assert.equal(discCount(undefined, ['A', 'B', 'C']), 2, 'an odd count rounds up');
+  assert.equal(discCount(undefined, ['Disc 1', 'Disc 2', 'Disc 3']), 3);
+  assert.equal(discCount(undefined, ['Other']), 0, 'unlabelled tracks say nothing');
+  assert.equal(discCount([lp({ qty: '2' }), { name: 'CD', qty: '1' }], []), 2, 'only the vinyl counts on a mixed release');
+  assert.equal(discCount([lp({ qty: '2' }), lp({ qty: '1' })], []), 3, 'separate vinyl entries add up');
+  assert.equal(unusualSpeed([lp({ descriptions: ['LP', '33 RPM'] })]), '');
+  assert.equal(unusualSpeed([lp({ text: '45rpm' })]), '45 rpm', 'a note typed without a space is understood');
+  assert.equal(unusualSpeed(undefined), '');
+  // The wording Discogs really uses for a 7" single
+  assert.equal(unusualSpeed([{ name: 'Vinyl', qty: '1', descriptions: ['7"', '45 RPM', 'Single', 'Stereo'] }]), '45 rpm');
+  assert.equal(unusualSpeed([{ name: 'Vinyl', qty: '1', descriptions: ['12"', '33 ⅓ RPM', 'Single'] }]), '');
+  assert.deepEqual(pressingNotes({ sideKeys: ['A', 'B', 'C', 'D'], formats: [{ name: 'Vinyl', qty: '2', descriptions: ['LP', '45 RPM'] }] }), ['2 discs', '45 rpm']);
+  assert.deepEqual(pressingNotes({ sideKeys: ['A', 'B'], formats: [] }), [], 'an ordinary record has nothing to add');
+  assert.equal(unusualSpeed([{ name: 'CD', descriptions: ['45 RPM'] }]), '', 'only vinyl has a speed');
+}
+
+
+// ---- the stats page: a sentence, an index, spines, and honest money --------------------------------------------
+import { statsHTML, valueHTML, spinesHTML, playTime } from '../public/js/statsview.js';
+
+{
+  assert.equal(playTime(50 * 60), '50 min');
+  assert.equal(playTime(3600), '1 hr');
+  assert.equal(playTime(5220), '1 hr 27 min');
+
+  const rec = (id, artist, year, extra = {}) => ({ id, artist, title: `Title ${id}`, year, genres: ['Rock'], dateAdded: '2021-03-05T00:00:00Z', tracklist: [{ duration: '40:00' }], artwork: { highRes: 'https://x/600x600bb.jpg' }, ...extra });
+  const html = statsHTML(computeStats([rec('a', 'AFI', 1999), rec('b', 'AFI', 2003), rec('c', 'Miles Davis', 1959)]));
+  assert.ok(html.includes('<b>3</b> records by <b>2</b> artists'), 'the numbers sit in a sentence');
+  assert.ok(html.includes('released between <b>1959</b> and <b>2003</b>'));
+  assert.ok(html.includes('Most collected') && html.includes('2 records'), 'the artist you own most of');
+  assert.ok(html.includes('st-dots'), 'genres are an index with leaders');
+  assert.ok(!html.includes('stat-bar'), 'the old bar charts are gone');
+  assert.equal(statsHTML(computeStats([])), '<p class="st-note">Nothing in the crate yet.</p>');
+  assert.ok(!statsHTML(computeStats([rec('a', 'X', 2000)])).includes('released between'), 'one year needs no range');
+  assert.ok(!statsHTML(computeStats([rec('a', '<b>x</b>', 2000)])).includes('<b>x</b>'), 'names are escaped');
+
+  // A big collection: a spine can stand for several records, and the row says so
+  const many = [{ name: '2010s', decade: 2010, count: 90, years: Array.from({ length: 90 }, (_, i) => 2010 + (i % 10)) }];
+  const shelf = spinesHTML(many);
+  assert.equal((shelf.match(/<i /g) || []).length, 30, '90 records at 3 to a spine');
+  assert.ok(shelf.includes('up to 3 records'));
+  assert.equal((spinesHTML([{ name: '1990s', decade: 1990, count: 4, years: [1990, 1991, 1992, 1993] }]).match(/<i /g) || []).length, 4, 'a small shelf has one spine each');
+
+  // The value: whole dollars, and where the median falls between low and high
+  const v = valueHTML({ minimum: '$924.70', median: '$1,552.55', maximum: '$3,186.48' });
+  assert.ok(v.includes('Worth about <b>$1,552</b>, somewhere between $924 and $3,186.'));
+  assert.ok(v.includes('left:27.8%'), 'the median marker sits 27.8% of the way along');
+  assert.ok(!valueHTML({ minimum: '$5', median: '$5', maximum: '$5' }).includes('st-range'), 'no range to show when low and high match');
+  assert.ok(valueHTML('loading').includes('Asking Discogs'));
+  assert.ok(valueHTML('error').includes("Couldn't reach Discogs"));
+}
+
+
+// ---- filters and empty states ------------------------------------------------------------------------------------
+import { facetsFor, matchesFilters, activeCount, toggleOption, describeSelection, emptySelection } from '../public/js/filters.js';
+import { emptyState } from '../public/js/emptystate.js';
+
+{
+  const lp = (extra = {}) => ({ name: 'Vinyl', qty: '1', descriptions: ['LP', 'Album'], text: '', ...extra });
+  const records = [
+    { id: 'a', year: 1999, masterYear: 1999, details: { formats: [lp()] } },
+    { id: 'b', year: 2003, details: { formats: [lp({ qty: '2', text: 'Red Marbled' })] } },
+    { id: 'c', year: 1985, details: { formats: [{ name: 'Vinyl', qty: '1', descriptions: ['7"', '45 RPM', 'Single'] }] } },
+    { id: 'd', year: 1994 },
+  ];
+  const facets = facetsFor(records);
+  assert.deepEqual(facets.decades.map((f) => [f.key, f.count]), [['1980s', 1], ['1990s', 2], ['2000s', 1]], 'decades run oldest first and include records without details');
+  assert.deepEqual(facets.sizes.map((f) => [f.key, f.count]), [['12"', 2], ['7"', 1]], 'an LP counts as a twelve-inch');
+  assert.deepEqual(facets.pressings.map((f) => f.key).sort(), ['Black', 'Marbled']);
+  assert.deepEqual(facets.discs.map((f) => f.label), ['One disc', 'Two or more discs']);
+  assert.deepEqual(facets.speeds.map((f) => f.key), ['45 rpm'], 'the usual speed is not an option');
+  assert.equal(facets.detailed, 3);
+  assert.equal(facets.total, 4);
+
+  const pick = (group, ...keys) => ({ ...emptySelection(), [group]: keys });
+  const ids = (sel) => records.filter((r) => matchesFilters(r, sel)).map((r) => r.id);
+  assert.deepEqual(ids(emptySelection()), ['a', 'b', 'c', 'd'], 'nothing chosen shows everything');
+  assert.deepEqual(ids(pick('decades', '1990s')), ['a', 'd']);
+  assert.deepEqual(ids(pick('decades', '1980s', '2000s')), ['b', 'c'], 'options in one group are alternatives');
+  assert.deepEqual(ids({ ...pick('decades', '1990s', '2000s'), pressings: ['Marbled'] }), ['b'], 'groups narrow each other');
+  assert.deepEqual(ids(pick('discs', 'multi')), ['b']);
+  assert.deepEqual(ids(pick('speeds', '45 rpm')), ['c']);
+  assert.deepEqual(ids(pick('sizes', '12"')), ['a', 'b'], 'a record with no details yet cannot match a detail filter');
+
+  assert.equal(activeCount({ ...pick('decades', '1990s', '2000s'), sizes: ['7"'] }), 3);
+  const once = toggleOption(emptySelection(), 'decades', '1990s');
+  assert.deepEqual(once.decades, ['1990s']);
+  assert.deepEqual(toggleOption(once, 'decades', '1990s').decades, [], 'choosing it again takes it off');
+  assert.deepEqual(emptySelection().decades, [], 'toggling never changes the original');
+  assert.equal(describeSelection({ ...pick('decades', '1990s'), discs: ['multi'] }), '1990s, Two or more discs');
+}
+
+{
+  assert.equal(emptyState({ total: 5, shown: 3 }), null, 'something to show: nothing to say');
+  assert.equal(emptyState({ total: 0, shown: 0, syncing: true }).title, 'Bringing in your crate');
+  const none = emptyState({ total: 0, shown: 0, connected: false });
+  assert.equal(none.actions[0].id, 'connect');
+  assert.equal(emptyState({ total: 0, shown: 0, connected: false, configured: false }).actions[0].id, 'connect', 'still a way forward without sign-in set up');
+  assert.equal(emptyState({ total: 0, shown: 0, connected: true }).actions[0].id, 'check');
+  const search = emptyState({ total: 50, shown: 0, query: ' kate ' });
+  assert.equal(search.title, 'Nothing matches “kate”');
+  assert.equal(search.actions[0].id, 'clear-search');
+  assert.equal(emptyState({ total: 50, shown: 0, genre: 'Jazz' }).actions[0].id, 'reset');
+  const both = emptyState({ total: 50, shown: 0, query: 'x', genre: 'Jazz', filters: '1990s' });
+  assert.equal(both.title, 'Nothing matches “x” + Jazz + 1990s');
+  assert.equal(both.actions[0].label, 'Clear search and filters');
+}
+
+
+// ---- welcome and first sync --------------------------------------------------------------------------------------
+import { progressLabel, progressFraction, recentCovers } from '../public/js/welcome.js';
+
+{
+  assert.equal(progressLabel({ count: 23, total: 51 }), '23 of 51 records');
+  assert.equal(progressLabel({ count: 1, total: 1 }), '1 of 1 record');
+  assert.equal(progressLabel({ count: 1200, total: 3400 }), '1,200 of 3,400 records');
+  assert.equal(progressLabel({ count: 100, page: 1, totalPages: 4 }), 'Page 1 of 4', 'no total yet: pages');
+  assert.equal(progressLabel({ count: 12 }), '12 records so far');
+  assert.equal(progressLabel({}), 'Getting started');
+  assert.equal(progressFraction({ count: 25, total: 50 }), 0.5);
+  assert.equal(progressFraction({ count: 80, total: 50 }), 1, 'never past the end');
+  assert.equal(progressFraction({ page: 1, totalPages: 4 }), 0.25);
+  assert.ok(progressFraction({}) > 0, 'a little movement while nothing is known');
+
+  const rec = (id, thumb) => ({ id, artwork: thumb ? { thumbnail: thumb } : {} });
+  const first = recentCovers([rec('a', 'u1'), rec('b', ''), rec('c', 'u3')]);
+  assert.deepEqual(first.map((c) => c.id), ['a', 'c'], 'records with no picture are skipped');
+  const next = recentCovers([rec('c', 'u3'), rec('d', 'u4')], first);
+  assert.deepEqual(next.map((c) => c.id), ['a', 'c', 'd'], 'no repeats across pages');
+  const many = recentCovers(Array.from({ length: 30 }, (_, i) => rec(`r${i}`, `u${i}`)), [], 14);
+  assert.equal(many.length, 14);
+  assert.equal(many[13].id, 'r29', 'the latest are kept');
+}
+
 console.log('Logic tests passed.');
 
 // ---- Discogs request queue ------------------------------------------------------------------------------------
@@ -329,6 +544,11 @@ import { computeStats, durationSeconds, colorGroup } from '../public/js/stats.js
   // a demo-only crate still gets stats
   assert.equal(computeStats([rec('discogs_mock_1', 'Demo', 1970)]).total, 1);
   assert.equal(computeStats([]).total, 0);
+  assert.deepEqual(s.decades[0].years, [1959], 'each decade lists its years, for the row of spines');
+  assert.equal(s.longest.seconds, 600, 'the longest record by playing time');
+  assert.equal(s.topArtist.name, 'AFI');
+  assert.equal(s.topArtist.records.length, 2, 'and the sleeves to show for them');
+  assert.equal(computeStats([rec('x', 'Solo', 2000)]).topArtist, null, 'no favourite when nobody repeats');
   assert.equal(colorGroup({ kind: 'translucent' }), 'Clear');
 
   // the proxy allows the signed-in user's collection value, and only theirs

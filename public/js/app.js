@@ -1,12 +1,19 @@
 // app.js - Main application coordinator
-import { openDB, getAllRecords, clearRecords, deleteRecords, getRecord, upsertRecords } from './db.js';
+import { openDB, getAllRecords, clearRecords, deleteRecords, getRecord, upsertRecords, useDatabase } from './db.js';
+import { shareIdFromPath, fetchShareStatus, publishShare, stopSharing, loadShare, shareIsStale } from './share.js';
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
+import { BrowseView, normalizeView, railLabel } from './browse.js';
+import { facetsFor, matchesFilters, activeCount, toggleOption, describeSelection, emptySelection, GROUPS } from './filters.js';
+import { emptyState } from './emptystate.js';
+import { WELCOME, progressLabel, progressFraction, recentCovers } from './welcome.js';
 import { GatefoldController } from './notes.js';
 import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichDeezerArtInBackground, verifyArtInBackground, recheckArtInBackground, needsArtRecheck, enrichMasterTitleArtInBackground, needsMasterTitleArt, needsDeezerArt, needsItunesArt, needsArtVerification, loadRecordDetails, needsDetails, refreshCollectionFields } from './sync.js';
 import { sortYear } from './years.js';
 import { computeStats } from './stats.js';
 import { computeHealth, describeStorage, healthSummary } from './health.js';
+import { watchForUpdates, shouldAutoReload } from './updates.js';
+import { trackSummary, pressingNotes } from './vinyl.js';
 import { needsAutoSync, timeAgo, readSyncMeta } from './syncplan.js';
 import { sourceSnapshot } from './sourcestats.js';
 import { statsHTML, valueHTML } from './statsview.js';
@@ -24,6 +31,37 @@ const slugify = (text) => String(text || '')
   .replace(/^-+|-+$/g, '') || 'untitled';
 
 const MAX_GENRE_TABS = 6;
+
+// The ambient glow: the cover is squeezed onto a small canvas and blurred there once (by averaging shifted copies of it),
+// then stretched across the screen. Nothing is filtered while the stack moves. No pixels are read, so covers from other
+// sites (which can't be read) work too.
+const GLOW_OFFSETS = [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3], [2, 2], [-2, 2], [2, -2], [-2, -2]];
+function paintGlow(canvas, img) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return false;
+  try {
+    const size = canvas.width;
+    const scratch = document.createElement('canvas');
+    scratch.width = scratch.height = size;
+    const sctx = scratch.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.globalAlpha = 1;
+    ctx.drawImage(img, 0, 0, size, size);
+    for (let pass = 0; pass < 4; pass++) {
+      sctx.globalAlpha = 1;
+      sctx.clearRect(0, 0, size, size);
+      sctx.drawImage(canvas, 0, 0);
+      GLOW_OFFSETS.forEach(([dx, dy], i) => {
+        ctx.globalAlpha = 1 / (i + 1);
+        ctx.drawImage(scratch, dx, dy);
+      });
+    }
+    ctx.globalAlpha = 1;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // Service worker registration: bypass on localhost to prevent stale asset caching during dev
 const isLocalhost = Boolean(
@@ -49,6 +87,10 @@ if ('serviceWorker' in navigator) {
         console.warn('ServiceWorker registration error:', err);
       });
     });
+    window.spindexUpdates = watchForUpdates({
+      container: navigator.serviceWorker,
+      onReady: () => { const pill = document.getElementById('update-pill'); if (pill) pill.hidden = false; },
+    });
   }
 }
 
@@ -62,6 +104,14 @@ class App {
     this.filteredRecords = [];
     this.metaFadeTimeout = null;
     this.lastMetaRecordId = null;
+
+    // /s/<id> is someone's shared crate, opened read-only in a database of its own so the visitor's collection is untouched
+    this.shareId = shareIdFromPath(location.pathname);
+    this.routeBase = this.shareId ? `/s/${this.shareId}` : '';
+    if (this.shareId) {
+      useDatabase(`spindex_share_${this.shareId}`);
+      document.body.classList.add('share-mode');
+    }
 
     this.initDOM();
     this.initControllers();
@@ -87,6 +137,15 @@ class App {
 
 
 
+    this.filters = emptySelection();
+    this.filterDrawer = document.getElementById('filter-drawer');
+    this.emptyEl = document.getElementById('empty-state');
+    this.announcer = document.getElementById('crate-announcer');
+    this.browseRoot = document.getElementById('browse-view');
+    this.viewButtons = [...document.querySelectorAll('.view-btn')];
+    this.view = 'stack';
+    try { this.view = normalizeView(localStorage.getItem('spindex_view')); } catch { /* storage can be unavailable */ }
+
     this.glowLayers = [
       document.getElementById('ambient-glow-img'),
       document.getElementById('ambient-glow-img-b'),
@@ -97,6 +156,7 @@ class App {
     // Active metadata column elements
     this.stationMetadataCol = document.getElementById('station-metadata-col');
     this.metaTitle = document.getElementById('meta-title');
+    this.metaLine = document.getElementById('meta-line');
     this.metaArtist = document.getElementById('meta-artist');
     this.metaYear = document.getElementById('meta-year');
     this.metaDuration = document.getElementById('meta-duration');
@@ -139,6 +199,35 @@ class App {
       (currIndex, total, currentRecord) => this.onCrateIndexChange(currIndex, total, currentRecord)
     );
 
+    this.browse = new BrowseView({
+      root: this.browseRoot,
+      rail: document.getElementById('browse-rail'),
+      describe: (record) => {
+        const year = sortYear(record);
+        const tags = getRecordTags(record);
+        return {
+          year: year ? String(year) : '',
+          genre: tags[0] ? tagLabel(tags[0]) : '',
+          length: calculateTotalDuration(record.tracklist) || '',
+        };
+      },
+      onOpen: (index) => {
+        this.crate.setIndex(index);
+        this.openRecordDetail(this.filteredRecords[index]);
+      },
+      onJump: (index) => {
+        if (this.view !== 'stack') return false;
+        this.crate.setIndex(index);
+        this.armJumpClose();
+        return true;
+      },
+      onSort: (sort) => {
+        if (this.sortSelect) this.sortSelect.value = sort;
+        this.currentSort = sort;
+        this.applyFiltersAndSort();
+      },
+    });
+
     this.gatefold = new GatefoldController({
       onStep: (direction) => this.stepInspector(direction),
       onJump: (id) => this.jumpToRecord(id),
@@ -166,7 +255,34 @@ class App {
       });
     }
 
+    this.viewButtons.forEach((btn) => {
+      if (btn.dataset.view) btn.addEventListener('click', () => this.setView(btn.dataset.view));
+    });
+    // Phones: search and the letter jump live in the bottom bar, in reach of a thumb
+    document.getElementById('mobile-search-btn')?.addEventListener('click', () => this.searchToggleBtn?.click());
+    this.counterEl?.addEventListener('click', () => { if (window.matchMedia('(max-width: 640px)').matches) this.openJump(); });
+    document.addEventListener('pointerdown', (e) => {
+      if (document.body.classList.contains('jump-open') && !e.target.closest('#browse-rail, #crate-counter')) this.closeJump();
+    });
+    document.getElementById('settings-help-btn')?.addEventListener('click', () => {
+      this.settingsDrawer?.classList.remove('open');
+      this.settingsDrawer?.setAttribute('aria-hidden', 'true');
+      const help = document.getElementById('help-overlay');
+      if (help) help.hidden = false;
+    });
+    document.getElementById('settings-stats-btn')?.addEventListener('click', () => {
+      this.settingsDrawer?.classList.remove('open');
+      this.settingsDrawer?.setAttribute('aria-hidden', 'true');
+      this.openStats();
+    });
+    this.setView(this.view, { initial: true });
+
     this.initSearch();
+    this.initFilters();
+    this.initEmptyState();
+    this.initShortcuts();
+    this.initPullToRefresh();
+    this.initShare();
     this.initFillStatus();
     this.requestPersistentStorage();
 
@@ -280,8 +396,21 @@ class App {
     document.getElementById('demo-note')?.addEventListener('click', () => this.openSettings());
 
     // Coming back to the app after a while: look for new records
+    document.getElementById('update-pill')?.addEventListener('click', () => location.reload());
+    let hiddenAt = 0;
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') this.autoSyncIfDue();
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now();
+        return;
+      }
+      const updates = window.spindexUpdates;
+      // Away for a while with a new version waiting: come back into it
+      if (updates && shouldAutoReload({ ready: updates.isReady(), hiddenMs: hiddenAt ? Date.now() - hiddenAt : 0 })) {
+        location.reload();
+        return;
+      }
+      updates?.check();
+      this.autoSyncIfDue();
     });
   }
 
@@ -301,10 +430,7 @@ class App {
     }
 
     if (this.discogsConnectedText && connected) {
-      const who = `<strong>${this.escapeHTML(username)}</strong>`;
-      this.discogsConnectedText.innerHTML =  /*html*/ mode === 'oauth'
-        ? `Connected to Discogs as ${who}.`
-        : `Using a personal access token for ${who}.`;
+        this.discogsConnectedText.innerHTML =  /*html*/ `<span class="tag-kicker">${mode === 'oauth' ? 'Connected to Discogs as' : 'Using a personal access token for'}</span><strong class="tag-name">${this.escapeHTML(username)}</strong>`;
     }
     if (this.usernameInput && mode === 'token') this.usernameInput.value = username;
   }
@@ -337,6 +463,7 @@ class App {
   }
 
   openSettings() {
+    this.refreshShare();
     this.renderDiscogsSettings();
     this.renderFreshness();
     this.renderHealth();
@@ -405,6 +532,7 @@ class App {
 
   async bootstrap() {
     await openDB();
+    if (this.shareId) return this.bootstrapShared();
     await initDiscogs();
     // A first-time visitor sees a demo crate; someone connected to Discogs never does (their crate is brought in instead).
     // "?demo" reloads the demo on purpose, for testing.
@@ -444,6 +572,7 @@ class App {
     this.openFromLocation(true);
     window.addEventListener('popstate', () => this.openFromLocation());
     this.handleDiscogsReturn();
+    this.maybeShowWelcome();
     this.autoSyncIfDue();
     this.fillMissingArt().then(() => this.fillMissingGenres());
     this.refreshCollectionFieldsIfNeeded()
@@ -747,6 +876,7 @@ class App {
     }
 
     if (this.searchQuery.trim()) list = list.filter((r) => this.matchesSearch(r));
+    if (activeCount(this.filters)) list = list.filter((r) => matchesFilters(r, this.filters));
 
     const getSortYear = sortYear;
 
@@ -810,6 +940,425 @@ class App {
     const activeRecord = list[this.crate.currentIndex] || null;
     this.updateActiveMetadata(activeRecord);
     if (this.reorderPill) this.reorderPill.hidden = true;
+    this.browseDirty = true;
+    if (this.view !== 'stack') this.renderBrowse();
+    this.updateFilterBadge();
+    this.renderEmptyState();
+  }
+
+  // ---- Surprise me, filters, empty states, keyboard help ------------------------------------------------------------
+
+  surprise() {
+    const list = this.filteredRecords;
+    if (list.length < 2) return;
+    let index;
+    do { index = Math.floor(Math.random() * list.length); } while (index === this.crate.currentIndex);
+    this.crate.setIndex(index);
+    if (this.view !== 'stack') {
+      this.browse.setActive(index);
+      this.browse.scrollToActive('smooth');
+      this.browse.pulse(index);
+    }
+  }
+
+  updateFilterBadge() {
+    const badge = document.getElementById('filter-badge');
+    if (!badge) return;
+    const n = activeCount(this.filters);
+    badge.hidden = n === 0;
+    badge.textContent = String(n);
+  }
+
+  initFilters() {
+    document.getElementById('surprise-btn')?.addEventListener('click', () => this.surprise());
+    document.getElementById('filter-toggle-btn')?.addEventListener('click', () => this.openFilters());
+    document.getElementById('filter-close-btn')?.addEventListener('click', () => this.closeFilters());
+    document.getElementById('filter-done-btn')?.addEventListener('click', () => this.closeFilters());
+    this.filterDrawer?.addEventListener('click', (e) => { if (e.target === this.filterDrawer) this.closeFilters(); });
+    document.getElementById('filter-clear-btn')?.addEventListener('click', () => {
+      this.filters = emptySelection();
+      this.applyFiltersAndSort();
+      this.renderFilterSheet();
+    });
+    document.getElementById('filter-content')?.addEventListener('click', (e) => {
+      const chip = e.target.closest('.fl-chip');
+      if (!chip) return;
+      this.filters = toggleOption(this.filters, chip.dataset.group, chip.dataset.key);
+      this.applyFiltersAndSort();
+      this.renderFilterSheet();
+    });
+  }
+
+  openFilters() {
+    this.renderFilterSheet();
+    this.filterDrawer?.classList.add('open');
+    this.filterDrawer?.setAttribute('aria-hidden', 'false');
+  }
+
+  closeFilters() {
+    this.filterDrawer?.classList.remove('open');
+    this.filterDrawer?.setAttribute('aria-hidden', 'true');
+  }
+
+  renderFilterSheet() {
+    const content = document.getElementById('filter-content');
+    if (!content) return;
+    const facets = facetsFor(this.allRecords);
+    const groups = GROUPS.filter((g) => facets[g.key].length > 0).map((g) => {
+      const chips = facets[g.key].map((o) => {
+        const on = this.filters[g.key].includes(o.key);
+        return `<button type="button" class="fl-chip" data-group="${g.key}" data-key="${this.escapeHTML(o.key)}" aria-pressed="${on}">${this.escapeHTML(o.label)} <i>${o.count}</i></button>`;
+      }).join('');
+      return `<section class="fl-group"><h4>${g.title}</h4><div class="fl-chips">${chips}</div></section>`;
+    }).join('');
+    const partial = facets.detailed < facets.total
+      ? `<p class="fl-note">Size, pressing, discs and speed are known for ${facets.detailed} of ${facets.total} records so far. The rest fill in as their details load.</p>`
+      : '';
+    content.innerHTML =  /*html*/ groups + partial;
+    const n = this.filteredRecords.length;
+    const done = document.getElementById('filter-done-btn');
+    if (done) done.textContent = `Show ${n} ${n === 1 ? 'record' : 'records'}`;
+    const clear = document.getElementById('filter-clear-btn');
+    if (clear) clear.hidden = activeCount(this.filters) === 0;
+  }
+
+  currentVibeLabel() {
+    if (this.activeVibe === 'all') return '';
+    const pill = this.vibeBar?.querySelector(`.vibe-pill[data-vibe="${CSS.escape(this.activeVibe)}"]`);
+    return pill?.textContent.trim() || this.activeVibe;
+  }
+
+  initEmptyState() {
+    this.emptyEl?.addEventListener('click', (e) => {
+      const id = e.target.closest('[data-action]')?.dataset.action;
+      if (id === 'connect') {
+        if (discogsState().configured) window.location.href = '/api/discogs/login';
+        else this.settingsToggleBtn?.click();
+      } else if (id === 'check') this.handleSync({});
+      else if (id === 'clear-search') this.clearSearch();
+      else if (id === 'reset') this.resetNarrowing();
+    });
+  }
+
+  clearSearch() {
+    if (this.searchInput) this.searchInput.value = '';
+    this.searchQuery = '';
+    this.applyFiltersAndSort();
+  }
+
+  // Search, genre tab and filters all back to "everything"
+  resetNarrowing() {
+    if (this.searchInput) this.searchInput.value = '';
+    this.searchQuery = '';
+    this.activeVibe = 'all';
+    this.filters = emptySelection();
+    this.syncVibeTabs();
+    this.applyFiltersAndSort();
+    if (this.filterDrawer?.classList.contains('open')) this.renderFilterSheet();
+  }
+
+  renderEmptyState() {
+    if (!this.emptyEl) return;
+    const state = emptyState({
+      total: this.allRecords.length,
+      shown: this.filteredRecords.length,
+      query: this.searchQuery,
+      genre: this.currentVibeLabel(),
+      filters: describeSelection(this.filters),
+      connected: isDiscogsConnected(),
+      configured: discogsState().configured,
+      syncing: Boolean(this.syncing),
+    });
+    document.body.classList.toggle('is-empty', Boolean(state));
+    this.emptyEl.hidden = !state;
+    if (!state) return;
+    document.getElementById('empty-title').textContent = state.title;
+    document.getElementById('empty-body').textContent = state.body;
+    const actions = document.getElementById('empty-actions');
+    actions.replaceChildren(...state.actions.map((a) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `btn ${a.primary ? 'btn-primary' : 'btn-secondary'}`;
+      b.dataset.action = a.id;
+      b.textContent = a.label;
+      return b;
+    }));
+  }
+
+  // "?" lists the shortcuts; 1, 2 and 3 switch the view
+  initShortcuts() {
+    const help = document.getElementById('help-overlay');
+    const closeHelp = () => { if (help) help.hidden = true; };
+    help?.addEventListener('click', (e) => { if (e.target === help) closeHelp(); });
+    window.addEventListener('keydown', (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'Escape') { closeHelp(); this.closeFilters(); return; }
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+      if (e.key === '?' && help) {
+        e.preventDefault();
+        help.hidden = !help.hidden;
+      } else if (['1', '2', '3'].includes(e.key) && !document.querySelector('.gatefold-workspace.open, .settings-drawer.open')) {
+        this.setView(['stack', 'grid', 'list'][Number(e.key) - 1]);
+      }
+    });
+  }
+
+  // Said aloud to screen readers when the front record changes (the stack itself is decoration to them)
+  announce(record, index, total) {
+    if (!this.announcer || !record) return;
+    clearTimeout(this.announceTimer);
+    this.announceTimer = setTimeout(() => {
+      this.announcer.textContent = `${record.title} by ${record.artist}, ${index + 1} of ${total}`;
+    }, 400);
+  }
+
+  // ---- The read-only link: opening someone's shared crate, and sharing your own ------------------------------------
+
+  async bootstrapShared() {
+    let snapshot;
+    try {
+      snapshot = await loadShare(this.shareId);
+    } catch (err) {
+      this.showShareProblem('This crate could not be opened.', 'Check your connection and try again.');
+      return;
+    }
+    if (!snapshot) {
+      this.showShareProblem('This crate isn’t shared any more', 'The link may have been turned off. Ask its owner for a new one.');
+      return;
+    }
+    // What this browser has already gathered about a record (liner notes and the like) is kept; everything else is the owner's
+    const existing = new Map((await getAllRecords()).map((r) => [r.id, r]));
+    const fresh = snapshot.records.map((r) => ({ ...existing.get(r.id), ...r }));
+    const keep = new Set(fresh.map((r) => r.id));
+    const gone = [...existing.keys()].filter((id) => !keep.has(id));
+    if (gone.length) await deleteRecords(gone);
+    await upsertRecords(fresh);
+
+    const banner = document.createElement('a');
+    banner.className = 'share-banner';
+    banner.href = '/';
+    const who = document.createElement('b');
+    who.textContent = snapshot.owner || 'Someone';
+    const make = document.createElement('u');
+    make.textContent = 'Make your own';
+    banner.append('Browsing ', who, '’s crate · read-only', make);
+    document.getElementById('share-banner-slot')?.replaceChildren(banner);
+    this.shareTitle = `${snapshot.owner ? `${snapshot.owner}’s crate` : 'A shared crate'} · Spindex`;
+    document.title = this.shareTitle;
+
+    await this.loadAllRecords();
+    this.openFromLocation(true);
+    window.addEventListener('popstate', () => this.openFromLocation());
+  }
+
+  showShareProblem(title, body) {
+    document.body.classList.add('is-empty');
+    if (!this.emptyEl) return;
+    document.getElementById('empty-title').textContent = title;
+    document.getElementById('empty-body').textContent = body;
+    const open = document.createElement('a');
+    open.className = 'btn btn-primary';
+    open.href = '/';
+    open.textContent = 'Open Spindex';
+    document.getElementById('empty-actions').replaceChildren(open);
+    this.emptyEl.hidden = false;
+  }
+
+  initShare() {
+    const $ = (id) => document.getElementById(id);
+    $('share-create-btn')?.addEventListener('click', () => this.publishShareNow({ first: true }));
+    $('share-update-btn')?.addEventListener('click', () => this.publishShareNow({}));
+    $('share-copy-btn')?.addEventListener('click', async () => {
+      const input = $('share-link');
+      try {
+        await navigator.clipboard.writeText(input.value);
+      } catch {
+        input.select();
+        document.execCommand?.('copy');
+      }
+      this.toast('Link copied');
+    });
+    $('share-stop-btn')?.addEventListener('click', async () => {
+      if (!window.confirm('Stop sharing? The link will stop working for everyone who has it.')) return;
+      try {
+        await stopSharing();
+        this.shareInfo = null;
+        this.renderShare();
+      } catch (err) {
+        this.showShareError(err.message);
+      }
+    });
+  }
+
+  showShareError(message) {
+    const el = document.getElementById('share-error');
+    if (!el) return;
+    el.textContent = message || '';
+    el.hidden = !message;
+  }
+
+  // Shown only to someone signed in with Discogs, on a server that has somewhere to keep the snapshot
+  async refreshShare() {
+    const group = document.getElementById('share-group');
+    if (!group || this.shareId) return;
+    if (discogsState().mode !== 'oauth') { group.hidden = true; return; }
+    const status = await fetchShareStatus();
+    if (!status.available || !status.signedIn) { group.hidden = true; return; }
+    group.hidden = false;
+    this.shareInfo = status.shared;
+    this.renderShare();
+    if (status.shared && shareIsStale(status.shared.updatedAt)) this.publishShareNow({ quiet: true });
+  }
+
+  renderShare() {
+    const info = this.shareInfo;
+    document.getElementById('share-off').hidden = Boolean(info);
+    document.getElementById('share-on').hidden = !info;
+    if (!info) return;
+    document.getElementById('share-link').value = info.url;
+    const n = info.count || 0;
+    document.getElementById('share-meta').textContent = `${n.toLocaleString('en-US')} ${n === 1 ? 'record' : 'records'} · Updated ${timeAgo(Date.parse(info.updatedAt) || Date.now())}`;
+  }
+
+  async publishShareNow({ first = false, quiet = false } = {}) {
+    const records = this.allRecords.filter((r) => !String(r.id).startsWith('discogs_mock_'));
+    if (!records.length) { this.showShareError('Bring your collection in first, then share it.'); return; }
+    this.showShareError('');
+    try {
+      const res = await publishShare(records);
+      this.shareInfo = res.shared;
+      this.renderShare();
+      if (!quiet) this.toast(first ? 'Link ready' : 'Link updated');
+    } catch (err) {
+      if (!quiet) this.showShareError(err.message);
+    }
+  }
+
+  // ---- Welcome (first visit) and the first sync ----------------------------------------------------------------------
+
+  // Someone who has never connected sees one clear invitation, over the demo crate. Once, and never on a direct album link.
+  maybeShowWelcome() {
+    const welcome = document.getElementById('welcome');
+    if (!welcome || isDiscogsConnected() || location.pathname !== '/' || new URLSearchParams(location.search).has('demo')) return;
+    let seen = false;
+    try { seen = localStorage.getItem('spindex_welcomed') === '1'; } catch { /* fine */ }
+    if (seen || this.allRecords.some((r) => !String(r.id).startsWith('discogs_mock_'))) return;
+
+    const { configured } = discogsState();
+    document.getElementById('welcome-title').textContent = WELCOME.title;
+    document.getElementById('welcome-body').textContent = WELCOME.body;
+    document.getElementById('welcome-progress').hidden = true;
+    document.getElementById('welcome-count').hidden = true;
+    document.getElementById('welcome-covers').replaceChildren();
+    const connect = document.createElement(configured ? 'a' : 'button');
+    connect.className = 'btn btn-primary';
+    connect.textContent = configured ? 'Connect Discogs' : 'Connect with a token';
+    if (configured) connect.href = '/api/discogs/login';
+    else connect.type = 'button';
+    const demo = document.createElement('button');
+    demo.type = 'button';
+    demo.className = 'text-btn';
+    demo.textContent = 'Look at a demo first';
+    const dismiss = () => {
+      try { localStorage.setItem('spindex_welcomed', '1'); } catch { /* fine */ }
+      welcome.hidden = true;
+    };
+    connect.addEventListener('click', () => {
+      try { localStorage.setItem('spindex_welcomed', '1'); } catch { /* fine */ }
+      if (!configured) { welcome.hidden = true; this.settingsToggleBtn?.click(); }
+    });
+    demo.addEventListener('click', dismiss);
+    document.getElementById('welcome-actions').replaceChildren(connect, demo);
+    welcome.hidden = false;
+  }
+
+  // While a collection is brought in for the first time: a count, a line, and the covers as they arrive
+  showFirstSync(update = {}) {
+    const welcome = document.getElementById('welcome');
+    if (!welcome) return;
+    if (welcome.hidden || !this.firstSync) {
+      this.firstSync = { covers: [] };
+      document.getElementById('welcome-title').textContent = 'Bringing in your crate';
+      document.getElementById('welcome-body').textContent = 'This takes a minute the first time. After that, new records show up on their own.';
+      document.getElementById('welcome-actions').replaceChildren();
+      document.getElementById('welcome-progress').hidden = false;
+      document.getElementById('welcome-count').hidden = false;
+      welcome.hidden = false;
+    }
+    document.getElementById('welcome-count').textContent = progressLabel(update);
+    document.getElementById('welcome-bar').style.width = `${Math.round(progressFraction(update) * 100)}%`;
+    if (update.recent) {
+      const before = this.firstSync.covers.length;
+      this.firstSync.covers = recentCovers(update.recent, this.firstSync.covers);
+      if (this.firstSync.covers.length !== before || before === 0) {
+        document.getElementById('welcome-covers').replaceChildren(...this.firstSync.covers.map((c) => {
+          const img = document.createElement('img');
+          img.src = c.url;
+          img.alt = '';
+          return img;
+        }));
+      }
+    }
+  }
+
+  hideFirstSync() {
+    this.firstSync = null;
+    const welcome = document.getElementById('welcome');
+    if (welcome) welcome.hidden = true;
+  }
+
+  // Stack, grid or list. The choice is remembered; the record you were on stays in view across all three.
+  setView(view, { initial = false } = {}) {
+    this.view = normalizeView(view);
+    try { localStorage.setItem('spindex_view', this.view); } catch { /* fine */ }
+    document.body.dataset.view = this.view;
+    this.closeJump();
+    this.viewButtons.forEach((btn) => { if (btn.dataset.view) btn.setAttribute('aria-pressed', String(btn.dataset.view === this.view)); });
+    if (this.browseRoot) this.browseRoot.hidden = this.view === 'stack';
+    if (this.view === 'stack') {
+      if (!initial) this.crate.refreshLayout();
+      return;
+    }
+    if (!initial || this.filteredRecords.length) this.renderBrowse();
+  }
+
+  railKey(record) {
+    return railLabel(this.currentSort, record);
+  }
+
+  // Stack view on a phone: tapping the counter brings up the letter (or decade) strip to jump along the crate
+  openJump() {
+    if (this.view !== 'stack') return;
+    this.browse.buildRail(this.filteredRecords, (record) => this.railKey(record));
+    if (this.browse.groups.length < 2) return;
+    document.body.classList.add('jump-open');
+    this.browse.markRail(this.browse.groupFor(this.crate.currentIndex));
+    this.armJumpClose();
+  }
+
+  armJumpClose() {
+    clearTimeout(this.jumpTimer);
+    this.jumpTimer = setTimeout(() => this.closeJump(), 5000);
+  }
+
+  closeJump() {
+    clearTimeout(this.jumpTimer);
+    document.body.classList.remove('jump-open');
+  }
+
+  renderBrowse() {
+    if (!this.browseRoot || this.view === 'stack') return;
+    const modeChanged = this.browseRoot.dataset.mode !== this.view;
+    if (this.browseDirty || modeChanged) {
+      const scrollTop = this.browseRoot.scrollTop;
+      this.browse.render(this.filteredRecords, this.view, this.currentSort, this.crate.currentIndex, (record) => this.railKey(record));
+      this.browseRoot.scrollTop = modeChanged ? 0 : scrollTop;
+      this.browseDirty = false;
+      if (modeChanged) this.browse.scrollToActive();
+    } else {
+      this.browse.setActive(this.crate.currentIndex);
+      this.browse.scrollToActive();
+    }
   }
 
   // Background work (years, details, genres) saves new data all the time. It must never move records around under
@@ -819,6 +1368,7 @@ class App {
     const byId = new Map(this.allRecords.map((r) => [r.id, r]));
     this.filteredRecords = this.filteredRecords.map((r) => byId.get(r.id) || r);
     this.crate.refreshRecords(this.filteredRecords);
+    if (this.view !== 'stack') this.browse.refresh(this.filteredRecords);
     this.buildRoutes();
     this.updateActiveMetadata(this.filteredRecords[this.crate.currentIndex] || null);
     this.checkPendingOrder();
@@ -832,6 +1382,8 @@ class App {
   }
 
   onCrateIndexChange(currIndex, total, currentRecord) {
+    if (this.browse) this.browse.setActive(currIndex);
+    this.announce(currentRecord, currIndex, total);
     const nextId = currentRecord?.id || null;
     if (nextId === this.lastMetaRecordId) {
       this.updateActiveMetadata(currentRecord);
@@ -862,28 +1414,31 @@ class App {
     }, 400);
   }
 
+  // The glow is a wash of colour, so each cover is blurred once on a small canvas (see paintGlow). It also waits for the stack to stop moving, so nothing competes with the animation.
   setGlow(url) {
     if (this.glowLayers.length < 2 || url === this.glowUrl) return;
     this.glowUrl = url;
+    clearTimeout(this.glowTimer);
 
     if (!url) {
       this.glowLayers.forEach((l) => { l.style.opacity = '0'; });
       return;
     }
 
-    const next = (this.glowActive + 1) % 2;
-    const incoming = this.glowLayers[next];
-    const outgoing = this.glowLayers[this.glowActive];
-    const show = () => {
-      if (this.glowUrl !== url) return;
-      incoming.style.opacity = '0.32';
-      if (outgoing) outgoing.style.opacity = '0';
-      this.glowActive = next;
-    };
-
-    incoming.onload = show;
-    incoming.src = url;
-    if (incoming.complete && incoming.naturalWidth > 0) show();
+    this.glowTimer = setTimeout(() => {
+      const next = (this.glowActive + 1) % 2;
+      const incoming = this.glowLayers[next];
+      const outgoing = this.glowLayers[this.glowActive];
+      const img = new Image();
+      img.onload = () => {
+        if (this.glowUrl !== url) return;
+        if (!paintGlow(incoming, img)) return;
+        incoming.style.opacity = '0.4';
+        if (outgoing) outgoing.style.opacity = '0';
+        this.glowActive = next;
+      };
+      img.src = url;
+    }, 220);
   }
 
   updateActiveMetadata(record) {
@@ -894,6 +1449,7 @@ class App {
 
     if (!record) {
       if (this.metaTitle) this.metaTitle.textContent = 'No records in crate';
+      if (this.metaLine) this.metaLine.textContent = '';
       if (this.metaArtist) this.metaArtist.textContent = '';
       if (this.metaYear) this.metaYear.textContent = '';
       if (this.metaDuration) this.metaDuration.textContent = '';
@@ -903,6 +1459,13 @@ class App {
     }
 
     if (this.metaTitle) this.metaTitle.textContent = record.title || 'Untitled';
+    if (this.metaLine) {
+      const firstTag = getRecordTags(record)[0];
+      const tracks = record.tracklist || [];
+      const groups = tracks.length ? groupTracksBySide(tracks) : null;
+      const notes = pressingNotes({ sideKeys: (groups || []).map((g) => g.sideKey), formats: record.details?.formats });
+      this.metaLine.textContent = [sortYear(record) || '', firstTag ? tagLabel(firstTag) : '', ...notes].filter(Boolean).join(' · ');
+    }
     if (this.metaArtist) this.metaArtist.textContent = record.artist || 'Unknown Artist';
     const primaryYear = sortYear(record);
     if (this.metaYear) this.metaYear.textContent = primaryYear ? String(primaryYear) : '';
@@ -921,24 +1484,19 @@ class App {
     }
 
     if (this.metaTrackSummary) {
-      this.metaTrackSummary.textContent = this.formatTrackSummary(record.tracklist || []);
+      this.metaTrackSummary.textContent = this.formatTrackSummary(record);
     }
   }
 
-  // One quiet line, e.g. "24 tracks · 4 sides"; the full tracklist lives in the sleeve view
-  formatTrackSummary(tracks) {
-    if (!tracks || tracks.length === 0) return '';
-
-    const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-    const parts = [plural(tracks.length, 'track')];
-
-    const groups = groupTracksBySide(tracks);
-    if (groups && groups.length > 0) {
-      const discs = groups.every((g) => g.sideKey.startsWith('Disc '));
-      parts.push(plural(groups.length, discs ? 'disc' : 'side'));
-    }
-
-    return parts.join(' · ');
+  // One quiet line, e.g. "24 tracks · 2 discs · 45 rpm": discs only from two up, speed only when it isn't 33
+  formatTrackSummary(record) {
+    const tracks = record.tracklist || [];
+    const groups = tracks.length ? groupTracksBySide(tracks) : null;
+    return trackSummary({
+      trackCount: tracks.length,
+      sideKeys: (groups || []).map((g) => g.sideKey),
+      formats: record.details?.formats,
+    });
   }
 
   escapeHTML(str = '') {
@@ -957,17 +1515,17 @@ class App {
     this.routeByPath = new Map();
     this.pathById = new Map();
     for (const record of [...this.allRecords].sort((a, b) => String(a.id).localeCompare(String(b.id)))) {
-      const base = `/album/${slugify(record.artist)}/${slugify(record.title)}/`;
+      const base = `${this.routeBase}/album/${slugify(record.artist)}/${slugify(record.title)}/`;
       let path = base;
       // Two pressings of the same title get a numeric suffix so every address is unique
-      for (let n = 2; this.routeByPath.has(path); n++) path = `/album/${slugify(record.artist)}/${slugify(record.title)}-${n}/`;
+      for (let n = 2; this.routeByPath.has(path); n++) path = `${this.routeBase}/album/${slugify(record.artist)}/${slugify(record.title)}-${n}/`;
       this.routeByPath.set(path, record);
       this.pathById.set(record.id, path);
     }
   }
 
   routePath(record) {
-    return this.pathById?.get(record.id) || `/album/${slugify(record.artist)}/${slugify(record.title)}/`;
+    return this.pathById?.get(record.id) || `${this.routeBase}/album/${slugify(record.artist)}/${slugify(record.title)}/`;
   }
 
   recordForPath(pathname) {
@@ -976,7 +1534,7 @@ class App {
   }
 
   setPageTitle(record) {
-    document.title = record ? `${record.title} — ${record.artist} · Spindex` : DEFAULT_TITLE;
+    document.title = record ? `${record.title} — ${record.artist} · Spindex` : this.shareTitle || DEFAULT_TITLE;
   }
 
   // mode: 'push' (opened from the crate), 'replace' (moved to another record), 'close'
@@ -985,7 +1543,7 @@ class App {
     if (mode === 'close') {
       // Closing after opening from the crate steps back in history; a cold-loaded address just becomes "/"
       if (history.state?.album && !history.state.entry) history.back();
-      else if (location.pathname !== '/') history.replaceState(null, '', '/');
+      else if (location.pathname !== `${this.routeBase}/`) history.replaceState(null, '', `${this.routeBase}/`);
       return;
     }
     const path = this.routePath(record);
@@ -1055,11 +1613,13 @@ class App {
     if (this.syncing) return;
     this.syncing = true;
     this.renderFreshness();
+    this.renderEmptyState();
     try {
       await this.runSync({ full, auto });
     } finally {
       this.syncing = false;
       this.renderFreshness();
+      this.renderEmptyState();
     }
   }
 
@@ -1083,7 +1643,9 @@ class App {
     }
     const { username } = discogsState();
     const last = username ? readSyncMeta(username).lastCheckedAt : 0;
-    el.textContent = last ? `Up to date. Checked ${timeAgo(last)}.` : 'Not checked yet.';
+    const count = this.allRecords.filter((r) => !String(r.id).startsWith('discogs_mock_')).length;
+    const records = count ? `${count.toLocaleString('en-US')} ${count === 1 ? 'record' : 'records'} · ` : '';
+    el.textContent = last ? `${records}Up to date. Checked ${timeAgo(last)}.` : `${records}Not checked yet.`;
   }
 
   // The demo crate is for a first visit: it goes away once Discogs is connected
@@ -1119,9 +1681,11 @@ class App {
     const buttons = [this.syncBtn, this.syncFullBtn, this.syncTokenBtn].filter(Boolean);
     buttons.forEach((b) => { b.disabled = true; });
     this.setSyncStatus(hadRealRecords ? 'Checking for new records...' : 'Bringing in your collection...', '');
+    if (!hadRealRecords) this.showFirstSync({});
 
     try {
-      const result = await syncDiscogsCollection(username, ({ page, totalPages, count, message, quick }) => {
+      const result = await syncDiscogsCollection(username, ({ page, totalPages, count, total, recent, message, quick }) => {
+        if (!hadRealRecords) this.showFirstSync({ page, totalPages, count, total, recent });
         if (message) return this.setSyncStatus(message, '');
         if (quick) return this.setSyncStatus('Checking for new records...', '');
         this.setSyncStatus(`Syncing page ${page} of ${totalPages} (${count} albums)...`, '');
@@ -1144,6 +1708,7 @@ class App {
       // One request per release supplies its details and tracklist; durations still missing are filled from the master after
       this.fillMissingArt();
       this.fillMissingYears().then(() => this.fillMissingDetails()).then(() => this.fillMissingTracklists());
+      if (this.shareInfo && (result.added > 0 || result.removed > 0)) this.publishShareNow({ quiet: true });
     } catch (err) {
       console.error(err);
       this.setSyncStatus(err.message === 'Not connected to Discogs'
@@ -1151,10 +1716,56 @@ class App {
         : `Sync failed: ${err.message}`, 'error');
     } finally {
       buttons.forEach((b) => { b.disabled = false; });
+      this.hideFirstSync();
     }
   }
 
+  // A brief line at the top of the screen, for feedback when Settings isn't open
+  toast(message, ms = 2400) {
+    const el = document.getElementById('toast');
+    if (!el) return;
+    el.textContent = message;
+    el.hidden = false;
+    clearTimeout(this.toastTimer);
+    if (ms) this.toastTimer = setTimeout(() => { el.hidden = true; }, ms);
+  }
+
+  // Pull the grid or list down from the top to look for new records, the way mail apps do
+  initPullToRefresh() {
+    const root = this.browseRoot;
+    if (!root) return;
+    const THRESHOLD = 90;
+    let startY = null;
+    let pulled = 0;
+    root.addEventListener('touchstart', (e) => {
+      startY = root.scrollTop <= 0 && e.touches.length === 1 ? e.touches[0].clientY : null;
+      pulled = 0;
+    }, { passive: true });
+    root.addEventListener('touchmove', (e) => {
+      if (startY === null) return;
+      pulled = e.touches[0].clientY - startY;
+      if (pulled > 20 && isDiscogsConnected() && !this.syncing) this.toast(pulled > THRESHOLD ? 'Release to check for new records' : 'Pull to check for new records', 0);
+    }, { passive: true });
+    root.addEventListener('touchend', () => {
+      if (startY === null) return;
+      const go = pulled > THRESHOLD && isDiscogsConnected() && !this.syncing;
+      startY = null;
+      if (go) {
+        this.toastSync = true;
+        this.toast('Checking for new records…', 0);
+        this.handleSync({});
+      } else {
+        const el = document.getElementById('toast');
+        if (el && /^(Pull|Release)/.test(el.textContent)) el.hidden = true;
+      }
+    }, { passive: true });
+  }
+
   setSyncStatus(msg, type = '') {
+    if (this.toastSync && msg && type) {
+      this.toastSync = false;
+      this.toast(msg);
+    }
     if (!this.syncStatus) return;
     this.syncStatus.textContent = msg;
     this.syncStatus.className = `sync-status ${type}`.trim();
