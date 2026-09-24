@@ -1,6 +1,13 @@
 // crate.js - Vertical 3D Cover Flow with persistent element animations
 import { parseSortArtist } from './sync.js';
 
+// The stack shows covers at about 300 to 500 points wide, so 600px art is plenty; the album page keeps the 1200px version.
+// (Decoding 1200px art for every sleeve is what makes flipping through a big crate heavy on a phone.)
+function crateArtUrl(record) {
+  const url = record.artwork?.highRes || record.artwork?.thumbnail || '';
+  return url.replace('1200x1200bb', '600x600bb');
+}
+
 export class CrateController {
   constructor(containerEl, counterEl, onSelectRecord, onIndexChange) {
     this.container = containerEl;
@@ -10,7 +17,9 @@ export class CrateController {
     this.records = [];
     this.sleeveElements = [];
     this.currentIndex = 0;
-    this.visibleRange = 45; // Below-stack keeps spreading, so anything deeper is off screen
+    // How far the stack reaches on screen, set in measure(): albums beyond it aren't drawn at all
+    this.visibleAbove = 12;
+    this.visibleBelow = 45;
     this.sortKey = 'artist';
     this.pos = 0;
     this.vel = 0;
@@ -99,7 +108,7 @@ export class CrateController {
 
       // Cover artwork image
       const img = document.createElement('img');
-      img.src = record.artwork?.highRes || record.artwork?.thumbnail || '';
+      img.src = crateArtUrl(record);
       img.alt = `${record.artist} - ${record.title}`;
       img.loading = i <= 3 ? 'eager' : 'lazy';
 
@@ -117,6 +126,11 @@ export class CrateController {
       const sheen = document.createElement('div');
       sheen.className = 'sleeve-sheen-overlay';
       coverWrap.appendChild(sheen);
+
+      // Depth shading: a black veil whose opacity changes (cheap to animate), in place of a per-frame brightness filter
+      const dim = document.createElement('div');
+      dim.className = 'sleeve-dim';
+      coverWrap.appendChild(dim);
 
       // The jacket's thickness: a bevelled edge and a lit top lip just outside the artwork, never over it
       const edge = document.createElement('div');
@@ -163,7 +177,7 @@ export class CrateController {
       });
 
       this.container.appendChild(el);
-      this.sleeveElements.push({ el, record, index: i });
+      this.sleeveElements.push({ el, dim, record, index: i });
     }
 
 
@@ -198,6 +212,9 @@ export class CrateController {
 
   measure() {
     this.size = this.container.offsetWidth || this.size;
+    // Each row below the active album takes about 42px, so only as many rows as fit the screen (plus a few) are drawn
+    const screenHeight = typeof window !== 'undefined' ? window.innerHeight : 1000;
+    this.visibleBelow = Math.min(45, Math.ceil(screenHeight / 40) + 3);
     this.gap = this.compactMq?.matches ? 64 : 0;
   }
 
@@ -287,7 +304,7 @@ export class CrateController {
       const offset = item.index - this.pos;
       const rounded = Math.round(offset);
       const absRounded = Math.abs(rounded);
-      const out = absRounded > this.visibleRange + 1;
+      const out = absRounded > (rounded < 0 ? this.visibleAbove : this.visibleBelow) + 1;
 
       const state = `${out ? 'o' : ''}${rounded === 0 ? 'a' : rounded < 0 ? 'u' : 'd'}`;
       if (item.state !== state) {
@@ -300,7 +317,7 @@ export class CrateController {
 
       const p = this.pose(offset);
       item.el.style.transform = `perspective(1200px) translate3d(0, ${p.y.toFixed(2)}px, ${p.z.toFixed(2)}px) rotateX(${p.rx.toFixed(3)}deg) scale(${p.s.toFixed(4)})`;
-      item.el.style.filter = `brightness(${p.b.toFixed(3)})`;
+      item.dim.style.opacity = (1 - p.b).toFixed(3);
 
       item.el.style.zIndex = String(this.zFor(offset));
     }

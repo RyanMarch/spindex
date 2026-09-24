@@ -669,7 +669,8 @@ class App {
   updateActiveMetadata(record) {
     this.lastMetaRecordId = record?.id || null;
 
-    this.setGlow(record?.artwork?.highRes || record?.artwork?.thumbnail || '');
+    // The glow is a heavily blurred wash of colour, so the small thumbnail is all it needs
+    this.setGlow(record?.artwork?.thumbnail || record?.artwork?.highRes || '');
 
     if (!record) {
       if (this.metaTitle) this.metaTitle.textContent = 'No records in crate';

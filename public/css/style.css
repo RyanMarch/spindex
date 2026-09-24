@@ -276,7 +276,7 @@ summary {
   width: 140%;
   height: 140%;
   object-fit: cover;
-  filter: blur(100px) saturate(2.1) brightness(1.1);
+  filter: blur(60px) saturate(2.1) brightness(1.1);
   opacity: 0;
   transform: scale(1.1);
   transition: opacity 1200ms ease;
@@ -3002,4 +3002,33 @@ body.search-open .crate-search {
     gap: 2rem;
     padding: 0.5rem 1.25rem calc(4rem + var(--sab)) 1rem;
   }
+}
+
+/* Depth shading on the stack: a black veil, so shading changes never re-render the cover itself */
+.sleeve-dim {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  will-change: opacity;
+}
+
+/* Touch screens: no shadow animations while the stack moves (many covers change state at once) */
+@media (hover: none) {
+  .sleeve-cover-wrap {
+    transition: none;
+  }
+}
+
+/* The app fills the screen edge to edge, including under the home indicator, however the browser reports its height */
+html {
+  height: 100%;
+  background: var(--bg-main);
+}
+
+.app-layout {
+  position: fixed;
+  inset: 0;
+  height: auto;
 }
