@@ -12,7 +12,7 @@ export function retryAfterMs(res) {
 }
 
 export function createLimiter({
-  pace = () => 1100,
+  pace = () => 1100, // called with the response, so a free answer (a cache hit) can skip the wait
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   now = () => Date.now(),
   maxRetries = 3,
@@ -57,7 +57,7 @@ export function createLimiter({
           emit();
           continue;
         }
-        nextAt = now() + pace();
+        nextAt = now() + pace(res);
         if (res && res.status === 429 && job.tries < maxRetries) {
           job.tries++;
           pausedUntil = now() + retryAfterMs(res);

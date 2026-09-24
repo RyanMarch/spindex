@@ -60,7 +60,7 @@ export async function initDiscogs() {
 }
 
 // path: a Discogs API path such as "/releases/249504" or "/users/name/collection/folders/0/releases?page=1"
-const limiter = createLimiter({ pace: () => paceMs() });
+const limiter = createLimiter({ pace: (res) => (res?.headers?.get('x-spindex-cache') === 'HIT' ? 0 : paceMs()) });
 
 async function send(path, init) {
   let res;

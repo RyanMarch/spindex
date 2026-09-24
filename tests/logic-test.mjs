@@ -179,3 +179,13 @@ import { createLimiter, retryAfterMs } from '../public/js/limiter.js';
   assert.equal(retryAfterMs(res(429, { 'retry-after': '500' })), 60000, 'capped');
   console.log('Discogs queue tests passed.');
 }
+
+// A free answer (a cache hit) skips the wait before the next request
+{
+  let t = 0;
+  const limiter = createLimiter({ pace: (res) => (res.status === 203 ? 0 : 1000), now: () => t, sleep: async (ms) => { t += ms; } });
+  const starts = [];
+  const run = (status) => limiter.schedule(async () => { starts.push(t); return { status, headers: { get: () => null } }; });
+  await Promise.all([run(203), run(200), run(200)]);
+  assert.deepEqual(starts, [0, 0, 1000], 'no wait after a cache hit, a full wait after a real request');
+}

@@ -9,3 +9,7 @@ DISCOGS_CONSUMER_SECRET=
 # Any long random string (24+ characters); it encrypts the login cookies. Generate one with:
 #   openssl rand -base64 32
 SESSION_SECRET=
+
+# Optional: how long release/master/artist pages stay in the edge cache, in seconds (default 604800 = 7 days,
+# max 2592000, 0 turns caching off).
+# DISCOGS_CACHE_SECONDS=604800
