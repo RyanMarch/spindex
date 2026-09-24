@@ -1,6 +1,7 @@
 // sync.js - Discogs syncing and iTunes art enrichment
-import { upsertRecords, updateRecord, getAllRecords } from './db.js';
+import { upsertRecords, updateRecord, getAllRecords, deleteRecords } from './db.js';
 import { discogsFetch } from './discogs.js';
+import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds } from './syncplan.js';
 import { masterYearUpdates, itunesYearUpdates, isEditionTitle } from './years.js';
 
 // Known band names or entities that shouldn't be split into "Last, First"
@@ -455,7 +456,13 @@ export async function refreshCollectionFields(username) {
   }
 }
 
-export async function syncDiscogsCollection(username, onProgress) {
+// A full sync reads the whole collection and picks up edits and removals. Otherwise it reads only as far as the newest
+// records we don't have yet (usually one request), and falls back to a full read whenever the numbers don't add up.
+export async function syncDiscogsCollection(username, onProgress, { full = false } = {}) {
+  const meta = readSyncMeta(username);
+  const readEverything = needsFullSync(meta, Date.now(), full);
+  let total = null;
+  let stoppedEarly = false;
   let page = 1;
   let totalPages = 1;
   const perPage = 100;
@@ -466,7 +473,7 @@ export async function syncDiscogsCollection(username, onProgress) {
   const fieldNames = await fetchCollectionFieldNames(username);
 
   while (page <= totalPages) {
-    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}`);
+    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}&sort=added&sort_order=desc`);
 
     if (!res.ok) {
       const detail = await res.json().then((body) => body.error || body.message, () => '').catch(() => '');
@@ -498,7 +505,7 @@ export async function syncDiscogsCollection(username, onProgress) {
       };
 
       // Keep validated high-res artwork if already enriched, otherwise use Discogs artwork
-      const existingArtwork = (existing?.artwork?.source === 'itunes' && existing?.artwork?.highRes)
+      const existingArtwork = (['itunes', 'deezer'].includes(existing?.artwork?.source) && existing?.artwork?.highRes)
         ? existing.artwork
         : discogsArtwork;
 
@@ -538,15 +545,36 @@ export async function syncDiscogsCollection(username, onProgress) {
     });
 
     fetchedRecords.push(...parsed);
+    total = data.pagination?.items ?? total;
     if (onProgress) {
-      onProgress({ page, totalPages, count: fetchedRecords.length });
+      onProgress({ page, totalPages, count: fetchedRecords.length, quick: !readEverything });
+    }
+
+    if (!readEverything && canStopEarly({
+      pageHasKnown: parsed.some((r) => existingMap.has(r.id)),
+      storedTotal: meta.storedTotal,
+      total,
+      newCount: fetchedRecords.filter((r) => !existingMap.has(r.id)).length,
+    })) {
+      stoppedEarly = true;
+      break;
     }
     page++;
   }
 
+  writeSyncMeta(username, { storedTotal: total, lastFullAt: stoppedEarly ? meta.lastFullAt : Date.now() });
+
   await upsertRecords(fetchedRecords);
-  enrichArtInBackground(fetchedRecords);
-  return fetchedRecords;
+
+  // A complete read shows what's gone from Discogs too
+  let removed = 0;
+  if (!stoppedEarly) {
+    const gone = removedRecordIds(existingRecords, fetchedRecords.map((r) => r.id), { total, fetchedCount: fetchedRecords.length });
+    if (gone.length > 0) await deleteRecords(gone);
+    removed = gone.length;
+  }
+
+  return { records: fetchedRecords, added: fetchedRecords.filter((r) => !existingMap.has(r.id)).length, removed, quick: stoppedEarly };
 }
 
 // Find each record's original release year from its Discogs master. This decides where a record files in the crate, so it
@@ -920,10 +948,14 @@ async function findItunesAlbum(record) {
   return { ok: true, item: scoredCandidates[0]?.item || null };
 }
 
-export async function enrichArtInBackground(records) {
+// Clean cover art from iTunes for records still showing the Discogs image. Resumable: each record is marked once
+// iTunes has actually answered for it, so an interrupted pass picks up where it stopped on the next load.
+export async function enrichArtInBackground(records, onEach) {
   for (const record of records) {
+    if (record.artwork?.source !== 'discogs' || record.artChecked || String(record.id).startsWith('discogs_mock_')) continue;
     try {
-      const { item: best } = await findItunesAlbum(record);
+      const { ok, item: best } = await findItunesAlbum(record);
+      if (!ok) break; // throttled or offline: leave the rest for next time
 
       if (best && best.artworkUrl100) {
         const highRes = best.artworkUrl100.replace('100x100bb.jpg', '1200x1200bb.jpg');
@@ -937,6 +969,7 @@ export async function enrichArtInBackground(records) {
           itunesUrl: best.collectionViewUrl || null,
           itunesArtistUrl: best.artistViewUrl || null,
           genreChecked: true,
+          artChecked: true,
         };
 
         if (best.releaseDate) {
@@ -944,17 +977,36 @@ export async function enrichArtInBackground(records) {
           Object.assign(updates, itunesYearUpdates(record, parseInt(String(best.releaseDate).slice(0, 4), 10)));
         }
         await updateRecord(record.id, updates);
+        if (onEach) onEach(record.id);
       } else {
-        // If iTunes has no valid match, revert to original Discogs artwork if currently set to iTunes
-        if (record.artwork?.source === 'itunes' && record.discogsArtwork?.highRes) {
-          await updateRecord(record.id, {
-            artwork: record.discogsArtwork,
-          });
-        }
+        await updateRecord(record.id, { artChecked: true });
       }
     } catch {
-      // Continue to next album if fetch fails
+      break;
     }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+}
+
+// Discogs' main image is often a collector's photograph of the sleeve. For records where iTunes found no album art,
+// ask Deezer, which has clean square covers. Checked once per record: a record Deezer doesn't have keeps the Discogs image.
+export async function enrichFallbackArtInBackground(records, onEach) {
+  for (const record of records) {
+    if (record.artwork?.source !== 'discogs' || !record.artChecked || record.fallbackArtChecked || String(record.id).startsWith('discogs_mock_')) continue;
+    try {
+      const res = await fetch(`/api/listen/deezer?artist=${encodeURIComponent(record.artist || '')}&title=${encodeURIComponent(record.title || '')}`);
+      if (!res.ok) break; // no server functions here, or Deezer is down: try again next load
+      const { cover } = await res.json();
+      const updates = { fallbackArtChecked: true };
+      if (cover) {
+        updates.artwork = { thumbnail: cover.replace('1000x1000', '250x250'), highRes: cover, source: 'deezer' };
+        if (onEach) onEach(record.id);
+      }
+      await updateRecord(record.id, updates);
+    } catch {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
   }
 }
 

@@ -229,20 +229,47 @@ async function fetchCommonsPhoto(fileName) {
 // Back cover from the Cover Art Archive (images are explicitly typed there), via MusicBrainz.
 // MusicBrainz lists which releases have a back cover, so we only ask the archive about those (no guessing, no 404s).
 // MusicBrainz asks for at most ~1 request per second.
+
+const normalizeTitle = (text) => String(text || '').toLowerCase().replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+
+// The release group whose title is the album's, not just the search's first hit (a "Demos" edition can outrank it)
+export function pickReleaseGroup(groups, title) {
+  const wanted = normalizeTitle(title);
+  return (groups || []).find((g) => normalizeTitle(g.title) === wanted) || (groups || [])[0] || null;
+}
+
+// A back cover has to show this kind of object: this is a record collection, so a cassette insert or a digital
+// release's art is wrong even when the archive has it. Vinyl first, then CD.
+const WRONG_FORMAT = /cassette|digital|vhs|dvd|blu-?ray|minidisc|8-?track|reel|cartridge/i;
+
+export function pickBackCoverReleases(releases) {
+  const formatsOf = (r) => (r.media || []).map((m) => m.format || '');
+  const rank = (r) => {
+    const formats = formatsOf(r);
+    if (formats.some((f) => /vinyl/i.test(f))) return 0;
+    if (formats.some((f) => /cd|sacd|hdcd/i.test(f))) return 1;
+    return 2;
+  };
+  return (releases || [])
+    .filter((r) => r['cover-art-archive']?.back && !formatsOf(r).some((f) => WRONG_FORMAT.test(f)))
+    .map((release, order) => ({ release, order }))
+    .sort((a, b) => rank(a.release) - rank(b.release) || a.order - b.order)
+    .map((entry) => entry.release);
+}
+
 export async function fetchBackCover(artist, title) {
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const cleanTitle = title.replace(/\([^)]*\)/g, '').trim();
 
-  const groups = await getJSON(`https://musicbrainz.org/ws/2/release-group?query=${encodeURIComponent(`artist:"${artist}" AND releasegroup:"${cleanTitle}"`)}&limit=1&fmt=json`);
-  const group = groups?.['release-groups']?.[0];
+  const groups = await getJSON(`https://musicbrainz.org/ws/2/release-group?query=${encodeURIComponent(`artist:"${artist}" AND releasegroup:"${cleanTitle}"`)}&limit=5&fmt=json`);
+  const group = pickReleaseGroup(groups?.['release-groups'], cleanTitle);
   if (!group) return null;
 
   await wait(1100);
-  const listing = await getJSON(`https://musicbrainz.org/ws/2/release?release-group=${group.id}&limit=100&fmt=json`);
-  const withBack = (listing?.releases || []).filter((r) => r['cover-art-archive']?.back);
+  const listing = await getJSON(`https://musicbrainz.org/ws/2/release?release-group=${group.id}&inc=media&limit=100&fmt=json`);
 
   // Usually one release; a second is a fallback in case the archive's storage server has a hiccup
-  for (const release of withBack.slice(0, 2)) {
+  for (const release of pickBackCoverReleases(listing?.releases).slice(0, 2)) {
     const archive = await getJSON(`https://coverartarchive.org/release/${release.id}`);
     const back = archive?.images?.find((img) => img.types?.includes('Back') && img.approved !== false);
     if (back) {

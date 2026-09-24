@@ -3039,3 +3039,5 @@ html {
 .reorder-pill[hidden]{display:none}
 .pop-in{animation:gf-pop-in .4s ease-out both}
 @keyframes gf-pop-in{from{opacity:0}to{opacity:1}}
+.link-btn{background:none;border:0;padding:0;font:inherit;color:var(--color-accent);text-decoration:underline;cursor:pointer}
+.link-btn:disabled{opacity:.5;cursor:default}

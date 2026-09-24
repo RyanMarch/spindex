@@ -4,9 +4,9 @@ import {
   splitCreditRoles, creditKinds, groupCredits, parseCollectionFields, mapDiscogsTracklist, parseReleaseDetails,
   normalizeItunesGenre, getGenreTags, getRecordTags, tagLabel, calculateTotalDuration,
 } from '../public/js/sync.js';
-import { pickAlbumPage, isVariousArtists } from '../public/js/wiki.js';
+import { pickAlbumPage, isVariousArtists, pickBackCoverReleases, pickReleaseGroup } from '../public/js/wiki.js';
 import { usefulValue } from '../public/js/values.js';
-import { pickDeezerAlbum, normalize as deezerNormalize } from '../functions/_lib/deezer.js';
+import { pickDeezerAlbum, pickDeezerCover, normalize as deezerNormalize } from '../functions/_lib/deezer.js';
 
 // ---- credit roles ---------------------------------------------------------------------------------------------
 assert.deepEqual(splitCreditRoles('Producer, Engineer [Assistant, Studio X], Guitar'), [
@@ -230,4 +230,67 @@ import { detailsAreStale } from '../public/js/sync.js';
   assert.equal(detailsAreStale({ details: { fetchedAt: new Date(now - 5 * day).toISOString() } }, now), false);
   assert.equal(detailsAreStale({ details: { fetchedAt: new Date(now - 31 * day).toISOString() } }, now), true);
   assert.equal(detailsAreStale({ details: {} }, now), true, 'no timestamp counts as stale');
+}
+
+// ---- artwork choices -------------------------------------------------------------------------------------------
+{
+  // Back covers: a cassette insert is never the answer for a record collection, and vinyl beats CD
+  const rel = (id, format, back = true) => ({ id, media: [{ format }], 'cover-art-archive': { back } });
+  const picked = pickBackCoverReleases([rel('tape', 'Cassette'), rel('cd', 'CD'), rel('lp', '12" Vinyl'), rel('none', '12" Vinyl', false), rel('web', 'Digital Media')]);
+  assert.deepEqual(picked.map((r) => r.id), ['lp', 'cd'], 'vinyl first, then CD; cassette, digital and releases without a back are dropped');
+  assert.deepEqual(pickBackCoverReleases([rel('tape', 'Cassette')]), [], 'only a cassette insert means no back cover');
+  assert.deepEqual(pickBackCoverReleases([{ id: 'x', 'cover-art-archive': { back: true } }]).map((r) => r.id), ['x'], 'unknown format is kept, last');
+
+  // The release group is the album, not a "Demos" edition that outranked it in search
+  assert.equal(pickReleaseGroup([{ id: 'demos', title: 'Transatlanticism Demos' }, { id: 'album', title: 'Transatlanticism' }], 'Transatlanticism').id, 'album');
+  assert.equal(pickReleaseGroup([{ id: 'only', title: 'Something Else' }], 'Nope').id, 'only', 'falls back to the first hit');
+  assert.equal(pickReleaseGroup([], 'x'), null);
+
+  // Deezer covers come only from an exact artist and title match
+  const dzc = (title, artist, cover) => ({ title, artist: { name: artist }, link: 'l', cover_xl: cover });
+  assert.equal(pickDeezerCover([dzc('Transatlanticism', 'Ben Freeman', 'wrong'), dzc('Transatlanticism', 'Death Cab For Cutie', 'right')], 'Death Cab for Cutie', 'Transatlanticism'), 'right');
+  assert.equal(pickDeezerCover([dzc('Bodies', 'Someone Else', 'x')], 'AFI', 'Bodies'), null);
+}
+
+// ---- how much of the collection a sync reads ---------------------------------------------------------------------
+import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds } from '../public/js/syncplan.js';
+import { allowedUpstream } from '../functions/_lib/proxy.js';
+
+{
+  const day = 86400000;
+  const now = Date.parse('2026-09-24T00:00:00Z');
+  assert.equal(needsFullSync({ storedTotal: null, lastFullAt: 0 }, now), true, 'the first sync reads everything');
+  assert.equal(needsFullSync({ storedTotal: 200, lastFullAt: now - 3 * day }, now), false);
+  assert.equal(needsFullSync({ storedTotal: 200, lastFullAt: now - 20 * day }, now), true, 'a full read every two weeks picks up edits');
+  assert.equal(needsFullSync({ storedTotal: 200, lastFullAt: now - day }, now, true), true, 'forced');
+
+  // stop at a page with known records only when the totals add up
+  assert.equal(canStopEarly({ pageHasKnown: true, storedTotal: 200, total: 203, newCount: 3 }), true);
+  assert.equal(canStopEarly({ pageHasKnown: true, storedTotal: 200, total: 203, newCount: 2 }), false, 'a second copy of a known release does not add up');
+  assert.equal(canStopEarly({ pageHasKnown: true, storedTotal: 200, total: 199, newCount: 0 }), false, 'a removed record does not add up');
+  assert.equal(canStopEarly({ pageHasKnown: false, storedTotal: 200, total: 203, newCount: 3 }), false, 'the whole page is new: keep reading');
+  assert.equal(canStopEarly({ pageHasKnown: true, storedTotal: null, total: 3, newCount: 3 }), false);
+
+  const mem = new Map();
+  const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+  assert.deepEqual(readSyncMeta('Ryan', storage), { storedTotal: null, lastFullAt: 0 });
+  writeSyncMeta('Ryan', { storedTotal: 210, lastFullAt: 5 }, storage);
+  assert.deepEqual(readSyncMeta('ryan', storage), { storedTotal: 210, lastFullAt: 5 }, 'usernames are not case sensitive');
+  assert.deepEqual(readSyncMeta('x', { getItem() { throw new Error('blocked'); } }), { storedTotal: null, lastFullAt: 0 }, 'blocked storage just means a full read');
+
+  // the proxy passes a newest-first sort, and only sorts it knows
+  const session = { u: 'Ryan' };
+  const path = 'users/Ryan/collection/folders/0/releases';
+  assert.equal(allowedUpstream(path, new URLSearchParams('page=1&per_page=100&sort=added&sort_order=desc&evil=1'), session), '/users/Ryan/collection/folders/0/releases?page=1&per_page=100&sort=added&sort_order=desc');
+  assert.equal(allowedUpstream(path, new URLSearchParams('sort=../../x&sort_order=sideways'), session), '/users/Ryan/collection/folders/0/releases', 'unknown sort values are dropped');
+}
+
+// ---- removing records that left the Discogs collection ------------------------------------------------------------
+{
+  const local = [{ id: 'discogs_1' }, { id: 'discogs_2' }, { id: 'discogs_3' }, { id: 'discogs_mock_9' }, { id: 'custom_1' }];
+  assert.deepEqual(removedRecordIds(local, ['discogs_1', 'discogs_3'], { total: 2, fetchedCount: 2 }), ['discogs_2'], 'only the missing Discogs record goes; demo and local records stay');
+  assert.deepEqual(removedRecordIds(local, [], { total: 0, fetchedCount: 0 }), [], 'an empty answer never wipes the crate');
+  assert.deepEqual(removedRecordIds(local, ['discogs_1'], { total: 5, fetchedCount: 1 }), [], 'a partial read deletes nothing');
+  assert.deepEqual(removedRecordIds(local, ['discogs_1', 'discogs_1'], { total: 2, fetchedCount: 2 }), ['discogs_2', 'discogs_3'], 'two copies of one release count as two items');
+  assert.deepEqual(removedRecordIds(local, ['discogs_1'], { total: null, fetchedCount: 1 }), [], 'no total reported, no deletion');
 }

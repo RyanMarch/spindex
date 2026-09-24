@@ -3,7 +3,7 @@ import { openDB, getAllRecords, clearRecords, deleteRecords, getRecord, upsertRe
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
-import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, loadRecordDetails, refreshCollectionFields } from './sync.js';
+import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichFallbackArtInBackground, loadRecordDetails, refreshCollectionFields } from './sync.js';
 import { sortYear } from './years.js';
 import { initDiscogs, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
 
@@ -238,6 +238,8 @@ class App {
       });
     }
     onDiscogsChange(() => this.renderDiscogsSettings());
+    this.syncFullBtn = document.getElementById('sync-full-btn');
+    if (this.syncFullBtn) this.syncFullBtn.addEventListener('click', () => this.handleSync({ full: true }));
     if (this.syncBtn) {
       this.syncBtn.addEventListener('click', () => this.handleSync());
     }
@@ -391,7 +393,7 @@ class App {
     this.openFromLocation(true);
     window.addEventListener('popstate', () => this.openFromLocation());
     this.handleDiscogsReturn();
-    this.fillMissingGenres();
+    this.fillMissingArt().then(() => this.fillMissingGenres());
     this.refreshCollectionFieldsIfNeeded()
       .then(() => this.fillMissingYears())
       .then(() => this.fillMissingDetails())
@@ -521,6 +523,17 @@ class App {
       : this.fill?.total
         ? `${this.fill.label || 'Filling in details…'} ${this.fill.done} of ${this.fill.total}`
         : 'Finishing track lists…';
+  }
+
+  // Records still showing a Discogs photo of the sleeve get clean cover art: iTunes first, then Deezer
+  async fillMissingArt() {
+    const needsArt = () => this.allRecords.filter((r) => r.artwork?.source === 'discogs' && !String(r.id).startsWith('discogs_mock_'));
+    if (needsArt().length === 0) return;
+
+    await enrichArtInBackground(needsArt().filter((r) => !r.artChecked));
+    this.allRecords = await getAllRecords();
+    await enrichFallbackArtInBackground(needsArt().filter((r) => r.artChecked && !r.fallbackArtChecked));
+    await this.refreshInPlace();
   }
 
   fillMissingGenres() {
@@ -920,7 +933,7 @@ class App {
     }
   }
 
-  async handleSync() {
+  async handleSync({ full = false } = {}) {
     // Typed-in token: save it first (this is the fallback path; signed-in users skip straight to syncing)
     if (discogsState().mode !== 'oauth') {
       const username = this.usernameInput?.value.trim();
@@ -939,22 +952,26 @@ class App {
       return;
     }
 
-    const buttons = [this.syncBtn, this.syncTokenBtn].filter(Boolean);
+    const buttons = [this.syncBtn, this.syncFullBtn, this.syncTokenBtn].filter(Boolean);
     buttons.forEach((b) => { b.disabled = true; });
     this.setSyncStatus('Starting Discogs collection sync...', '');
 
     try {
-      await syncDiscogsCollection(username, ({ page, totalPages, count, message }) => {
+      const result = await syncDiscogsCollection(username, ({ page, totalPages, count, message, quick }) => {
         if (message) return this.setSyncStatus(message, '');
+        if (quick) return this.setSyncStatus('Checking for new records...', '');
         this.setSyncStatus(`Syncing page ${page} of ${totalPages} (${count} albums)...`, '');
-      });
+      }, { full });
 
       const stale = (await getAllRecords()).filter((r) => String(r.id).startsWith('discogs_mock_'));
       if (stale.length > 0) await deleteRecords(stale.map((r) => r.id));
 
-      this.setSyncStatus('Sync complete! Crate updated.', 'success');
+      this.setSyncStatus(result.quick
+        ? (result.added > 0 ? `Added ${result.added} new ${result.added === 1 ? 'record' : 'records'}.` : 'Already up to date.')
+        : result.removed > 0 ? `Sync complete! Removed ${result.removed} ${result.removed === 1 ? 'record' : 'records'} no longer in your collection.` : 'Sync complete! Crate updated.', 'success');
       await this.loadAllRecords();
       // One request per release supplies its details and tracklist; durations still missing are filled from the master after
+      this.fillMissingArt();
       this.fillMissingYears().then(() => this.fillMissingDetails()).then(() => this.fillMissingTracklists());
     } catch (err) {
       console.error(err);

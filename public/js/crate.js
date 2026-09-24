@@ -5,7 +5,7 @@ import { parseSortArtist } from './sync.js';
 // (Decoding 1200px art for every sleeve is what makes flipping through a big crate heavy on a phone.)
 function crateArtUrl(record) {
   const url = record.artwork?.highRes || record.artwork?.thumbnail || '';
-  return url.replace('1200x1200bb', '600x600bb');
+  return url.replace('1200x1200bb', '600x600bb').replace('/1000x1000-', '/500x500-');
 }
 
 export class CrateController {

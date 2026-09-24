@@ -337,9 +337,10 @@ export class GatefoldController {
   }
 
   async loadBackCover(record, token) {
-    if (record.context?.backCover === undefined) {
+    // backCoverVersion 2: chosen by format (vinyl, then CD). Covers saved before that could be a cassette insert.
+    if (record.context?.backCover === undefined || record.context.backCoverVersion !== 2) {
       const url = isVariousArtists(record.artist) ? null : await fetchBackCover(record.artist, record.title);
-      await this.saveContext(record, { backCover: url || null });
+      await this.saveContext(record, { backCover: url || null, backCoverVersion: 2 });
     }
     if (this.isCurrent(record, token)) this.renderFlip(record);
   }
