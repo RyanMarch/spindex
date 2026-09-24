@@ -8,6 +8,7 @@ import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBack
 import { sortYear } from './years.js';
 import { computeStats } from './stats.js';
 import { computeHealth, describeStorage, healthSummary } from './health.js';
+import { watchForUpdates, shouldAutoReload } from './updates.js';
 import { needsAutoSync, timeAgo, readSyncMeta } from './syncplan.js';
 import { sourceSnapshot } from './sourcestats.js';
 import { statsHTML, valueHTML } from './statsview.js';
@@ -80,6 +81,10 @@ if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch((err) => {
         console.warn('ServiceWorker registration error:', err);
       });
+    });
+    window.spindexUpdates = watchForUpdates({
+      container: navigator.serviceWorker,
+      onReady: () => { const pill = document.getElementById('update-pill'); if (pill) pill.hidden = false; },
     });
   }
 }
@@ -363,8 +368,21 @@ class App {
     document.getElementById('demo-note')?.addEventListener('click', () => this.openSettings());
 
     // Coming back to the app after a while: look for new records
+    document.getElementById('update-pill')?.addEventListener('click', () => location.reload());
+    let hiddenAt = 0;
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') this.autoSyncIfDue();
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now();
+        return;
+      }
+      const updates = window.spindexUpdates;
+      // Away for a while with a new version waiting: come back into it
+      if (updates && shouldAutoReload({ ready: updates.isReady(), hiddenMs: hiddenAt ? Date.now() - hiddenAt : 0 })) {
+        location.reload();
+        return;
+      }
+      updates?.check();
+      this.autoSyncIfDue();
     });
   }
 

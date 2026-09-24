@@ -4043,3 +4043,26 @@ body.sleeve-open .browse-rail {
   opacity: 0.01;
   transition: none;
 }
+/* A new version has been installed: a quiet prompt to reload into it */
+.update-pill {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--sab, 0px) + 5.6rem);
+  z-index: 300;
+  padding: 0.55rem 1.1rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(20, 20, 26, 0.96);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+}
+
+.update-pill[hidden] {
+  display: none;
+}

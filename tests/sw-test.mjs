@@ -29,6 +29,7 @@ function boot({ network }) {
     },
     fetch: network,
     Response,
+    Request,
     URL,
     Promise,
   };
@@ -127,4 +128,63 @@ const opaque = () => ({ status: 0, type: 'opaque', clone() { return this; } });
   assert.ok(stores.has('spindex-images-v1'), 'updating the app does not throw away the cached pictures');
   assert.ok(!stores.has('spindex-cache-v1'), 'but old app files are removed');
 }
+
+// Scripts and styles are checked with the server every time (no browser guessing); page loads pass through untouched
+{
+  const seen = [];
+  const { fire } = boot({ network: async (req) => { seen.push(req); return ok('code'); } });
+  const script = fetchEvent(new Request('https://spindex.example/js/app.js'));
+  fire('fetch', script);
+  await script.responded;
+  assert.equal(seen[0].cache, 'no-cache', 'a script is always revalidated');
+
+  const nav = { url: 'https://spindex.example/', method: 'GET', destination: 'document', mode: 'navigate' };
+  const page = fetchEvent(nav);
+  fire('fetch', page);
+  await page.responded;
+  assert.equal(seen[1], nav, 'a page load is passed through as it is');
+}
+
+// Noticing that a new version has taken over
+{
+  const { watchForUpdates, shouldAutoReload, AUTO_RELOAD_AFTER_MS } = await import('../public/js/updates.js');
+  const makeContainer = (controller) => {
+    const handlers = [];
+    return {
+      controller,
+      addEventListener: (type, fn) => { if (type === 'controllerchange') handlers.push(fn); },
+      fire: () => handlers.forEach((fn) => fn()),
+      getRegistration: async () => ({ update: async () => { made.updates++; } }),
+    };
+  };
+  const made = { updates: 0 };
+
+  // A first-ever install claims the page too, but that is not an update
+  let told = 0;
+  const first = makeContainer(null);
+  const w1 = watchForUpdates({ container: first, onReady: () => told++ });
+  first.fire();
+  assert.equal(told, 0, 'the first install is not announced');
+  first.fire();
+  assert.equal(told, 1, 'the next takeover is');
+  first.fire();
+  assert.equal(told, 1, 'and only once');
+  assert.equal(w1.isReady(), true);
+
+  // A page that already had a worker hears about the very first takeover
+  let told2 = 0;
+  const second = makeContainer({});
+  watchForUpdates({ container: second, onReady: () => told2++ });
+  second.fire();
+  assert.equal(told2, 1, 'an update over an existing worker is announced');
+
+  await w1.check();
+  assert.equal(made.updates, 1, 'coming back to the app asks the browser to look for a new version');
+  assert.equal(watchForUpdates({ container: undefined, onReady() {} }), null, 'no service worker support: nothing to watch');
+
+  assert.equal(shouldAutoReload({ ready: true, hiddenMs: AUTO_RELOAD_AFTER_MS }), true, 'away long enough with an update waiting: reload');
+  assert.equal(shouldAutoReload({ ready: true, hiddenMs: 10000 }), false, 'a quick glance away never reloads');
+  assert.equal(shouldAutoReload({ ready: false, hiddenMs: AUTO_RELOAD_AFTER_MS * 10 }), false, 'nothing to reload into');
+}
+
 console.log('Service worker tests passed.');
