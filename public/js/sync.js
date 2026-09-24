@@ -465,10 +465,19 @@ export async function syncDiscogsCollection(username, onProgress) {
   const fieldNames = await fetchCollectionFieldNames(username);
 
   while (page <= totalPages) {
-    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}`);
+    let res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}`);
+
+    // Discogs allows 60 requests a minute and background enrichment shares that budget: wait and retry
+    for (let attempt = 0; res.status === 429 && attempt < 3; attempt++) {
+      const wait = Math.min(Number(res.headers.get('retry-after')) || 30, 60);
+      onProgress?.({ message: `Discogs asked us to slow down. Retrying in ${wait}s…` });
+      await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+      res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}`);
+    }
 
     if (!res.ok) {
-      throw new Error(`Discogs fetch error: ${res.statusText}`);
+      const detail = await res.json().then((body) => body.error || body.message, () => '').catch(() => '');
+      throw new Error(`Discogs fetch error (${res.status})${detail ? `: ${detail}` : ''}`);
     }
 
     const data = await res.json();

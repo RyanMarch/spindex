@@ -857,7 +857,8 @@ class App {
     this.setSyncStatus('Starting Discogs collection sync...', '');
 
     try {
-      await syncDiscogsCollection(username, ({ page, totalPages, count }) => {
+      await syncDiscogsCollection(username, ({ page, totalPages, count, message }) => {
+        if (message) return this.setSyncStatus(message, '');
         this.setSyncStatus(`Syncing page ${page} of ${totalPages} (${count} albums)...`, '');
       });
 
