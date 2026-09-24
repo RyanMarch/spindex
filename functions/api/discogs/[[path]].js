@@ -3,11 +3,12 @@ import { configured, apiRequest } from '../../_lib/oauth.js';
 import { readSession, clearCookie, SESSION_COOKIE } from '../../_lib/session.js';
 import { allowedUpstream } from '../../_lib/proxy.js';
 import { json } from '../../_lib/http.js';
+import { cacheablePath, cacheKey, ttlSeconds, stripMarketplace } from '../../_lib/cache.js';
 
 // Headers worth passing back: rate-limit accounting lets the app pace itself
 const PASS_THROUGH = ['content-type', 'retry-after', 'x-discogs-ratelimit', 'x-discogs-ratelimit-used', 'x-discogs-ratelimit-remaining'];
 
-export async function onRequestGet({ request, env, params }) {
+export async function onRequestGet({ request, env, params, waitUntil }) {
   if (!configured(env)) return json({ error: 'Discogs is not configured on this server.' }, 503);
 
   const session = await readSession(request, env);
@@ -16,6 +17,21 @@ export async function onRequestGet({ request, env, params }) {
   const segments = Array.isArray(params.path) ? params.path : [params.path];
   const upstreamPath = allowedUpstream(segments.join('/'), new URL(request.url).searchParams, session);
   if (!upstreamPath) return json({ error: 'That Discogs endpoint is not available.' }, 403);
+
+  // Public pages (releases, masters, artists) are shared through Cloudflare's edge cache. This sits after the
+  // session check, so only signed-in people can read from it.
+  const cachePath = cacheablePath(upstreamPath);
+  const ttl = ttlSeconds(env);
+  const cache = cachePath && ttl > 0 && typeof caches !== 'undefined' ? caches.default : null;
+  if (cache) {
+    const hit = await cache.match(cacheKey(cachePath));
+    if (hit) {
+      return new Response(hit.body, {
+        status: 200,
+        headers: { 'Content-Type': hit.headers.get('Content-Type') || 'application/json', 'Cache-Control': 'private, no-store', 'X-Spindex-Cache': 'HIT' },
+      });
+    }
+  }
 
   let upstream;
   try {
@@ -31,6 +47,17 @@ export async function onRequestGet({ request, env, params }) {
   }
   // Discogs no longer accepts this token (the user revoked the app): drop the session so the UI can reconnect
   if (upstream.status === 401) headers.append('Set-Cookie', clearCookie(request, SESSION_COOKIE));
+
+  if (cache && upstream.ok) {
+    headers.set('X-Spindex-Cache', 'MISS');
+    const body = stripMarketplace(await upstream.text());
+    const contentType = upstream.headers.get('content-type') || 'application/json';
+    const stored = new Response(body, { status: 200, headers: { 'Content-Type': contentType, 'Cache-Control': `public, max-age=${ttl}` } });
+    const put = cache.put(cacheKey(cachePath), stored).catch(() => {});
+    if (waitUntil) waitUntil(put);
+    else await put;
+    return new Response(body, { status: 200, headers });
+  }
 
   return new Response(upstream.body, { status: upstream.status, headers });
 }

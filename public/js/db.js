@@ -1,9 +1,16 @@
 // db.js - Local-first IndexedDB storage for Spindex
-const DB_NAME = 'spindex_db';
+let DB_NAME = 'spindex_db';
 const DB_VERSION = 1;
 const STORE_NAME = 'records';
 
 let dbInstance = null;
+
+// A shared, read-only crate is kept in a database of its own, so a visitor's own collection is never touched.
+// Must be called before anything opens the database.
+export function useDatabase(name) {
+  if (dbInstance) throw new Error('The database is already open');
+  DB_NAME = name;
+}
 
 export function openDB() {
   if (dbInstance) return Promise.resolve(dbInstance);

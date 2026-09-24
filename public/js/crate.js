@@ -3,9 +3,9 @@ import { parseSortArtist } from './sync.js';
 
 // The stack shows covers at about 300 to 500 points wide, so 600px art is plenty; the album page keeps the 1200px version.
 // (Decoding 1200px art for every sleeve is what makes flipping through a big crate heavy on a phone.)
-function crateArtUrl(record) {
+export function crateArtUrl(record) {
   const url = record.artwork?.highRes || record.artwork?.thumbnail || '';
-  return url.replace('1200x1200bb', '600x600bb');
+  return url.replace('1200x1200bb', '600x600bb').replace('/1000x1000-', '/500x500-');
 }
 
 export class CrateController {
@@ -72,6 +72,17 @@ export class CrateController {
     this.buildSleeves();
   }
 
+  // Same records in the same order with fresher data: nothing moves, only artwork that changed is swapped
+  refreshRecords(records) {
+    if (records.length !== this.records.length) return;
+    this.records = records;
+    this.sleeveElements.forEach((item, i) => {
+      item.record = records[i];
+      const url = crateArtUrl(records[i]);
+      if (item.img && item.img.getAttribute('src') !== url) item.img.src = url;
+    });
+  }
+
   setIndex(index) {
     if (index >= 0 && index < this.records.length && index !== this.currentIndex) {
       this.currentIndex = index;
@@ -87,10 +98,6 @@ export class CrateController {
 
     if (total === 0) {
       if (this.counter) this.counter.textContent = '0 / 0';
-      const emptyMsg = document.createElement('div');
-      emptyMsg.className = 'empty-crate-msg';
-      emptyMsg.innerHTML =  /*html*/ '<p>Your record crate is empty.</p><small>Sync with Discogs or reload demo collection.</small>';
-      this.container.appendChild(emptyMsg);
       if (this.onIndexChange) this.onIndexChange(0, 0, null);
       return;
     }
@@ -101,6 +108,9 @@ export class CrateController {
       const el = document.createElement('div');
       el.className = 'sleeve';
       el.dataset.index = String(i);
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', `${record.title} by ${record.artist}`);
+      el.tabIndex = -1;
 
       // Solid jacket cover wrapper
       const coverWrap = document.createElement('div');
@@ -170,14 +180,14 @@ export class CrateController {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         if (i === this.currentIndex) {
-          if (this.onSelect) this.onSelect(record);
+          if (this.onSelect) this.onSelect(this.records[i]);
         } else {
           this.setIndex(i);
         }
       });
 
       this.container.appendChild(el);
-      this.sleeveElements.push({ el, dim, record, index: i });
+      this.sleeveElements.push({ el, dim, img, record, index: i });
     }
 
 
@@ -215,6 +225,8 @@ export class CrateController {
     // Each row below the active album takes about 42px, so only as many rows as fit the screen (plus a few) are drawn
     const screenHeight = typeof window !== 'undefined' ? window.innerHeight : 1000;
     this.visibleBelow = Math.min(45, Math.ceil(screenHeight / 40) + 3);
+    // On a phone the sliver of every album above only adds noise behind the controls
+    this.visibleAbove = typeof window !== 'undefined' && window.innerWidth <= 640 ? 5 : 12;
     this.gap = this.compactMq?.matches ? 64 : 0;
   }
 
@@ -311,6 +323,9 @@ export class CrateController {
         item.state = state;
         const dir = rounded < 0 ? 'flow-above' : 'flow-below';
         item.el.className = `sleeve ${out ? `out-of-range ${dir}` : rounded === 0 ? 'active' : dir}`;
+        // Screen readers only need the sleeve that is up front; the rest of the stack is decoration
+        item.el.setAttribute('aria-hidden', String(rounded !== 0));
+        item.el.tabIndex = rounded === 0 ? 0 : -1;
       }
 
       if (out) continue;
@@ -374,6 +389,7 @@ export class CrateController {
     // Keyboard navigation: Up/Left = prev, Down/Right = next
     window.addEventListener('keydown', (e) => {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+      if (!this.inStack()) return;
       if (document.querySelector('.gatefold-workspace.open') || document.querySelector('.settings-drawer.open')) return;
 
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
@@ -393,49 +409,115 @@ export class CrateController {
       }
     });
 
-    // Touch swipe gestures
-    let touchStartY = 0;
-    let touchStartTime = 0;
+    this.bindTouch();
+    this.bindWheel();
+  }
 
-    this.container.addEventListener('touchstart', (e) => {
-      const touch = e.touches[0];
-      touchStartY = touch.clientY;
-      touchStartTime = Date.now();
+  inStack() {
+    const view = document.body.dataset.view;
+    return !view || view === 'stack';
+  }
+
+  // Sizes were measured while the stack was hidden, so coming back to it measures again
+  refreshLayout() {
+    this.measure();
+    this.render();
+  }
+
+  // Moves the stack to a whole album, keeping whatever speed it already has so the spring carries on smoothly
+  goTo(index, velocity = 0) {
+    const clamped = Math.max(0, Math.min(this.records.length - 1, index));
+    this.vel = velocity;
+    if (clamped === this.currentIndex) {
+      this.kick();
+      return;
+    }
+    this.currentIndex = clamped;
+    this.updatePositions();
+  }
+
+  // Touch: the stack follows the finger, and on release the fling's speed decides how many albums it glides past
+  bindTouch() {
+    const area = this.container.closest?.('.station-crate-col') || this.container;
+    const ROW = 46; // pixels of finger travel per album
+    const MAX_FLING = 24; // albums a single fling can skip
+    let start = null;
+    let samples = [];
+    let swallowClick = false;
+
+    area.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1 || !this.records.length) return;
+      cancelAnimationFrame(this.raf);
+      this.raf = null;
+      start = { y: e.touches[0].clientY, pos: this.pos, moved: false };
+      samples = [{ y: start.y, t: e.timeStamp }];
     }, { passive: true });
 
-    this.container.addEventListener('touchend', (e) => {
-      const touch = e.changedTouches[0];
-      const deltaY = touch.clientY - touchStartY;
-      const elapsedTime = Date.now() - touchStartTime;
+    area.addEventListener('touchmove', (e) => {
+      if (!start) return;
+      const y = e.touches[0].clientY;
+      if (!start.moved && Math.abs(y - start.y) < 6) return;
+      start.moved = true;
+      this.pos = Math.max(0, Math.min(this.records.length - 1, start.pos - (y - start.y) / ROW));
+      samples.push({ y, t: e.timeStamp });
+      if (samples.length > 6) samples.shift();
+      if (this.counter) this.counter.textContent = `${Math.round(this.pos) + 1} / ${this.records.length}`;
+      this.render();
+    }, { passive: true });
 
-      if (elapsedTime > 600) return;
+    const finish = (e) => {
+      if (!start) return;
+      const moved = start.moved;
+      start = null;
+      if (!moved) return; // a plain tap is left to the click handler
+      swallowClick = true;
+      setTimeout(() => { swallowClick = false; }, 350);
+      const last = samples[samples.length - 1];
+      const first = samples.find((s) => last.t - s.t <= 120) || samples[0];
+      const dt = Math.max(last.t - first.t, 1);
+      const rowsPerSecond = -((last.y - first.y) / dt) * 1000 / ROW; // finger up means forward
+      const stale = (e.timeStamp - last.t) > 120;
+      const fling = stale ? 0 : Math.max(-MAX_FLING, Math.min(MAX_FLING, rowsPerSecond * 0.22));
+      this.goTo(Math.round(this.pos + fling), stale ? 0 : rowsPerSecond * 0.5);
+    };
+    area.addEventListener('touchend', finish, { passive: true });
+    area.addEventListener('touchcancel', finish, { passive: true });
 
-      if (Math.abs(deltaY) > 28) {
-        if (deltaY < 0) {
-          this.next();
-        } else {
-          this.prev();
-        }
+    // A drag that ends over a sleeve must not also count as a tap on it
+    area.addEventListener('click', (e) => {
+      if (swallowClick) {
+        e.stopPropagation();
+        e.preventDefault();
       }
-    }, { passive: true });
+    }, true);
+  }
 
-    // Vertical mouse wheel with momentum debounce
-    let wheelDebounce = false;
+  // Wheel and trackpad: scroll distance adds up, so a hard flick travels several albums and a nudge moves one
+  bindWheel() {
+    const ROW = 70; // pixels of scrolling per album
+    let goal = 0;
+    let idleTimer = null;
+
     window.addEventListener('wheel', (e) => {
       if (document.querySelector('.gatefold-workspace.open') || document.querySelector('.settings-drawer.open')) return;
-      if (wheelDebounce) return;
+      if (!this.records.length || !this.inStack()) return;
 
-      const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      let delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      if (e.deltaMode === 1) delta *= 16; // lines
+      if (delta === 0) return;
 
-      if (Math.abs(delta) > 14) {
-        wheelDebounce = true;
-        if (delta > 0) {
-          this.next();
-        } else {
-          this.prev();
-        }
-        setTimeout(() => { wheelDebounce = false; }, 160);
+      if (Math.round(goal) !== this.currentIndex || goal < 0) goal = this.currentIndex; // moved by keys or clicks since
+      // A notched mouse wheel sends big whole steps: one album per click. A trackpad sends many small ones.
+      const rows = Math.abs(delta) >= 100 ? Math.sign(delta) : (delta * (1 + Math.min(Math.abs(delta) / 100, 0.5))) / ROW;
+      goal = Math.max(0, Math.min(this.records.length - 1, goal + rows));
+
+      const target = Math.round(goal);
+      if (target !== this.currentIndex) {
+        this.currentIndex = target;
+        this.updatePositions();
       }
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => { goal = this.currentIndex; }, 200);
     }, { passive: true });
   }
 

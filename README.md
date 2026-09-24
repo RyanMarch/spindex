@@ -24,7 +24,10 @@ browser, and works offline once loaded.
   the artist, videos, listening links, a flippable sleeve with the pressing's real disc colour, and links to other
   records in your crate. Sections with nothing to show are hidden.
 - **Phones and tablets**: touch-sized controls, safe-area support, and layouts for portrait and landscape.
-- **Demo crate**: a built-in 12-album collection loads when the database is empty.
+- **Demo crate**: a first visit (before Discogs is connected) shows a built-in 12-album collection. It goes away once you connect. Add `?demo` to the address to reload it while testing.
+- **Grid and list views**, filters (decade, size, pressing, discs, speed), a jump rail (A to Z or decades), "surprise me", and a `?` list of keyboard shortcuts.
+- **Read-only link**: Settings > Share your crate publishes a snapshot others can browse at `/s/<id>`. See "Sharing" below.
+- **Stays up to date by itself**: opening the app (or coming back to it) checks Discogs for new records when it has been a few hours. Settings shows when it last checked.
 
 ## Local development
 
@@ -88,6 +91,22 @@ token instead") still works as a local fallback.
 - The proxy is read-only and allowlisted (your own collection, releases, masters, artists). Nothing is cached server-side.
 - `npm test` includes an end-to-end OAuth test against a mock Discogs server (`tests/oauth-test.mjs`).
 
+## Sharing (the read-only link)
+
+A signed-in owner can publish a trimmed snapshot of their collection (titles, artists, years, genres, covers, tracklists
+and pressing formats; never notes, conditions or anything gathered from other sources). Anyone with the link,
+`/s/<20 random characters>`, can browse it read-only. It is unlisted, not secret. Republishing keeps the same link,
+and "Stop sharing" makes it stop working.
+
+It needs a Cloudflare KV namespace bound as `SHARES`. Without one the feature reports itself unavailable and its
+Settings section stays hidden.
+
+- Local: `npm run dev` already passes `--kv SHARES`.
+- Production: create a KV namespace (Workers & Pages > KV), then bind it to the Pages project as `SHARES`
+  (Settings > Functions > KV namespace bindings, for Production).
+
+A shared crate opens in a browser database of its own, so a visitor's own collection is never touched.
+
 ## Deploying (Cloudflare Pages)
 
 1. Create a Pages project from this repo: no build command, output directory `public`.
@@ -95,6 +114,7 @@ token instead") still works as a local fallback.
 3. Set `DISCOGS_CONSUMER_KEY`, `DISCOGS_CONSUMER_SECRET` and `SESSION_SECRET` (a new `openssl rand -base64 32`) as
    encrypted Production variables.
 4. Add the custom domain (sign-in needs HTTPS).
+   Optional: bind a KV namespace as `SHARES` to turn on the read-only link (see "Sharing").
 5. Check `/api/health`, then connect Discogs from a phone, sync, and open an album from a direct `/album/...` URL.
 
 Pages keeps every deploy, so a bad release can be rolled back from the dashboard. The service worker is network-first;

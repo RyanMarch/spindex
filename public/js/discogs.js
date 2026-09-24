@@ -5,6 +5,9 @@
 //  'token'  fallback for local use: a personal access token typed into Settings, sent straight to Discogs.
 //  'none'   not connected.
 
+import { createLimiter } from './limiter.js';
+import { noteSource } from './sourcestats.js';
+
 const API = 'https://api.discogs.com';
 
 const state = {
@@ -58,7 +61,9 @@ export async function initDiscogs() {
 }
 
 // path: a Discogs API path such as "/releases/249504" or "/users/name/collection/folders/0/releases?page=1"
-export async function discogsFetch(path, init = {}) {
+const limiter = createLimiter({ pace: (res) => (res?.headers?.get('x-spindex-cache') === 'HIT' ? 0 : paceMs()) });
+
+async function send(path, init) {
   let res;
 
   if (state.mode === 'oauth') {
@@ -82,6 +87,17 @@ export async function discogsFetch(path, init = {}) {
   if (remaining !== null) state.remaining = Number(remaining);
   return res;
 }
+
+// Every Discogs request goes through one shared queue. priority is 'high' for anything a person is waiting on and
+// 'low' for background filling, which yields to it.
+export async function discogsFetch(path, init = {}, priority = 'high') {
+  const res = await limiter.schedule(() => send(path, init), priority);
+  noteSource('Discogs', res.ok || res.status === 404, `answered ${res.status}`);
+  return res;
+}
+
+// Queue activity, for the "filling in details" indicator: fn({ pending, high, low, pausedUntil })
+export const onDiscogsQueue = (fn) => limiter.subscribe(fn);
 
 // How long to wait between background requests. Normally just over a second; slower when Discogs says we're close to
 // the limit (60 a minute), which the proxy reports back on every response.

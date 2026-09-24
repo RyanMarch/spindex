@@ -1,6 +1,30 @@
 // sync.js - Discogs syncing and iTunes art enrichment
-import { upsertRecords, updateRecord, getAllRecords } from './db.js';
-import { discogsFetch, paceMs } from './discogs.js';
+import { upsertRecords, updateRecord, getAllRecords, deleteRecords } from './db.js';
+import { discogsFetch } from './discogs.js';
+import { createLimiter } from './limiter.js';
+import { noteSource } from './sourcestats.js';
+import { fingerprintFromUrl, sameArtwork, discogsImageUrl } from './imagematch.js';
+import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds } from './syncplan.js';
+import { isCustomRelease } from './values.js';
+import { masterYearUpdates, itunesYearUpdates, isEditionTitle } from './years.js';
+
+// Apple allows roughly 20 iTunes searches a minute per address, and when it says no, it leaves out the CORS header, so
+// the browser reports a rejected request rather than a 429. Everything goes through one paced queue, and a rejection
+// pauses it and retries instead of ending the whole pass.
+const itunesLimiter = createLimiter({ pace: () => 3200, maxRetries: 2 });
+
+async function itunesFetch(url, priority = 'low') {
+  const res = await itunesLimiter.schedule(async () => {
+    try {
+      return await fetch(url);
+    } catch {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('offline');
+      return { status: 429, ok: false, headers: { get: () => null } };
+    }
+  }, priority);
+  noteSource('iTunes', res.ok, `answered ${res.status}`);
+  return res;
+}
 
 // Known band names or entities that shouldn't be split into "Last, First"
 const KNOWN_BANDS = new Set([
@@ -454,7 +478,75 @@ export async function refreshCollectionFields(username) {
   }
 }
 
-export async function syncDiscogsCollection(username, onProgress) {
+// One item from Discogs' collection list, merged over the record we already have for it (if any)
+export function buildCollectionRecord(item, existing, fieldNames) {
+  const basic = item.basic_information || {};
+  const artistName = basic.artists && basic.artists.length > 0
+    ? basic.artists[0].name
+    : 'Unknown Artist';
+  const recordId = `discogs_${item.id}`;
+  const fields = parseCollectionFields(item.notes, fieldNames);
+
+  const existingTracklist = existing?.tracklist && existing.tracklist.length > 0
+    ? existing.tracklist
+    : [];
+
+  const discogsArtwork = {
+    thumbnail: basic.thumb || '',
+    highRes: basic.cover_image || '',
+    source: 'discogs',
+  };
+
+  // Keep validated high-res artwork if already enriched, otherwise use Discogs artwork
+  const existingArtwork = (['itunes', 'deezer'].includes(existing?.artwork?.source) && existing?.artwork?.highRes)
+    ? existing.artwork
+    : discogsArtwork;
+
+  const titleStr = basic.title || 'Untitled';
+  const isExpandedEdition = isEditionTitle(titleStr);
+  const chosenYear = (isExpandedEdition && basic.year)
+    ? basic.year
+    : (existing?.year || existing?.originalYear || basic.master_year || existing?.masterYear || basic.year || 0);
+
+  // Start from what the crate already knows (details, checked flags, art from other sources) and lay the fresh Discogs
+  // fields over it. Saving only the fresh fields would silently throw away everything gathered since the last sync.
+  return {
+    ...existing,
+    id: recordId,
+    discogsId: item.id,
+    masterId: basic.master_id || existing?.masterId || null,
+    title: titleStr,
+    artist: artistName.replace(/\s\(\d+\)$/, '').trim(),
+    sortArtist: parseSortArtist(artistName),
+    year: chosenYear,
+    masterYear: basic.master_year || existing?.masterYear || null,
+    originalYear: isExpandedEdition && basic.year
+      ? basic.year
+      : (existing?.originalYear || basic.master_year || existing?.masterYear || null),
+    pressingYear: basic.year || existing?.pressingYear || null,
+    releaseDate: existing?.releaseDate || null,
+    genres: basic.genres || [],
+    styles: basic.styles || [],
+    format: basic.formats ? basic.formats.map((f) => f.name) : ['Vinyl'],
+    dateAdded: item.date_added || new Date().toISOString(),
+    notes: fields.collectionNotes.map((n) => n.value).join('\n'),
+    mediaCondition: fields.mediaCondition,
+    sleeveCondition: fields.sleeveCondition,
+    collectionNotes: fields.collectionNotes,
+    tracklist: existingTracklist,
+    artwork: existingArtwork,
+    discogsArtwork,
+    context: existing?.context || null,
+  };
+}
+
+// A full sync reads the whole collection and picks up edits and removals. Otherwise it reads only as far as the newest
+// records we don't have yet (usually one request), and falls back to a full read whenever the numbers don't add up.
+export async function syncDiscogsCollection(username, onProgress, { full = false } = {}) {
+  const meta = readSyncMeta(username);
+  const readEverything = needsFullSync(meta, Date.now(), full);
+  let total = null;
+  let stoppedEarly = false;
   let page = 1;
   let totalPages = 1;
   const perPage = 100;
@@ -465,15 +557,7 @@ export async function syncDiscogsCollection(username, onProgress) {
   const fieldNames = await fetchCollectionFieldNames(username);
 
   while (page <= totalPages) {
-    let res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}`);
-
-    // Discogs allows 60 requests a minute and background enrichment shares that budget: wait and retry
-    for (let attempt = 0; res.status === 429 && attempt < 3; attempt++) {
-      const wait = Math.min(Number(res.headers.get('retry-after')) || 30, 60);
-      onProgress?.({ message: `Discogs asked us to slow down. Retrying in ${wait}s…` });
-      await new Promise((resolve) => setTimeout(resolve, wait * 1000));
-      res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}`);
-    }
+    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}&sort=added&sort_order=desc`);
 
     if (!res.ok) {
       const detail = await res.json().then((body) => body.error || body.message, () => '').catch(() => '');
@@ -485,81 +569,71 @@ export async function syncDiscogsCollection(username, onProgress) {
       totalPages = data.pagination.pages;
     }
 
-    const parsed = (data.releases || []).map((item) => {
-      const basic = item.basic_information || {};
-      const artistName = basic.artists && basic.artists.length > 0
-        ? basic.artists[0].name
-        : 'Unknown Artist';
-      const recordId = `discogs_${item.id}`;
-      const existing = existingMap.get(recordId);
-      const fields = parseCollectionFields(item.notes, fieldNames);
-
-      const existingTracklist = existing?.tracklist && existing.tracklist.length > 0
-        ? existing.tracklist
-        : [];
-
-      const discogsArtwork = {
-        thumbnail: basic.thumb || '',
-        highRes: basic.cover_image || '',
-        source: 'discogs',
-      };
-
-      // Keep validated high-res artwork if already enriched, otherwise use Discogs artwork
-      const existingArtwork = (existing?.artwork?.source === 'itunes' && existing?.artwork?.highRes)
-        ? existing.artwork
-        : discogsArtwork;
-
-      const isEditionTitle = (t) =>
-        /\b2\.0\b/i.test(t) ||
-        /\b\d+(?:th)?\s+anniversary\b/i.test(t) ||
-        /\bdeluxe\b/i.test(t) ||
-        /\bexpanded\b/i.test(t);
-
-      const titleStr = basic.title || 'Untitled';
-      const isExpandedEdition = isEditionTitle(titleStr);
-      const chosenYear = (isExpandedEdition && basic.year)
-        ? basic.year
-        : (existing?.year || existing?.originalYear || basic.master_year || existing?.masterYear || basic.year || 0);
-
-      return {
-        id: recordId,
-        discogsId: item.id,
-        masterId: basic.master_id || existing?.masterId || null,
-        title: titleStr,
-        artist: artistName.replace(/\s\(\d+\)$/, '').trim(),
-        sortArtist: parseSortArtist(artistName),
-        year: chosenYear,
-        masterYear: basic.master_year || existing?.masterYear || null,
-        originalYear: isExpandedEdition && basic.year
-          ? basic.year
-          : (existing?.originalYear || basic.master_year || existing?.masterYear || null),
-        pressingYear: basic.year || existing?.pressingYear || null,
-        releaseDate: existing?.releaseDate || null,
-        genres: basic.genres || [],
-        styles: basic.styles || [],
-        format: basic.formats ? basic.formats.map((f) => f.name) : ['Vinyl'],
-        dateAdded: item.date_added || new Date().toISOString(),
-        notes: fields.collectionNotes.map((n) => n.value).join('\n'),
-        mediaCondition: fields.mediaCondition,
-        sleeveCondition: fields.sleeveCondition,
-        collectionNotes: fields.collectionNotes,
-        tracklist: existingTracklist,
-        artwork: existingArtwork,
-        discogsArtwork,
-        context: existing?.context || null,
-      };
-    });
+    const parsed = (data.releases || []).map((item) => buildCollectionRecord(item, existingMap.get(`discogs_${item.id}`), fieldNames));
 
     fetchedRecords.push(...parsed);
+    total = data.pagination?.items ?? total;
     if (onProgress) {
-      onProgress({ page, totalPages, count: fetchedRecords.length });
+      onProgress({ page, totalPages, count: fetchedRecords.length, total, recent: parsed, quick: !readEverything });
+    }
+
+    if (!readEverything && canStopEarly({
+      pageHasKnown: parsed.some((r) => existingMap.has(r.id)),
+      storedTotal: meta.storedTotal,
+      total,
+      newCount: fetchedRecords.filter((r) => !existingMap.has(r.id)).length,
+    })) {
+      stoppedEarly = true;
+      break;
     }
     page++;
   }
 
+  writeSyncMeta(username, { storedTotal: total, lastFullAt: stoppedEarly ? meta.lastFullAt : Date.now(), lastCheckedAt: Date.now() });
+
   await upsertRecords(fetchedRecords);
-  enrichArtInBackground(fetchedRecords);
-  return fetchedRecords;
+
+  // A complete read shows what's gone from Discogs too
+  let removed = 0;
+  if (!stoppedEarly) {
+    const gone = removedRecordIds(existingRecords, fetchedRecords.map((r) => r.id), { total, fetchedCount: fetchedRecords.length });
+    if (gone.length > 0) await deleteRecords(gone);
+    removed = gone.length;
+  }
+
+  return { records: fetchedRecords, added: fetchedRecords.filter((r) => !existingMap.has(r.id)).length, removed, quick: stoppedEarly };
+}
+
+// Find each record's original release year from its Discogs master. This decides where a record files in the crate, so it
+// runs before the other background work. Records that share a master cost one request between them.
+export async function enrichYearsInBackground(records, onEach) {
+  const byMaster = new Map();
+  for (const record of records) {
+    if (!record.masterId || record.masterYear != null || record.masterChecked) continue;
+    if (!byMaster.has(record.masterId)) byMaster.set(record.masterId, []);
+    byMaster.get(record.masterId).push(record);
+  }
+
+  for (const [masterId, group] of byMaster) {
+    let res;
+    try {
+      res = await discogsFetch(`/masters/${masterId}`, {}, 'low');
+    } catch {
+      continue;
+    }
+    if (res.status === 429) break;
+    if (res.status === 404) {
+      for (const record of group) await updateRecord(record.id, { masterChecked: true });
+    } else if (res.ok) {
+      const master = await res.json();
+      for (const record of group) {
+        const updates = masterYearUpdates(record, master);
+        await updateRecord(record.id, updates);
+        Object.assign(record, updates);
+      }
+    }
+    if (onEach) onEach(group.length);
+  }
 }
 
 export async function enrichTracklistsInBackground(records) {
@@ -580,7 +654,7 @@ export async function enrichTracklistsInBackground(records) {
       if (currentTracklist.length === 0) {
         let res = null;
         try {
-          res = await discogsFetch(`/releases/${record.discogsId}`);
+          res = await discogsFetch(`/releases/${record.discogsId}`, {}, 'low');
         } catch {
           // Network / CORS / preflight failure
           continue;
@@ -607,16 +681,13 @@ export async function enrichTracklistsInBackground(records) {
             await updateRecord(record.id, { masterId: data.master_id });
           }
         }
-
-        // Throttle ~1.1s between Discogs API calls to stay comfortably under 60 req/min
-        await delay(paceMs());
       }
 
       // If Discogs returned no tracks or was rate-limited / unavailable, attempt iTunes fallback for full tracklist
       if (currentTracklist.length === 0) {
         try {
           const query = encodeURIComponent(`${record.artist} ${record.title}`);
-          const itunesRes = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=50`);
+          const itunesRes = await itunesFetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=50`);
           if (itunesRes.ok) {
             const itunesData = await itunesRes.json();
             const songs = (itunesData.results || []).filter((s) => s.trackName);
@@ -651,7 +722,7 @@ export async function enrichTracklistsInBackground(records) {
 
       if (missingDurations && record.masterId) {
         try {
-          const masterRes = await discogsFetch(`/masters/${record.masterId}`);
+          const masterRes = await discogsFetch(`/masters/${record.masterId}`, {}, 'low');
 
           if (masterRes.status === 429) {
             console.warn('Discogs rate limit reached (429). Pausing background tracklist enrichment.');
@@ -664,34 +735,9 @@ export async function enrichTracklistsInBackground(records) {
             const masterTracks = (masterData.tracklist || []).filter((t) => (!t.type_ || t.type_ === 'track') && t.duration);
 
             if (masterData.year) {
-              record.masterYear = masterData.year;
-
-              // Check if release title diverges significantly from master title (e.g. "Millennium 2.0" vs "Millennium")
-              const clean = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-              const normRel = clean(record.title);
-              const normMas = clean(masterData.title);
-              const isDivergent = normRel !== normMas && (
-                /\b2\.0\b/i.test(record.title) ||
-                /\b\d+(?:th)?\s+anniversary\b/i.test(record.title) ||
-                /\bdeluxe\b/i.test(record.title) ||
-                /\bexpanded\b/i.test(record.title) ||
-                (normRel.startsWith(normMas) && normRel.length >= normMas.length + 2)
-              );
-
-              if (isDivergent && record.pressingYear) {
-                // Keep the edition release year as primary
-                record.originalYear = record.pressingYear;
-                record.year = record.pressingYear;
-              } else {
-                record.originalYear = masterData.year;
-                record.year = masterData.year;
-              }
-
-              await updateRecord(record.id, {
-                masterYear: record.masterYear,
-                originalYear: record.originalYear,
-                year: record.year,
-              });
+              const updates = masterYearUpdates(record, masterData);
+              Object.assign(record, updates);
+              await updateRecord(record.id, updates);
             }
 
             const normalizeTitle = (str) =>
@@ -717,9 +763,6 @@ export async function enrichTracklistsInBackground(records) {
         } catch {
           // If master lookup fails, continue with whatever durations we have
         }
-
-        // Throttle ~1.1s between Discogs API calls
-        await delay(paceMs());
       }
 
       // 3. Fallback: For any tracks still missing durations, try matching against iTunes album tracks
@@ -727,7 +770,7 @@ export async function enrichTracklistsInBackground(records) {
       if (stillMissing) {
         try {
           const query = encodeURIComponent(`${record.artist} ${record.title}`);
-          const itunesRes = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=50`);
+          const itunesRes = await itunesFetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=50`);
           if (itunesRes.ok) {
             const itunesData = await itunesRes.json();
             const normalizeTitle = (str) =>
@@ -772,7 +815,7 @@ function cleanAlphaNum(str) {
   return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-function scoreAlbumMatch(recordArtist, recordTitle, itunesArtist, itunesAlbum) {
+export function scoreAlbumMatch(recordArtist, recordTitle, itunesArtist, itunesAlbum) {
   const rArtist = cleanAlphaNum(recordArtist);
   const rTitle = cleanAlphaNum(recordTitle);
   const iArtist = cleanAlphaNum(itunesArtist);
@@ -780,9 +823,14 @@ function scoreAlbumMatch(recordArtist, recordTitle, itunesArtist, itunesAlbum) {
 
   if (!rTitle || !iAlbum) return -1;
 
+  // The same album is often titled differently on a pressing and the digital release: "(Vinyl Edition ...)" against
+  // "(Original ...)". Without the bracketed qualifiers, are the titles the same?
+  const bare = (text) => cleanAlphaNum(String(text || '').replace(/\s*[([][^)\]]*[)\]]\s*$/, ''));
   let titleScore = -1;
   if (rTitle === iAlbum) {
     titleScore = 100;
+  } else if (bare(recordTitle) && bare(recordTitle) === bare(itunesAlbum)) {
+    titleScore = 90;
   } else if (iAlbum.startsWith(rTitle)) {
     const suffix = iAlbum.slice(rTitle.length);
     // Disqualify distinct follow-ups, companion releases, side b, part 2, vol 2 unless original title explicitly has them
@@ -904,13 +952,13 @@ function uniqueTags(list) {
 async function findItunesAlbum(record) {
   const cleanTitle = (record.title || '').replace(/\.{2,}$/, '').trim();
   const query = encodeURIComponent(`${record.artist} ${cleanTitle}`);
-  let res = await fetch(`https://itunes.apple.com/search?term=${query}&entity=album&limit=10`);
+  let res = await itunesFetch(`https://itunes.apple.com/search?term=${query}&entity=album&limit=10`);
   if (!res.ok) return { ok: false, item: null };
   let data = await res.json();
 
   // Fallback: If entity=album returns 0 results, query with media=music (Apple frequently omits new releases from entity=album)
   if (!data || data.resultCount === 0) {
-    const fallbackRes = await fetch(`https://itunes.apple.com/search?term=${query}&media=music&limit=15`);
+    const fallbackRes = await itunesFetch(`https://itunes.apple.com/search?term=${query}&media=music&limit=15`);
     if (fallbackRes.ok) {
       data = await fallbackRes.json();
     }
@@ -932,46 +980,203 @@ async function findItunesAlbum(record) {
   return { ok: true, item: scoredCandidates[0]?.item || null };
 }
 
-export async function enrichArtInBackground(records) {
+// Clean cover art from iTunes for records Deezer didn't have (or couldn't be asked about). Resumable: each record is marked once
+// iTunes has actually answered for it, so an interrupted pass picks up where it stopped on the next load.
+export async function enrichArtInBackground(records, onEach) {
   for (const record of records) {
+    if (!needsItunesArt(record)) continue;
     try {
-      const { item: best } = await findItunesAlbum(record);
+      const { ok, item: best } = await findItunesAlbum(record);
+      if (!ok) break; // throttled or offline: leave the rest for next time
 
       if (best && best.artworkUrl100) {
         const highRes = best.artworkUrl100.replace('100x100bb.jpg', '1200x1200bb.jpg');
+        const art = { thumbnail: best.artworkUrl100, highRes, source: 'itunes' };
+        const verdict = await judgeCandidate(record, itunesThumb(best.artworkUrl100));
+        if (verdict === 'unknown') continue; // couldn't compare: nothing decided, tried again next load
         const updates = {
-          artwork: {
-            thumbnail: best.artworkUrl100,
-            highRes,
-            source: 'itunes',
-          },
           primaryGenre: best.primaryGenreName || null,
           itunesUrl: best.collectionViewUrl || null,
           itunesArtistUrl: best.artistViewUrl || null,
           genreChecked: true,
+          artChecked: true,
+          itunesSearchVersion: ART_SEARCH_VERSION,
         };
+        if (verdict === 'same') {
+          updates.artwork = art;
+          updates.artVerified = true;
+        } else if (!record.artCandidate) {
+          updates.artCandidate = art;
+        }
+        updates.artMatchVersion = ART_MATCH_VERSION;
 
         if (best.releaseDate) {
           updates.releaseDate = best.releaseDate;
-          const itunesYear = parseInt(String(best.releaseDate).slice(0, 4), 10);
-          if (itunesYear && !record.masterYear) {
-            updates.originalYear = itunesYear;
-            if (!record.year || record.year === record.pressingYear) {
-              updates.year = itunesYear;
-            }
-          }
+          Object.assign(updates, itunesYearUpdates(record, parseInt(String(best.releaseDate).slice(0, 4), 10)));
         }
         await updateRecord(record.id, updates);
+        if (onEach && verdict === 'same') onEach(record.id);
       } else {
-        // If iTunes has no valid match, revert to original Discogs artwork if currently set to iTunes
-        if (record.artwork?.source === 'itunes' && record.discogsArtwork?.highRes) {
-          await updateRecord(record.id, {
-            artwork: record.discogsArtwork,
-          });
-        }
+        await updateRecord(record.id, { artChecked: true, itunesSearchVersion: ART_SEARCH_VERSION });
       }
     } catch {
-      // Continue to next album if fetch fails
+      break;
+    }
+  }
+}
+
+// Records still showing Discogs' own image, which is often a collector's photograph of the sleeve. Deezer is asked first:
+// it has clean square covers, no tight rate limit, and answers are cached at the edge. Whatever Deezer doesn't have goes
+// on to iTunes. A cleaner cover is only swapped in when it looks like the same picture as the Discogs image (a special
+// edition can have entirely different art from the digital release); otherwise it is kept as an option for the record.
+// (fallbackArtChecked is what an earlier version called deezerChecked.)
+const isDemo = (record) => String(record.id).startsWith('discogs_mock_');
+// The searches were made better at finding the same album under a differently bracketed title ("(Vinyl Edition ...)" against
+// "(Original ...)"). A record whose search came up empty under the old matching is searched once more.
+export const ART_SEARCH_VERSION = 2;
+export const needsDeezerArt = (record) => record.artwork?.source === 'discogs' && !record.artworkLocked && !isDemo(record) && !isCustomRelease(record) && record.deezerSearchVersion !== ART_SEARCH_VERSION;
+export const needsItunesArt = (record) => record.artwork?.source === 'discogs' && !record.artworkLocked && !isDemo(record) && !isCustomRelease(record) && record.itunesSearchVersion !== ART_SEARCH_VERSION;
+// Both searches missed, the record has a Discogs master (custom entries have none), and the master is titled differently:
+// its title is what other services usually call the album, so it gets a third search. Once per record.
+const bareTitle = (text) => cleanAlphaNum(String(text || '').replace(/\s*[([][^)\]]*[)\]]\s*$/, ''));
+export const titlesDiffer = (a, b) => Boolean(bareTitle(a) && bareTitle(b)) && bareTitle(a) !== bareTitle(b);
+export const needsMasterTitleArt = (record) => record.artwork?.source === 'discogs' && !record.artworkLocked && !isDemo(record) && !isCustomRelease(record)
+  && Boolean(record.masterId) && !record.artCandidate
+  && record.deezerSearchVersion === ART_SEARCH_VERSION && record.itunesSearchVersion === ART_SEARCH_VERSION
+  && record.masterTitleSearchVersion !== ART_SEARCH_VERSION;
+
+// The comparison was made more forgiving of photographs (version 2). Records whose cleaner cover was turned down before
+// that are judged again, once.
+export const ART_MATCH_VERSION = 2;
+export const needsArtRecheck = (record) => record.artwork?.source === 'discogs' && Boolean(record.artCandidate) && !record.artworkLocked
+  && !isDemo(record) && !isCustomRelease(record) && record.artMatchVersion !== ART_MATCH_VERSION;
+export const needsArtVerification = (record) => ['deezer', 'itunes'].includes(record.artwork?.source) && !record.artworkLocked && !record.artVerified && !isDemo(record) && !isCustomRelease(record)
+  && Boolean(record.discogsArtwork?.thumbnail || record.discogsArtwork?.highRes);
+
+// Small versions of a cover, enough to compare pictures
+export const deezerThumb = (cover) => cover.replace('1000x1000', '250x250');
+export const itunesThumb = (url) => url.replace(/\d+x\d+bb/, '250x250bb');
+
+// 'same', 'different', or 'unknown' (an image couldn't be loaded, so nothing is decided and it is tried again later).
+// A record with no Discogs image has nothing to disagree with.
+export async function judgeCandidate(record, candidateThumbUrl, load = fingerprintFromUrl) {
+  const original = record.discogsArtwork?.thumbnail || record.discogsArtwork?.highRes;
+  if (!original) return 'same';
+  try {
+    const [discogs, candidate] = await Promise.all([load(discogsImageUrl(original)), load(candidateThumbUrl)]);
+    return sameArtwork(discogs, candidate) ? 'same' : 'different';
+  } catch {
+    return 'unknown';
+  }
+}
+
+// Each record is marked once Deezer has actually answered, whether or not it had the album. A failure (Deezer down, or no
+// server here) marks nothing and stops the pass: it says nothing about the album, so the next load asks again.
+export async function enrichDeezerArtInBackground(records, onEach) {
+  for (const record of records) {
+    if (!needsDeezerArt(record)) continue;
+    try {
+      const res = await fetch(`/api/listen/deezer?artist=${encodeURIComponent(record.artist || '')}&title=${encodeURIComponent(record.title || '')}`);
+      if (!res.ok) break;
+      const { cover } = await res.json();
+      const updates = { deezerChecked: true, deezerSearchVersion: ART_SEARCH_VERSION };
+      if (cover) {
+        const art = { thumbnail: deezerThumb(cover), highRes: cover, source: 'deezer' };
+        const verdict = await judgeCandidate(record, art.thumbnail);
+        if (verdict === 'unknown') continue; // couldn't compare: say nothing, ask again next time
+        if (verdict === 'same') {
+          updates.artwork = art;
+          updates.artVerified = true;
+          if (onEach) onEach(record.id);
+        } else {
+          updates.artCandidate = art;
+        }
+        updates.artMatchVersion = ART_MATCH_VERSION;
+      }
+      await updateRecord(record.id, updates);
+    } catch {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
+// The third search: the master's title. Deezer first, then iTunes, and the same picture check before anything is swapped in.
+export async function enrichMasterTitleArtInBackground(records, onEach) {
+  for (const record of records) {
+    if (!needsMasterTitleArt(record)) continue;
+    try {
+      let title = record.masterTitle;
+      if (title === undefined) {
+        const res = await discogsFetch(`/masters/${record.masterId}`, {}, 'low');
+        if (res.status === 429) break;
+        title = res.ok ? String((await res.json()).title || '') : '';
+        await updateRecord(record.id, { masterTitle: title });
+      }
+      const updates = { masterTitleSearchVersion: ART_SEARCH_VERSION };
+      if (titlesDiffer(record.title, title)) {
+        let art = null;
+        const dz = await fetch(`/api/listen/deezer?artist=${encodeURIComponent(record.artist || '')}&title=${encodeURIComponent(title)}`);
+        if (!dz.ok) break; // Deezer down, or no server here: try again next load
+        const { cover } = await dz.json();
+        if (cover) art = { thumbnail: deezerThumb(cover), highRes: cover, source: 'deezer' };
+        if (!art) {
+          const { ok, item } = await findItunesAlbum({ ...record, title });
+          if (!ok) break;
+          if (item?.artworkUrl100) art = { thumbnail: item.artworkUrl100, highRes: item.artworkUrl100.replace('100x100bb.jpg', '1200x1200bb.jpg'), source: 'itunes' };
+        }
+        if (art) {
+          const verdict = await judgeCandidate(record, art.source === 'deezer' ? art.thumbnail : itunesThumb(art.thumbnail));
+          if (verdict === 'unknown') continue; // couldn't compare: say nothing, ask again next time
+          if (verdict === 'same') {
+            updates.artwork = art;
+            updates.artVerified = true;
+            updates.artMatchVersion = ART_MATCH_VERSION;
+            if (onEach) onEach(record.id);
+          } else {
+            updates.artCandidate = art;
+            updates.artMatchVersion = ART_MATCH_VERSION;
+          }
+        }
+      }
+      await updateRecord(record.id, updates);
+    } catch {
+      break;
+    }
+  }
+}
+
+// Cleaner covers turned down by an earlier, stricter comparison get a second look: one that matches now is swapped in.
+export async function recheckArtInBackground(records, onEach) {
+  for (const record of records) {
+    if (!needsArtRecheck(record)) continue;
+    const candidate = record.artCandidate;
+    const thumb = candidate.source === 'deezer' ? deezerThumb(candidate.highRes || candidate.thumbnail) : itunesThumb(candidate.highRes || candidate.thumbnail);
+    const verdict = await judgeCandidate(record, thumb);
+    if (verdict === 'unknown') continue;
+    if (verdict === 'same') {
+      await updateRecord(record.id, { artwork: candidate, artCandidate: null, artVerified: true, artMatchVersion: ART_MATCH_VERSION });
+      if (onEach) onEach(record.id);
+    } else {
+      await updateRecord(record.id, { artMatchVersion: ART_MATCH_VERSION });
+    }
+  }
+}
+
+// Covers swapped in before the comparison existed are checked now: one that turns out to be a different picture goes back
+// to the Discogs image, and stays available as an option.
+export async function verifyArtInBackground(records, onEach) {
+  for (const record of records) {
+    if (!needsArtVerification(record)) continue;
+    const current = record.artwork;
+    const thumb = current.source === 'deezer' ? deezerThumb(current.highRes || current.thumbnail) : itunesThumb(current.highRes || current.thumbnail);
+    const verdict = await judgeCandidate(record, thumb);
+    if (verdict === 'unknown') continue;
+    if (verdict === 'same') {
+      await updateRecord(record.id, { artVerified: true, artMatchVersion: ART_MATCH_VERSION });
+    } else {
+      await updateRecord(record.id, { artwork: record.discogsArtwork, artCandidate: current, artVerified: true, artMatchVersion: ART_MATCH_VERSION });
+      if (onEach) onEach(record.id);
     }
   }
 }
@@ -992,7 +1197,6 @@ export async function enrichGenresInBackground(records) {
     } catch {
       break;
     }
-    await new Promise((resolve) => setTimeout(resolve, 400));
   }
 }
 
@@ -1030,6 +1234,7 @@ export function parseReleaseDetails(data) {
 
   return {
     labels,
+    status: data.status || '',
     country: data.country || '',
     released: data.released || '',
     formats: (data.formats || []).map((f) => ({
@@ -1146,10 +1351,10 @@ export function groupCredits(details) {
 }
 
 // Fetch one release from Discogs. `status` is 'ok', 'throttled' (429) or 'error'.
-export async function fetchReleaseDetails(record) {
+export async function fetchReleaseDetails(record, priority = 'high') {
   let res;
   try {
-    res = await discogsFetch(`/releases/${record.discogsId}`);
+    res = await discogsFetch(`/releases/${record.discogsId}`, {}, priority);
   } catch {
     return { status: 'error' };
   }
@@ -1165,14 +1370,49 @@ export async function fetchReleaseDetails(record) {
   };
 }
 
+export const DETAILS_MAX_AGE_DAYS = 30;
+
+// Saved details older than this are quietly fetched again the next time the record is looked at
+export function detailsAreStale(record, now = Date.now()) {
+  if (!record.details) return false;
+  const fetched = Date.parse(record.details.fetchedAt || '');
+  return !Number.isFinite(fetched) || now - fetched > DETAILS_MAX_AGE_DAYS * 86400000;
+}
+
+const detailsInFlight = new Map();
+
+// Fetch a record's details and save them. One request per record at a time, however many callers ask. Resolves with
+// the saved fields, or null if Discogs didn't answer.
+export function loadRecordDetails(record, priority = 'high') {
+  if (!detailsInFlight.has(record.id)) {
+    const job = (async () => {
+      const result = await fetchReleaseDetails(record, priority);
+      if (result.status !== 'ok') return null;
+      const updates = { details: result.details };
+      if ((!record.tracklist || record.tracklist.length === 0) && result.tracklist.length > 0) {
+        updates.tracklist = result.tracklist;
+      }
+      if (!record.masterId && result.masterId) updates.masterId = result.masterId;
+      await updateRecord(record.id, updates);
+      return updates;
+    })().finally(() => detailsInFlight.delete(record.id));
+    detailsInFlight.set(record.id, job);
+  }
+  return detailsInFlight.get(record.id);
+}
+
+// A record needs its release details when it has none. One without a master also needs them again if they were saved before
+// the release's status was kept: that status is what tells a custom release from an ordinary one, and only records without a
+// master can be custom.
+export const needsDetails = (record) => Boolean(record.discogsId) && !String(record.id).startsWith('discogs_mock_')
+  && (!record.details || (record.details.status === undefined && !record.masterId));
+
 // Backfill full release details, one gentle request at a time. Stops if throttled and resumes next load.
 export async function enrichDetailsInBackground(records, onEach) {
-  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
   for (const record of records) {
-    if (!record.discogsId || record.details) continue;
+    if (!needsDetails(record)) continue;
 
-    const result = await fetchReleaseDetails(record);
+    const result = await fetchReleaseDetails(record, 'low');
     if (result.status === 'throttled') break;
     if (result.status === 'ok') {
       const updates = { details: result.details };
@@ -1183,7 +1423,6 @@ export async function enrichDetailsInBackground(records, onEach) {
       await updateRecord(record.id, updates);
       if (onEach) onEach(record.id);
     }
-    await delay(paceMs());
   }
 }
 
