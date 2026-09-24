@@ -4,9 +4,9 @@ import {
   splitCreditRoles, creditKinds, groupCredits, parseCollectionFields, mapDiscogsTracklist, parseReleaseDetails,
   normalizeItunesGenre, getGenreTags, getRecordTags, tagLabel, calculateTotalDuration,
 } from '../public/js/sync.js';
-import { pickAlbumPage, isVariousArtists } from '../public/js/wiki.js';
+import { pickAlbumPage, isVariousArtists, pickBackCoverReleases, pickReleaseGroup } from '../public/js/wiki.js';
 import { usefulValue } from '../public/js/values.js';
-import { pickDeezerAlbum, normalize as deezerNormalize } from '../functions/_lib/deezer.js';
+import { pickDeezerAlbum, pickDeezerCover, normalize as deezerNormalize } from '../functions/_lib/deezer.js';
 
 // ---- credit roles ---------------------------------------------------------------------------------------------
 assert.deepEqual(splitCreditRoles('Producer, Engineer [Assistant, Studio X], Guitar'), [
@@ -123,3 +123,216 @@ assert.equal(calculateTotalDuration([]), null);
 assert.equal(calculateTotalDuration([{ duration: '3:00' }, { duration: '2:00' }]), '5 min');
 
 console.log('Logic tests passed.');
+
+// ---- Discogs request queue ------------------------------------------------------------------------------------
+import { createLimiter, retryAfterMs } from '../public/js/limiter.js';
+
+{
+  // Fake clock: sleeping just advances time, so the test runs instantly
+  let t = 0;
+  const clock = { now: () => t, sleep: async (ms) => { t += ms; } };
+  const res = (status, headers = {}) => ({ status, headers: { get: (k) => headers[k] ?? null } });
+
+  // Requests run one at a time, spaced by pace(), and 'high' jumps ahead of 'low'
+  const order = [];
+  const starts = [];
+  const limiter = createLimiter({ pace: () => 1000, ...clock });
+  const run = (name, priority) => limiter.schedule(async () => { order.push(name); starts.push(t); return res(200); }, priority);
+  await Promise.all([run('low1', 'low'), run('low2', 'low'), run('high1', 'high'), run('low3', 'low')]);
+  assert.deepEqual(order, ['low1', 'high1', 'low2', 'low3'], 'the first job starts at once, then high beats low');
+  assert.deepEqual(starts.slice(1).map((s, i) => s - starts[i]), [1000, 1000, 1000], 'requests are spaced by pace()');
+
+  // A 429 pauses the queue, honours Retry-After, and the caller only sees the eventual success
+  t = 0;
+  let calls = 0;
+  const throttled = createLimiter({ pace: () => 0, ...clock });
+  const out = await throttled.schedule(async () => (++calls === 1 ? res(429, { 'retry-after': '20' }) : res(200)));
+  assert.equal(out.status, 200);
+  assert.equal(calls, 2);
+  assert.ok(t >= 20000, 'waited out Retry-After');
+
+  // It gives up after maxRetries and hands back the 429
+  calls = 0;
+  const stubborn = createLimiter({ pace: () => 0, maxRetries: 2, ...clock });
+  const last = await stubborn.schedule(async () => { calls++; return res(429); });
+  assert.equal(last.status, 429);
+  assert.equal(calls, 3, 'one try plus two retries');
+
+  // A thrown request rejects that caller without stalling the queue
+  const flaky = createLimiter({ pace: () => 0, ...clock });
+  const bad = flaky.schedule(async () => { throw new Error('offline'); });
+  const good = flaky.schedule(async () => res(200));
+  await assert.rejects(bad, /offline/);
+  assert.equal((await good).status, 200);
+
+  // Subscribers hear about the queue, and the pause shows up in the stats
+  const seen = [];
+  const watched = createLimiter({ pace: () => 0, ...clock });
+  watched.subscribe((s) => seen.push(s));
+  let n = 0;
+  await watched.schedule(async () => (++n === 1 ? res(429, { 'retry-after': '5' }) : res(200)), 'low');
+  assert.ok(seen.some((s) => s.low === 1), 'reports queued background work');
+  assert.ok(seen.some((s) => s.pausedUntil > 0), 'reports the pause');
+  assert.equal(seen.at(-1).pending, 0, 'ends idle');
+
+  assert.equal(retryAfterMs(res(429)), 30000, 'default wait');
+  assert.equal(retryAfterMs(res(429, { 'retry-after': '500' })), 60000, 'capped');
+  console.log('Discogs queue tests passed.');
+}
+
+// A free answer (a cache hit) skips the wait before the next request
+{
+  let t = 0;
+  const limiter = createLimiter({ pace: (res) => (res.status === 203 ? 0 : 1000), now: () => t, sleep: async (ms) => { t += ms; } });
+  const starts = [];
+  const run = (status) => limiter.schedule(async () => { starts.push(t); return { status, headers: { get: () => null } }; });
+  await Promise.all([run(203), run(200), run(200)]);
+  assert.deepEqual(starts, [0, 0, 1000], 'no wait after a cache hit, a full wait after a real request');
+}
+
+// ---- which year a record files under ---------------------------------------------------------------------------
+import { sortYear, masterYearUpdates, itunesYearUpdates, isEditionTitle } from '../public/js/years.js';
+
+{
+  // A 2023 vinyl issue of a 1999 album files under 1999 once its master is known
+  const reissue = { title: 'Millennium', pressingYear: 2023, year: 2023, originalYear: null, masterYear: null };
+  assert.equal(sortYear(reissue), 2023, 'before the master is known it files under the pressing');
+  const updates = masterYearUpdates(reissue, { title: 'Millennium', year: 1999 });
+  assert.deepEqual(updates, { masterYear: 1999, originalYear: 1999, year: 1999, masterChecked: true });
+  assert.equal(sortYear({ ...reissue, ...updates }), 1999);
+
+  // Special editions keep their own year
+  const deluxe = { title: 'Millennium (Deluxe)', pressingYear: 2023, year: 2023 };
+  const kept = masterYearUpdates(deluxe, { title: 'Millennium', year: 1999 });
+  assert.equal(kept.year, 2023);
+  assert.equal(sortYear({ ...deluxe, ...kept }), 2023, 'a deluxe edition files under its pressing year');
+
+  // A master with no year is marked checked so it is not asked for again
+  assert.deepEqual(masterYearUpdates(reissue, { title: 'X', year: 0 }), { masterChecked: true });
+
+  assert.equal(isEditionTitle('Abbey Road 50th Anniversary'), true);
+  assert.equal(isEditionTitle('Abbey Road'), false);
+
+  // iTunes dates only fill gaps: never for a record with a master, and never later than what we have
+  assert.deepEqual(itunesYearUpdates({ masterId: 5, pressingYear: 2023, year: 2023 }, 1999), {}, 'the master decides');
+  assert.deepEqual(itunesYearUpdates({ pressingYear: 1975, year: 1975 }, 2011), {}, "a remaster's date never pushes an album later");
+  assert.deepEqual(itunesYearUpdates({ pressingYear: 2023, year: 2023 }, 1999), { originalYear: 1999, year: 1999 });
+  assert.deepEqual(itunesYearUpdates({ pressingYear: 2023, year: 2023 }, NaN), {});
+}
+
+// ---- stale release details ---------------------------------------------------------------------------------------
+import { detailsAreStale } from '../public/js/sync.js';
+
+{
+  const now = Date.parse('2026-09-24T00:00:00Z');
+  const day = 86400000;
+  assert.equal(detailsAreStale({}, now), false, 'nothing saved yet is missing, not stale');
+  assert.equal(detailsAreStale({ details: { fetchedAt: new Date(now - 5 * day).toISOString() } }, now), false);
+  assert.equal(detailsAreStale({ details: { fetchedAt: new Date(now - 31 * day).toISOString() } }, now), true);
+  assert.equal(detailsAreStale({ details: {} }, now), true, 'no timestamp counts as stale');
+}
+
+// ---- artwork choices -------------------------------------------------------------------------------------------
+{
+  // Back covers: a cassette insert is never the answer for a record collection, and vinyl beats CD
+  const rel = (id, format, back = true) => ({ id, media: [{ format }], 'cover-art-archive': { back } });
+  const picked = pickBackCoverReleases([rel('tape', 'Cassette'), rel('cd', 'CD'), rel('lp', '12" Vinyl'), rel('none', '12" Vinyl', false), rel('web', 'Digital Media')]);
+  assert.deepEqual(picked.map((r) => r.id), ['lp', 'cd'], 'vinyl first, then CD; cassette, digital and releases without a back are dropped');
+  assert.deepEqual(pickBackCoverReleases([rel('tape', 'Cassette')]), [], 'only a cassette insert means no back cover');
+  assert.deepEqual(pickBackCoverReleases([{ id: 'x', 'cover-art-archive': { back: true } }]).map((r) => r.id), ['x'], 'unknown format is kept, last');
+
+  // The release group is the album, not a "Demos" edition that outranked it in search
+  assert.equal(pickReleaseGroup([{ id: 'demos', title: 'Transatlanticism Demos' }, { id: 'album', title: 'Transatlanticism' }], 'Transatlanticism').id, 'album');
+  assert.equal(pickReleaseGroup([{ id: 'only', title: 'Something Else' }], 'Nope').id, 'only', 'falls back to the first hit');
+  assert.equal(pickReleaseGroup([], 'x'), null);
+
+  // Deezer covers come only from an exact artist and title match
+  const dzc = (title, artist, cover) => ({ title, artist: { name: artist }, link: 'l', cover_xl: cover });
+  assert.equal(pickDeezerCover([dzc('Transatlanticism', 'Ben Freeman', 'wrong'), dzc('Transatlanticism', 'Death Cab For Cutie', 'right')], 'Death Cab for Cutie', 'Transatlanticism'), 'right');
+  assert.equal(pickDeezerCover([dzc('Bodies', 'Someone Else', 'x')], 'AFI', 'Bodies'), null);
+}
+
+// ---- how much of the collection a sync reads ---------------------------------------------------------------------
+import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds } from '../public/js/syncplan.js';
+import { allowedUpstream } from '../functions/_lib/proxy.js';
+
+{
+  const day = 86400000;
+  const now = Date.parse('2026-09-24T00:00:00Z');
+  assert.equal(needsFullSync({ storedTotal: null, lastFullAt: 0 }, now), true, 'the first sync reads everything');
+  assert.equal(needsFullSync({ storedTotal: 200, lastFullAt: now - 3 * day }, now), false);
+  assert.equal(needsFullSync({ storedTotal: 200, lastFullAt: now - 20 * day }, now), true, 'a full read every two weeks picks up edits');
+  assert.equal(needsFullSync({ storedTotal: 200, lastFullAt: now - day }, now, true), true, 'forced');
+
+  // stop at a page with known records only when the totals add up
+  assert.equal(canStopEarly({ pageHasKnown: true, storedTotal: 200, total: 203, newCount: 3 }), true);
+  assert.equal(canStopEarly({ pageHasKnown: true, storedTotal: 200, total: 203, newCount: 2 }), false, 'a second copy of a known release does not add up');
+  assert.equal(canStopEarly({ pageHasKnown: true, storedTotal: 200, total: 199, newCount: 0 }), false, 'a removed record does not add up');
+  assert.equal(canStopEarly({ pageHasKnown: false, storedTotal: 200, total: 203, newCount: 3 }), false, 'the whole page is new: keep reading');
+  assert.equal(canStopEarly({ pageHasKnown: true, storedTotal: null, total: 3, newCount: 3 }), false);
+
+  const mem = new Map();
+  const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+  assert.deepEqual(readSyncMeta('Ryan', storage), { storedTotal: null, lastFullAt: 0 });
+  writeSyncMeta('Ryan', { storedTotal: 210, lastFullAt: 5 }, storage);
+  assert.deepEqual(readSyncMeta('ryan', storage), { storedTotal: 210, lastFullAt: 5 }, 'usernames are not case sensitive');
+  assert.deepEqual(readSyncMeta('x', { getItem() { throw new Error('blocked'); } }), { storedTotal: null, lastFullAt: 0 }, 'blocked storage just means a full read');
+
+  // the proxy passes a newest-first sort, and only sorts it knows
+  const session = { u: 'Ryan' };
+  const path = 'users/Ryan/collection/folders/0/releases';
+  assert.equal(allowedUpstream(path, new URLSearchParams('page=1&per_page=100&sort=added&sort_order=desc&evil=1'), session), '/users/Ryan/collection/folders/0/releases?page=1&per_page=100&sort=added&sort_order=desc');
+  assert.equal(allowedUpstream(path, new URLSearchParams('sort=../../x&sort_order=sideways'), session), '/users/Ryan/collection/folders/0/releases', 'unknown sort values are dropped');
+}
+
+// ---- removing records that left the Discogs collection ------------------------------------------------------------
+{
+  const local = [{ id: 'discogs_1' }, { id: 'discogs_2' }, { id: 'discogs_3' }, { id: 'discogs_mock_9' }, { id: 'custom_1' }];
+  assert.deepEqual(removedRecordIds(local, ['discogs_1', 'discogs_3'], { total: 2, fetchedCount: 2 }), ['discogs_2'], 'only the missing Discogs record goes; demo and local records stay');
+  assert.deepEqual(removedRecordIds(local, [], { total: 0, fetchedCount: 0 }), [], 'an empty answer never wipes the crate');
+  assert.deepEqual(removedRecordIds(local, ['discogs_1'], { total: 5, fetchedCount: 1 }), [], 'a partial read deletes nothing');
+  assert.deepEqual(removedRecordIds(local, ['discogs_1', 'discogs_1'], { total: 2, fetchedCount: 2 }), ['discogs_2', 'discogs_3'], 'two copies of one release count as two items');
+  assert.deepEqual(removedRecordIds(local, ['discogs_1'], { total: null, fetchedCount: 1 }), [], 'no total reported, no deletion');
+}
+
+// ---- collection stats --------------------------------------------------------------------------------------------
+import { computeStats, durationSeconds, colorGroup } from '../public/js/stats.js';
+
+{
+  assert.equal(durationSeconds('3:02'), 182);
+  assert.equal(durationSeconds('1:02:03'), 3723);
+  assert.equal(durationSeconds(''), 0);
+  assert.equal(durationSeconds('n/a'), 0);
+
+  const rec = (id, artist, year, extra = {}) => ({ id, artist, title: id, year, genres: ['Rock'], dateAdded: '2021-03-05T00:00:00Z', tracklist: [{ duration: '10:00' }], ...extra });
+  const records = [
+    rec('a', 'AFI', 1999, { genres: ['Punk'], details: { formats: [{ name: 'Vinyl', descriptions: ['LP'], text: 'Black' }] } }),
+    rec('b', 'AFI', 2003, { genres: ['Punk'], dateAdded: '2021-03-20T00:00:00Z', details: { formats: [{ name: 'Vinyl', descriptions: ['LP'], text: 'Red Marbled' }] } }),
+    rec('c', 'Miles Davis', 1959, { genres: ['Jazz'], dateAdded: '2022-01-02T00:00:00Z' }),
+    rec('d', 'Various', 1985, { genres: [], dateAdded: 'not a date' }),
+    rec('discogs_mock_1', 'Demo', 1970),
+  ];
+  const s = computeStats(records);
+  assert.equal(s.total, 4, 'demo records are left out when real ones exist');
+  assert.equal(s.artistCount, 2, '"Various" is not an artist');
+  assert.deepEqual(s.topArtists[0], { name: 'AFI', count: 2 });
+  assert.deepEqual(s.decades.map((d) => [d.name, d.count]), [['1950s', 1], ['1980s', 1], ['1990s', 1], ['2000s', 1]]);
+  assert.equal(s.oldest.year, 1959);
+  assert.equal(s.newest.year, 2003);
+  assert.equal(s.genres.reduce((sum, g) => sum + g.count, 0), 4, 'genre bars add up to the collection');
+  assert.ok(s.genres.some((g) => g.name === 'Unfiled'), 'a record with no genre is unfiled, not dropped');
+  assert.deepEqual(s.colors.map((c) => [c.name, c.count]).sort(), [['Black', 1], ['Marbled', 1]]);
+  assert.deepEqual(s.colorCoverage, { known: 2, total: 4 }, 'colours are only known once details have loaded');
+  assert.equal(s.runtimeSeconds, 4 * 600);
+  assert.deepEqual(s.growth, [{ month: '2021-03', added: 2, total: 2 }, { month: '2022-01', added: 1, total: 3 }], 'growth is cumulative and skips bad dates');
+
+  // a demo-only crate still gets stats
+  assert.equal(computeStats([rec('discogs_mock_1', 'Demo', 1970)]).total, 1);
+  assert.equal(computeStats([]).total, 0);
+  assert.equal(colorGroup({ kind: 'translucent' }), 'Clear');
+
+  // the proxy allows the signed-in user's collection value, and only theirs
+  const session = { u: 'Ryan' };
+  assert.equal(allowedUpstream('users/Ryan/collection/value', new URLSearchParams(), session), '/users/Ryan/collection/value');
+  assert.equal(allowedUpstream('users/someoneelse/collection/value', new URLSearchParams(), session), null);
+}

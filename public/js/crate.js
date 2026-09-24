@@ -5,7 +5,7 @@ import { parseSortArtist } from './sync.js';
 // (Decoding 1200px art for every sleeve is what makes flipping through a big crate heavy on a phone.)
 function crateArtUrl(record) {
   const url = record.artwork?.highRes || record.artwork?.thumbnail || '';
-  return url.replace('1200x1200bb', '600x600bb');
+  return url.replace('1200x1200bb', '600x600bb').replace('/1000x1000-', '/500x500-');
 }
 
 export class CrateController {
@@ -70,6 +70,17 @@ export class CrateController {
     }
     this.currentIndex = targetIndex;
     this.buildSleeves();
+  }
+
+  // Same records in the same order with fresher data: nothing moves, only artwork that changed is swapped
+  refreshRecords(records) {
+    if (records.length !== this.records.length) return;
+    this.records = records;
+    this.sleeveElements.forEach((item, i) => {
+      item.record = records[i];
+      const url = crateArtUrl(records[i]);
+      if (item.img && item.img.getAttribute('src') !== url) item.img.src = url;
+    });
   }
 
   setIndex(index) {
@@ -170,14 +181,14 @@ export class CrateController {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         if (i === this.currentIndex) {
-          if (this.onSelect) this.onSelect(record);
+          if (this.onSelect) this.onSelect(this.records[i]);
         } else {
           this.setIndex(i);
         }
       });
 
       this.container.appendChild(el);
-      this.sleeveElements.push({ el, dim, record, index: i });
+      this.sleeveElements.push({ el, dim, img, record, index: i });
     }
 
 

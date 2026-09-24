@@ -3,8 +3,11 @@ import { openDB, getAllRecords, clearRecords, deleteRecords, getRecord, upsertRe
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
-import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, refreshCollectionFields } from './sync.js';
-import { initDiscogs, discogsState, isDiscogsConnected, onDiscogsChange, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
+import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichFallbackArtInBackground, loadRecordDetails, refreshCollectionFields } from './sync.js';
+import { sortYear } from './years.js';
+import { computeStats } from './stats.js';
+import { statsHTML, valueHTML } from './statsview.js';
+import { initDiscogs, discogsFetch, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
 
 const DEFAULT_TITLE = 'Spindex | Your record collection';
 
@@ -139,6 +142,7 @@ class App {
       onJump: (id) => this.jumpToRecord(id),
       getPosition: () => ({ index: this.crate.currentIndex, total: this.filteredRecords.length }),
       onRoute: (record, mode) => this.syncUrl(record, mode),
+      onArtworkChange: () => this.refreshInPlace(),
     });
   }
 
@@ -160,6 +164,7 @@ class App {
     }
 
     this.initSearch();
+    this.initFillStatus();
 
     // Genre tabs are rendered from the collection, so listen on the bar
     if (this.vibeBar) {
@@ -195,6 +200,15 @@ class App {
         }
       });
     }
+
+    // Collection stats
+    this.statsDrawer = document.getElementById('stats-drawer');
+    document.getElementById('stats-toggle-btn')?.addEventListener('click', () => this.openStats());
+    document.getElementById('stats-close-btn')?.addEventListener('click', () => this.closeStats());
+    this.statsDrawer?.addEventListener('click', (e) => { if (e.target === this.statsDrawer) this.closeStats(); });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.statsDrawer?.classList.contains('open')) this.closeStats();
+    });
 
     // Settings drawer toggling
     if (this.settingsToggleBtn) {
@@ -236,6 +250,8 @@ class App {
       });
     }
     onDiscogsChange(() => this.renderDiscogsSettings());
+    this.syncFullBtn = document.getElementById('sync-full-btn');
+    if (this.syncFullBtn) this.syncFullBtn.addEventListener('click', () => this.handleSync({ full: true }));
     if (this.syncBtn) {
       this.syncBtn.addEventListener('click', () => this.handleSync());
     }
@@ -290,6 +306,33 @@ class App {
         : `Using a personal access token for ${who}. Sync brings in your latest collection.`;
     }
     if (this.usernameInput && mode === 'token') this.usernameInput.value = username;
+  }
+
+  openStats() {
+    const content = document.getElementById('stats-content');
+    if (!content || !this.statsDrawer) return;
+    content.innerHTML =  /*html*/ statsHTML(computeStats(this.allRecords));
+    this.statsDrawer.classList.add('open');
+    this.statsDrawer.setAttribute('aria-hidden', 'false');
+    this.showCollectionValue();
+  }
+
+  closeStats() {
+    this.statsDrawer?.classList.remove('open');
+    this.statsDrawer?.setAttribute('aria-hidden', 'true');
+  }
+
+  // What Discogs says the collection is worth right now. Shown, never saved: prices go stale within hours.
+  async showCollectionValue() {
+    const slot = document.getElementById('stat-value');
+    if (!slot || !isDiscogsConnected() || !this.crateBelongsToCurrentUser()) return;
+    slot.innerHTML =  /*html*/ valueHTML('loading');
+    try {
+      const res = await discogsFetch(`/users/${encodeURIComponent(discogsState().username)}/collection/value`);
+      slot.innerHTML =  /*html*/ valueHTML(res.ok ? await res.json() : 'error');
+    } catch {
+      slot.innerHTML =  /*html*/ valueHTML('error');
+    }
   }
 
   openSettings() {
@@ -389,8 +432,9 @@ class App {
     this.openFromLocation(true);
     window.addEventListener('popstate', () => this.openFromLocation());
     this.handleDiscogsReturn();
-    this.fillMissingGenres();
+    this.fillMissingArt().then(() => this.fillMissingGenres());
     this.refreshCollectionFieldsIfNeeded()
+      .then(() => this.fillMissingYears())
       .then(() => this.fillMissingDetails())
       .then(() => this.fillMissingTracklists());
   }
@@ -463,15 +507,89 @@ class App {
     const needsDetails = this.allRecords.filter((r) => r.discogsId && !r.details && !String(r.id).startsWith('discogs_mock_'));
     if (needsDetails.length === 0) return;
 
-    await enrichDetailsInBackground(needsDetails);
-    await this.loadAllRecords();
+    this.fill = { total: needsDetails.length, done: 0 };
+    try {
+      await enrichDetailsInBackground(needsDetails, () => {
+        this.fill.done++;
+        this.renderFillStatus();
+      });
+    } finally {
+      this.fill = null;
+    }
+    await this.refreshInPlace();
+  }
+
+  // Where a record files in the crate depends on its original release year, which only its Discogs master knows
+  async fillMissingYears() {
+    if (!isDiscogsConnected()) return;
+
+    const needsYear = this.allRecords.filter((r) => r.masterId && r.masterYear == null && !r.masterChecked && !String(r.id).startsWith('discogs_mock_'));
+    if (needsYear.length === 0) return;
+
+    this.fill = { label: 'Finding original release years…', total: needsYear.length, done: 0 };
+    try {
+      await enrichYearsInBackground(needsYear, (count) => {
+        this.fill.done += count;
+        this.renderFillStatus();
+      });
+    } finally {
+      this.fill = null;
+    }
+    await this.refreshInPlace();
+  }
+
+  // A small pill that says what the background Discogs work is doing, so a slow first load reads as intentional
+  initFillStatus() {
+    this.fillStatusEl = document.getElementById('fill-status');
+    this.reorderPill = document.getElementById('reorder-pill');
+    this.reorderPill?.addEventListener('click', () => this.applyFiltersAndSort());
+    this.queueStats = { low: 0, pausedUntil: 0 };
+    onDiscogsQueue((stats) => {
+      this.queueStats = stats;
+      this.renderFillStatus();
+    });
+  }
+
+  renderFillStatus() {
+    const el = this.fillStatusEl;
+    if (!el) return;
+    const { low, pausedUntil } = this.queueStats;
+    const active = low > 0 || pausedUntil > 0;
+    el.hidden = !active;
+    if (!active) return;
+    el.textContent = pausedUntil > 0
+      ? 'Discogs asked us to slow down. Resuming shortly…'
+      : this.fill?.total
+        ? `${this.fill.label || 'Filling in details…'} ${this.fill.done} of ${this.fill.total}`
+        : 'Finishing track lists…';
+  }
+
+  // Records still showing a Discogs photo of the sleeve get clean cover art: iTunes first, then Deezer
+  async fillMissingArt() {
+    const needsArt = () => this.allRecords.filter((r) => r.artwork?.source === 'discogs' && !String(r.id).startsWith('discogs_mock_'));
+    if (needsArt().length === 0) return;
+
+    const onEach = () => this.scheduleRefresh();
+    await enrichArtInBackground(needsArt().filter((r) => !r.artChecked), onEach);
+    this.allRecords = await getAllRecords();
+    await enrichFallbackArtInBackground(needsArt().filter((r) => r.artChecked && !r.fallbackArtChecked), onEach);
+    await this.refreshInPlace();
+  }
+
+  // New artwork shows up in the stack as it arrives, in batches rather than one repaint per record
+  scheduleRefresh() {
+    if (this.refreshTimer) return;
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
+      this.refreshInPlace();
+    }, 4000);
   }
 
   fillMissingGenres() {
     const needsGenre = this.allRecords.filter((r) => !r.genreChecked || r.itunesUrl === undefined);
     if (needsGenre.length === 0) return;
 
-    enrichGenresInBackground(needsGenre).then(() => this.loadAllRecords());
+    enrichGenresInBackground(needsGenre).then(() => this.refreshInPlace());
   }
 
   fillMissingTracklists() {
@@ -484,7 +602,7 @@ class App {
     });
     if (needsEnrichment.length === 0) return;
 
-    enrichTracklistsInBackground(needsEnrichment).then(() => this.loadAllRecords());
+    enrichTracklistsInBackground(needsEnrichment).then(() => this.refreshInPlace());
   }
 
   setBrowseOpen(open) {
@@ -549,7 +667,8 @@ class App {
     return fold(this.searchQuery).split(/\s+/).filter(Boolean).every((word) => haystack.includes(word));
   }
 
-  applyFiltersAndSort() {
+  // The crate's contents in the current filter and sort, without touching the screen
+  computeList() {
     let list = [...this.allRecords];
 
     // Filter by tag: a record shows under every genre tag it carries
@@ -560,12 +679,7 @@ class App {
 
     if (this.searchQuery.trim()) list = list.filter((r) => this.matchesSearch(r));
 
-    const getSortYear = (r) => {
-      if (r.year && r.masterYear && r.year !== r.masterYear) {
-        return r.year;
-      }
-      return r.masterYear || r.originalYear || r.year || 0;
-    };
+    const getSortYear = sortYear;
 
     // Sort list
     if (this.currentSort === 'artist-last-year' || this.currentSort === 'artist') {
@@ -616,11 +730,36 @@ class App {
       });
     }
 
+    return list;
+  }
+
+  applyFiltersAndSort() {
+    const list = this.computeList();
     const currentActiveId = this.filteredRecords[this.crate?.currentIndex]?.id || null;
     this.filteredRecords = list;
     this.crate.setRecords(list, this.currentSort, currentActiveId);
     const activeRecord = list[this.crate.currentIndex] || null;
     this.updateActiveMetadata(activeRecord);
+    if (this.reorderPill) this.reorderPill.hidden = true;
+  }
+
+  // Background work (years, details, genres) saves new data all the time. It must never move records around under
+  // someone's hands, so it refreshes the records in place, keeps the order, and offers a re-sort instead.
+  async refreshInPlace() {
+    this.allRecords = await getAllRecords();
+    const byId = new Map(this.allRecords.map((r) => [r.id, r]));
+    this.filteredRecords = this.filteredRecords.map((r) => byId.get(r.id) || r);
+    this.crate.refreshRecords(this.filteredRecords);
+    this.buildRoutes();
+    this.updateActiveMetadata(this.filteredRecords[this.crate.currentIndex] || null);
+    this.checkPendingOrder();
+  }
+
+  checkPendingOrder() {
+    if (!this.reorderPill) return;
+    const next = this.computeList();
+    const same = next.length === this.filteredRecords.length && next.every((r, i) => r.id === this.filteredRecords[i].id);
+    this.reorderPill.hidden = same;
   }
 
   onCrateIndexChange(currIndex, total, currentRecord) {
@@ -629,6 +768,8 @@ class App {
       this.updateActiveMetadata(currentRecord);
       return;
     }
+
+    this.prefetchDetails(currentRecord);
 
     if (this.stationMetadataCol) {
       clearTimeout(this.metaFadeTimeout);
@@ -640,6 +781,16 @@ class App {
     } else {
       this.updateActiveMetadata(currentRecord);
     }
+  }
+
+  // Resting on a record for a moment usually means its page is next, so fetch its Discogs details now. Opening it then
+  // shows the complete page straight away instead of filling in after.
+  prefetchDetails(record) {
+    clearTimeout(this.prefetchTimer);
+    if (!record?.discogsId || record.details || !isDiscogsConnected() || String(record.id).startsWith('discogs_mock_')) return;
+    this.prefetchTimer = setTimeout(() => {
+      loadRecordDetails(record, 'high').catch(() => { });
+    }, 400);
   }
 
   setGlow(url) {
@@ -684,9 +835,7 @@ class App {
 
     if (this.metaTitle) this.metaTitle.textContent = record.title || 'Untitled';
     if (this.metaArtist) this.metaArtist.textContent = record.artist || 'Unknown Artist';
-    const primaryYear = (record.year && record.masterYear && record.year !== record.masterYear)
-      ? record.year
-      : (record.masterYear || record.originalYear || record.year);
+    const primaryYear = sortYear(record);
     if (this.metaYear) this.metaYear.textContent = primaryYear ? String(primaryYear) : '';
 
     if (this.metaDuration) {
@@ -833,7 +982,7 @@ class App {
     }
   }
 
-  async handleSync() {
+  async handleSync({ full = false } = {}) {
     // Typed-in token: save it first (this is the fallback path; signed-in users skip straight to syncing)
     if (discogsState().mode !== 'oauth') {
       const username = this.usernameInput?.value.trim();
@@ -852,23 +1001,27 @@ class App {
       return;
     }
 
-    const buttons = [this.syncBtn, this.syncTokenBtn].filter(Boolean);
+    const buttons = [this.syncBtn, this.syncFullBtn, this.syncTokenBtn].filter(Boolean);
     buttons.forEach((b) => { b.disabled = true; });
     this.setSyncStatus('Starting Discogs collection sync...', '');
 
     try {
-      await syncDiscogsCollection(username, ({ page, totalPages, count, message }) => {
+      const result = await syncDiscogsCollection(username, ({ page, totalPages, count, message, quick }) => {
         if (message) return this.setSyncStatus(message, '');
+        if (quick) return this.setSyncStatus('Checking for new records...', '');
         this.setSyncStatus(`Syncing page ${page} of ${totalPages} (${count} albums)...`, '');
-      });
+      }, { full });
 
       const stale = (await getAllRecords()).filter((r) => String(r.id).startsWith('discogs_mock_'));
       if (stale.length > 0) await deleteRecords(stale.map((r) => r.id));
 
-      this.setSyncStatus('Sync complete! Crate updated.', 'success');
+      this.setSyncStatus(result.quick
+        ? (result.added > 0 ? `Added ${result.added} new ${result.added === 1 ? 'record' : 'records'}.` : 'Already up to date.')
+        : result.removed > 0 ? `Sync complete! Removed ${result.removed} ${result.removed === 1 ? 'record' : 'records'} no longer in your collection.` : 'Sync complete! Crate updated.', 'success');
       await this.loadAllRecords();
       // One request per release supplies its details and tracklist; durations still missing are filled from the master after
-      this.fillMissingDetails().then(() => this.fillMissingTracklists());
+      this.fillMissingArt();
+      this.fillMissingYears().then(() => this.fillMissingDetails()).then(() => this.fillMissingTracklists());
     } catch (err) {
       console.error(err);
       this.setSyncStatus(err.message === 'Not connected to Discogs'
