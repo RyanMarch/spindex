@@ -3,7 +3,7 @@ import { openDB, getAllRecords, clearRecords, deleteRecords, getRecord, upsertRe
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
 import { GatefoldController } from './notes.js';
-import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichFallbackArtInBackground, loadRecordDetails, refreshCollectionFields } from './sync.js';
+import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichDeezerArtInBackground, needsDeezerArt, needsItunesArt, loadRecordDetails, refreshCollectionFields } from './sync.js';
 import { sortYear } from './years.js';
 import { computeStats } from './stats.js';
 import { statsHTML, valueHTML } from './statsview.js';
@@ -564,15 +564,14 @@ class App {
         : 'Finishing track lists…';
   }
 
-  // Records still showing a Discogs photo of the sleeve get clean cover art: iTunes first, then Deezer
+  // Records still showing a Discogs photo of the sleeve get clean cover art: Deezer first (fast), then iTunes for the rest
   async fillMissingArt() {
-    const needsArt = () => this.allRecords.filter((r) => r.artwork?.source === 'discogs' && !String(r.id).startsWith('discogs_mock_'));
-    if (needsArt().length === 0) return;
+    if (!this.allRecords.some((r) => needsDeezerArt(r) || needsItunesArt(r))) return;
 
     const onEach = () => this.scheduleRefresh();
-    await enrichArtInBackground(needsArt().filter((r) => !r.artChecked), onEach);
+    await enrichDeezerArtInBackground(this.allRecords.filter(needsDeezerArt), onEach);
     this.allRecords = await getAllRecords();
-    await enrichFallbackArtInBackground(needsArt().filter((r) => r.artChecked && !r.fallbackArtChecked), onEach);
+    await enrichArtInBackground(this.allRecords.filter(needsItunesArt), onEach);
     await this.refreshInPlace();
   }
 

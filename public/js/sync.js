@@ -965,11 +965,11 @@ async function findItunesAlbum(record) {
   return { ok: true, item: scoredCandidates[0]?.item || null };
 }
 
-// Clean cover art from iTunes for records still showing the Discogs image. Resumable: each record is marked once
+// Clean cover art from iTunes for records Deezer didn't have (or couldn't be asked about). Resumable: each record is marked once
 // iTunes has actually answered for it, so an interrupted pass picks up where it stopped on the next load.
 export async function enrichArtInBackground(records, onEach) {
   for (const record of records) {
-    if (record.artwork?.source !== 'discogs' || record.artChecked || String(record.id).startsWith('discogs_mock_')) continue;
+    if (!needsItunesArt(record)) continue;
     try {
       const { ok, item: best } = await findItunesAlbum(record);
       if (!ok) break; // throttled or offline: leave the rest for next time
@@ -1004,16 +1004,23 @@ export async function enrichArtInBackground(records, onEach) {
   }
 }
 
-// Discogs' main image is often a collector's photograph of the sleeve. For records where iTunes found no album art,
-// ask Deezer, which has clean square covers. Checked once per record: a record Deezer doesn't have keeps the Discogs image.
-export async function enrichFallbackArtInBackground(records, onEach) {
+// Records still showing Discogs' own image, which is often a collector's photograph of the sleeve. Deezer is asked first:
+// it has clean square covers, no tight rate limit, and answers are cached at the edge. Whatever Deezer doesn't have goes
+// on to iTunes. (fallbackArtChecked is what an earlier version called deezerChecked.)
+const isDemo = (record) => String(record.id).startsWith('discogs_mock_');
+export const needsDeezerArt = (record) => record.artwork?.source === 'discogs' && !isDemo(record) && !record.deezerChecked && !record.fallbackArtChecked;
+export const needsItunesArt = (record) => record.artwork?.source === 'discogs' && !isDemo(record) && !record.artChecked;
+
+// Each record is marked once Deezer has actually answered, whether or not it had the album. A failure (Deezer down, or no
+// server here) marks nothing and stops the pass: it says nothing about the album, so the next load asks again.
+export async function enrichDeezerArtInBackground(records, onEach) {
   for (const record of records) {
-    if (record.artwork?.source !== 'discogs' || !record.artChecked || record.fallbackArtChecked || String(record.id).startsWith('discogs_mock_')) continue;
+    if (!needsDeezerArt(record)) continue;
     try {
       const res = await fetch(`/api/listen/deezer?artist=${encodeURIComponent(record.artist || '')}&title=${encodeURIComponent(record.title || '')}`);
-      if (!res.ok) break; // no server functions here, or Deezer is down: try again next load
+      if (!res.ok) break;
       const { cover } = await res.json();
-      const updates = { fallbackArtChecked: true };
+      const updates = { deezerChecked: true };
       if (cover) {
         updates.artwork = { thumbnail: cover.replace('1000x1000', '250x250'), highRes: cover, source: 'deezer' };
         if (onEach) onEach(record.id);
@@ -1022,7 +1029,7 @@ export async function enrichFallbackArtInBackground(records, onEach) {
     } catch {
       break;
     }
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
 }
 

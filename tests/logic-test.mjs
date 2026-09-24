@@ -221,7 +221,7 @@ import { sortYear, masterYearUpdates, itunesYearUpdates, isEditionTitle } from '
 }
 
 // ---- stale release details ---------------------------------------------------------------------------------------
-import { detailsAreStale } from '../public/js/sync.js';
+import { detailsAreStale, needsDeezerArt, needsItunesArt } from '../public/js/sync.js';
 
 {
   const now = Date.parse('2026-09-24T00:00:00Z');
@@ -387,4 +387,19 @@ import { fetchBackCover } from '../public/js/wiki.js';
   } finally {
     globalThis.fetch = realFetch;
   }
+}
+
+// ---- which artwork lookups a record still needs ------------------------------------------------------------------
+{
+  const photo = { id: 'discogs_1', artwork: { source: 'discogs' } };
+  assert.equal(needsDeezerArt(photo), true, 'a Discogs photo asks Deezer first');
+  assert.equal(needsItunesArt(photo), true, 'and iTunes takes whatever is left');
+  assert.equal(needsDeezerArt({ ...photo, deezerChecked: true }), false, 'Deezer answered (a miss counts): never asked again');
+  assert.equal(needsDeezerArt({ ...photo, fallbackArtChecked: true }), false, 'records checked by the earlier version are not asked again');
+  assert.equal(needsItunesArt({ ...photo, deezerChecked: true }), true, 'a Deezer miss still goes to iTunes');
+  assert.equal(needsItunesArt({ ...photo, deezerChecked: true, artChecked: true }), false, 'both answered: nothing left to try');
+  const clean = { id: 'discogs_2', artwork: { source: 'deezer' } };
+  assert.equal(needsDeezerArt(clean) || needsItunesArt(clean), false, 'clean art is left alone');
+  assert.equal(needsDeezerArt({ ...clean, artwork: { source: 'itunes' } }) || needsItunesArt({ ...clean, artwork: { source: 'itunes' } }), false);
+  assert.equal(needsDeezerArt({ id: 'discogs_mock_1', artwork: { source: 'discogs' } }), false, 'demo records are skipped');
 }
