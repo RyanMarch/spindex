@@ -1032,9 +1032,13 @@ export class GatefoldController {
     }
     // Keep the active tab in view on phones
     const tab = this.tabsEl?.querySelector('.active');
-    if (tab && this.tabsEl.scrollWidth > this.tabsEl.clientWidth) {
-      this.tabsEl.scrollTo({ left: tab.offsetLeft - 24, behavior: 'smooth' });
+    // Only when it has slid out of sight, and only once per change, so the strip doesn't chase the content as it scrolls
+    if (tab && tab !== this.lastActiveTab && this.tabsEl.scrollWidth > this.tabsEl.clientWidth) {
+      const left = this.tabsEl.scrollLeft;
+      const outOfView = tab.offsetLeft < left + 8 || tab.offsetLeft + tab.offsetWidth > left + this.tabsEl.clientWidth - 8;
+      if (outOfView) this.tabsEl.scrollTo({ left: tab.offsetLeft - 24, behavior: 'smooth' });
     }
+    this.lastActiveTab = tab;
   }
 
   // ------------------------------------------------------------------------

@@ -404,13 +404,40 @@ summary {
   pointer-events: auto;
 }
 
-/* The active cover is the one lifted off the stack: contact, mid and ambient shadows */
+/* The cover at the front is lifted off the stack by two layers whose opacity follows its distance from the front (set
+   in crate.js), so its deep shadow and its shine fade in and out with the scroll instead of switching at a halfway point */
+.sleeve-lift {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 4;
+  will-change: opacity;
+  box-shadow:
+    0 10px 20px -4px rgba(0, 0, 0, 0.5),
+    0 30px 50px -14px rgba(0, 0, 0, 0.55);
+}
+
+.sleeve-sheen-front {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  will-change: opacity;
+  background:
+    radial-gradient(circle at var(--glare-x, 50%) var(--glare-y, 35%), rgba(255, 255, 255, 0.06) 0%, transparent 60%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+    linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, 0.28) 100%);
+}
+
+/* At the front and in the stack a cover keeps the same resting shadow; only the layers above change */
 .sleeve.active .sleeve-cover-wrap {
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.7),
-    0 10px 20px -4px rgba(0, 0, 0, 0.55),
-    0 30px 50px -14px rgba(0, 0, 0, 0.6),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+    0 -1px 1px rgba(0, 0, 0, 0.6),
+    0 -6px 12px -2px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 .sleeve.active:hover .sleeve-body {
@@ -425,12 +452,6 @@ summary {
     inset 0 0 0 1px rgba(255, 255, 255, 0.24);
 }
 
-.sleeve.active .sleeve-sheen-overlay {
-  background:
-    radial-gradient(circle at var(--glare-x, 50%) var(--glare-y, 35%), rgba(255, 255, 255, 0.06) 0%, transparent 60%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
-    linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, 0.28) 100%);
-}
 
 /* Flow Above (Past albums scrolled up): Leaning backward, stepping up into a packed crate stack */
 .sleeve.flow-above {
@@ -444,8 +465,8 @@ summary {
     inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
-.sleeve.flow-above .sleeve-sheen-overlay {
-  background: linear-gradient(180deg, transparent 40%, rgba(255, 255, 255, 0.12) 100%);
+.sleeve .sleeve-sheen-overlay {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 55%);
 }
 
 /* Flow Below (Upcoming albums scrolled down): Leaning backward, stepping down into a packed crate stack */
@@ -456,13 +477,11 @@ summary {
 .sleeve.flow-below .sleeve-cover-wrap {
   box-shadow:
     0 -1px 1px rgba(0, 0, 0, 0.6),
-    0 -7px 12px -2px rgba(0, 0, 0, 0.5),
+    0 -6px 12px -2px rgba(0, 0, 0, 0.5),
     inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
-.sleeve.flow-below .sleeve-sheen-overlay {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, transparent 60%);
-}
+
 
 /* Fallback cover */
 .cover-fallback {
@@ -514,8 +533,10 @@ summary {
   transition: opacity 160ms ease;
 }
 
-.station-metadata-col.is-updating {
-  opacity: 0;
+/* The caption follows the stack: --scrub is 1 at rest and falls to 0 while albums fly past (set in app.js) */
+.station-metadata-col.station-metadata-col > * {
+  opacity: var(--scrub, 1);
+  transition: none;
 }
 
 .meta-title {
@@ -2543,8 +2564,9 @@ body.sleeve-open .station-container {
     text-align: center;
   }
 
+  /* fades out without giving up its room, so the bar doesn't reflow while the sheet scrolls */
   .gf-bar.is-scrolled .gf-back-text {
-    display: none;
+    opacity: 0;
   }
 
   .gf-tabs {
@@ -3080,20 +3102,18 @@ html {
 }
 
 .fill-status {
-  position: fixed;
-  left: calc(var(--sal, 0px) + 16px);
-  bottom: calc(var(--sab, 0px) + 12px);
-  z-index: 60;
-  max-width: calc(50vw - 56px);
+  max-width: 100%;
   padding: 6px 12px;
-  border-radius: 14px;
+  border-radius: 9999px;
   background: rgba(20, 20, 26, .92);
   border: 1px solid var(--border-subtle);
   color: var(--text-muted);
   font-size: .72rem;
   letter-spacing: .02em;
   line-height: 1.3;
-  pointer-events: none
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap
 }
 
 .fill-status[hidden] {
@@ -3101,12 +3121,8 @@ html {
 }
 
 .reorder-pill {
-  position: fixed;
-  right: calc(var(--sar, 0px) + 16px);
-  bottom: calc(var(--sab, 0px) + 12px);
-  z-index: 60;
   padding: 8px 14px;
-  border-radius: 14px;
+  border-radius: 9999px;
   background: var(--color-accent);
   border: 0;
   color: #fff;
@@ -3114,6 +3130,7 @@ html {
   font-size: .72rem;
   font-weight: 700;
   letter-spacing: .04em;
+  white-space: nowrap;
   cursor: pointer
 }
 
@@ -4487,11 +4504,7 @@ body.sleeve-open .browse-rail {
 
 /* A new version has been installed: a quiet prompt to reload into it */
 .update-pill {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(var(--sab, 0px) + 5.6rem);
-  z-index: 300;
+  white-space: nowrap;
   padding: 0.55rem 1.1rem;
   border-radius: 9999px;
   border: 1px solid var(--border-strong);
@@ -5178,12 +5191,7 @@ body.is-empty .floating-nav-pill #crate-counter {
 }
 
 .toast {
-  position: fixed;
-  top: calc(var(--sat, 0px) + 4.2rem);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 320;
-  max-width: calc(100vw - 32px);
+  max-width: 100%;
   padding: 0.55rem 1.1rem;
   border-radius: 9999px;
   border: 1px solid var(--border-strong);
@@ -5431,35 +5439,36 @@ body.share-mode #fill-status {
     transition-duration: 0.01ms;
   }
 }
-/* Phones: the bottom bar owns the bottom edge. The progress note sits at the top, and the pills that offer something to
-   tap stack just above the bar, one above the other, so nothing ever lands on top of anything else. */
+/* One stack for the toast and the pills. It is bottom centre, never takes a tap except on a pill that offers one, and
+   on phones it sits above the bottom bar (which is not there while an album is open). */
+.status-stack {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--sab, 0px) + 12px);
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+
+.status-stack > button {
+  pointer-events: auto;
+}
+
 @media (max-width: 640px) {
-  .fill-status {
-    top: calc(var(--sat, 0px) + 3.7rem);
-    bottom: auto;
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-    max-width: calc(100vw - 32px);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    border-radius: 9999px;
-  }
-
-  .reorder-pill {
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
+  body:not(.sleeve-open) .status-stack {
     bottom: calc(var(--sab, 0px) + 5.6rem);
-    white-space: nowrap;
-    border-radius: 9999px;
-    padding: 0.6rem 1.1rem;
   }
+}
 
-  .update-pill {
-    bottom: calc(var(--sab, 0px) + 9rem);
-  }
+body:has(.settings-drawer.open) .status-stack .fill-status,
+body:has(.settings-drawer.open) .status-stack .reorder-pill {
+  display: none;
 }
 
 /* Lyrics Drawer: styled like an inner sleeve lyric sheet */
@@ -5917,4 +5926,134 @@ body.share-mode #fill-status {
 #settings-drawer .share-group[open] {
   padding-bottom: 1rem;
   border-bottom: 1px solid rgba(233, 225, 207, 0.12);
+}
+
+/* Phones and tablets: the sheet only fades. Nothing travels, so it can never be caught part-way and inset, and the
+   backdrop always fills the screen. */
+@media (max-width: 960px) {
+  .gatefold-workspace,
+  .gatefold-workspace.open {
+    transform: none;
+  }
+
+  .gatefold-workspace {
+    transition: opacity 320ms ease, visibility 0s linear 320ms;
+  }
+
+  .gatefold-workspace.open {
+    transition-delay: 0s;
+  }
+}
+
+/* The section tabs scroll sideways only, and stay put when the sheet scrolls */
+.gf-tabs {
+  overflow-y: hidden;
+  touch-action: pan-x;
+  overscroll-behavior: contain;
+}
+
+/* The layout runs edge to edge, so the sheet and the glow reach the notch; the things that hold content keep their own
+   safe-area padding. (The layout used to pad both sides itself, so a phone on its side got the gap twice.) */
+.app-layout {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.bv-grid,
+.bv-list {
+  padding-left: var(--sal, 0px);
+  padding-right: var(--sar, 0px);
+}
+
+/* A phone on its side: one column of tracks, so a title has room to be read */
+@media (max-width: 960px) and (max-height: 520px) {
+  .gatefold-sides-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gatefold-tracks li {
+    gap: 0.5rem;
+  }
+}
+
+/* The header's fade reaches the screen's edges even though its contents keep clear of the notch */
+.app-header {
+  background: none;
+}
+
+.app-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(-1 * var(--sal, 0px));
+  right: calc(-1 * var(--sar, 0px));
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(8, 8, 11, 0.82) 0%, rgba(8, 8, 11, 0.5) 55%, transparent 100%);
+}
+
+/* Touch screens: the grid and list scroll under a bottom bar and a jump rail, and every tile used to be a 3D layer with
+   a blurred shadow. None of that is visible on a phone (there is no hover tilt), so it is switched off there and
+   scrolling stays smooth. */
+@media (hover: none), (pointer: coarse) {
+  .browse-view {
+    will-change: auto;
+  }
+
+  .bv-art {
+    transform: none;
+    transition: none;
+    -webkit-backface-visibility: visible;
+    backface-visibility: visible;
+  }
+
+  .bv-cover {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    transition: none;
+  }
+
+  .floating-nav-pill,
+  .browse-rail {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(20, 20, 26, 0.96);
+  }
+}
+
+/* Phones: the caption under the cover. It has room for a title of two lines, is brighter (it used to be dimmed twice over
+   and sat under the cover's shadow), and the stack below it starts far enough down to leave that room (crate.js). */
+@media (max-width: 640px) {
+  .station-metadata-col {
+    height: 112px;
+    margin-top: 22px;
+  }
+
+  .meta-title {
+    margin-top: 0;
+    font-size: 1.3rem;
+    line-height: 1.2;
+    -webkit-line-clamp: 2;
+    text-wrap: balance;
+    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.6);
+  }
+
+  .meta-artist {
+    color: var(--text-main);
+    opacity: 0.88;
+    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.6);
+  }
+
+  .meta-line {
+    color: var(--text-main);
+    opacity: 0.8;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+  }
+
+  /* a shorter reach, so the front cover's shadow doesn't fall on the caption */
+  .sleeve-lift {
+    box-shadow:
+      0 8px 16px -4px rgba(0, 0, 0, 0.5),
+      0 16px 26px -10px rgba(0, 0, 0, 0.5);
+  }
 }

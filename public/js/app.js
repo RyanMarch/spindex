@@ -17,7 +17,7 @@ import { computeStats } from './stats.js';
 import { computeHealth, describeStorage, healthSummary } from './health.js';
 import { watchForUpdates, shouldAutoReload } from './updates.js';
 import { trackSummary, pressingNotes } from './vinyl.js';
-import { needsAutoSync, timeAgo, readSyncMeta } from './syncplan.js';
+import { timeAgo, readSyncMeta } from './syncplan.js';
 import { sourceSnapshot } from './sourcestats.js';
 import { statsHTML, valueHTML } from './statsview.js';
 import { initDiscogs, discogsFetch, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
@@ -200,7 +200,8 @@ class App {
       this.stackContainer,
       this.counterEl,
       (record) => this.openRecordDetail(record),
-      (currIndex, total, currentRecord) => this.onCrateIndexChange(currIndex, total, currentRecord)
+      (currIndex, total, currentRecord) => this.onCrateIndexChange(currIndex, total, currentRecord),
+      (index, fade, record) => this.onCrateScrub(fade, record)
     );
 
     this.browse = new BrowseView({
@@ -286,7 +287,6 @@ class App {
     this.initFilters();
     this.initEmptyState();
     this.initShortcuts();
-    this.initPullToRefresh();
     this.initShare();
     this.initWall();
     this.initFillStatus();
@@ -401,7 +401,7 @@ class App {
     }
     document.getElementById('demo-note')?.addEventListener('click', () => this.openSettings());
 
-    // Coming back to the app after a while: look for new records
+    // Coming back to the app after a while: pick up a new version of the app if one is waiting
     document.getElementById('update-pill')?.addEventListener('click', () => location.reload());
     let hiddenAt = 0;
     document.addEventListener('visibilitychange', () => {
@@ -416,7 +416,6 @@ class App {
         return;
       }
       updates?.check();
-      this.autoSyncIfDue();
     });
   }
 
@@ -1378,6 +1377,8 @@ class App {
     document.body.dataset.view = this.view;
     this.closeJump();
     this.viewButtons.forEach((btn) => { if (btn.dataset.view) btn.setAttribute('aria-pressed', String(btn.dataset.view === this.view)); });
+    // The grid and list are in the page but hidden until asked for: opening straight into one has to show it
+    if (nextView !== 'stack' && this.browseRoot) this.browseRoot.hidden = false;
     const leavingStack = prevView === 'stack' && nextView !== 'stack';
     const enteringStack = prevView !== 'stack' && nextView === 'stack';
 
@@ -1483,17 +1484,12 @@ class App {
     }
 
     this.prefetchDetails(currentRecord);
+  }
 
-    if (this.stationMetadataCol) {
-      clearTimeout(this.metaFadeTimeout);
-      this.stationMetadataCol.classList.add('is-updating');
-      this.metaFadeTimeout = setTimeout(() => {
-        this.updateActiveMetadata(currentRecord);
-        this.stationMetadataCol.classList.remove('is-updating');
-      }, 140);
-    } else {
-      this.updateActiveMetadata(currentRecord);
-    }
+  // The caption follows the stack: it shows whichever album is at the front, fading out while albums fly past
+  onCrateScrub(fade, record) {
+    this.stationMetadataCol?.style.setProperty('--scrub', fade === 1 ? '1' : fade.toFixed(2));
+    if (record && record.id !== this.lastMetaRecordId) this.updateActiveMetadata(record);
   }
 
   // Resting on a record for a moment usually means its page is next, so fetch its Discogs details now. Opening it then
@@ -1717,13 +1713,13 @@ class App {
     }
   }
 
-  // Opening the app (or coming back to it) checks for new records when it has been a while. Nobody needs to press anything.
+  // New records are only looked for when asked (Settings > Check now). The exception is a crate with nothing real in it,
+  // such as after the browser cleared its saved data, which fills itself again.
   async autoSyncIfDue({ force = false } = {}) {
     if (this.syncing || !isDiscogsConnected()) return;
-    const { username } = discogsState();
     const hasRealRecords = this.allRecords.some((r) => !String(r.id).startsWith('discogs_mock_'));
+    if (hasRealRecords && !force) return;
     if (hasRealRecords && !this.crateBelongsToCurrentUser()) return; // someone else's crate: that is for a person to decide
-    if (!force && !needsAutoSync(readSyncMeta(username))) return;
     await this.handleSync({ auto: true });
   }
 
@@ -1824,42 +1820,7 @@ class App {
     if (ms) this.toastTimer = setTimeout(() => { el.hidden = true; }, ms);
   }
 
-  // Pull the grid or list down from the top to look for new records, the way mail apps do
-  initPullToRefresh() {
-    const root = this.browseRoot;
-    if (!root) return;
-    const THRESHOLD = 90;
-    let startY = null;
-    let pulled = 0;
-    root.addEventListener('touchstart', (e) => {
-      startY = root.scrollTop <= 0 && e.touches.length === 1 ? e.touches[0].clientY : null;
-      pulled = 0;
-    }, { passive: true });
-    root.addEventListener('touchmove', (e) => {
-      if (startY === null) return;
-      pulled = e.touches[0].clientY - startY;
-      if (pulled > 20 && isDiscogsConnected() && !this.syncing) this.toast(pulled > THRESHOLD ? 'Release to check for new records' : 'Pull to check for new records', 0);
-    }, { passive: true });
-    root.addEventListener('touchend', () => {
-      if (startY === null) return;
-      const go = pulled > THRESHOLD && isDiscogsConnected() && !this.syncing;
-      startY = null;
-      if (go) {
-        this.toastSync = true;
-        this.toast('Checking for new records…', 0);
-        this.handleSync({});
-      } else {
-        const el = document.getElementById('toast');
-        if (el && /^(Pull|Release)/.test(el.textContent)) el.hidden = true;
-      }
-    }, { passive: true });
-  }
-
   setSyncStatus(msg, type = '') {
-    if (this.toastSync && msg && type) {
-      this.toastSync = false;
-      this.toast(msg);
-    }
     if (!this.syncStatus) return;
     this.syncStatus.textContent = msg;
     this.syncStatus.className = `sync-status ${type}`.trim();

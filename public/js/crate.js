@@ -9,11 +9,17 @@ export function crateArtUrl(record) {
 }
 
 export class CrateController {
-  constructor(containerEl, counterEl, onSelectRecord, onIndexChange) {
+  constructor(containerEl, counterEl, onSelectRecord, onIndexChange, onScrub) {
     this.container = containerEl;
     this.counter = counterEl;
     this.onSelect = onSelectRecord;
     this.onIndexChange = onIndexChange;
+    this.onScrub = onScrub; // (index, fade): which record is nearest the front, and how settled the stack is (1 = at rest)
+    this.speed = 0; // albums per second, smoothed
+    this.lastPos = 0;
+    this.lastRenderT = 0;
+    this.scrubIndex = -1;
+    this.scrubFade = -1;
     this.records = [];
     this.sleeveElements = [];
     this.currentIndex = 0;
@@ -121,6 +127,7 @@ export class CrateController {
       img.src = crateArtUrl(record);
       img.alt = `${record.artist} - ${record.title}`;
       img.loading = i <= 3 ? 'eager' : 'lazy';
+      img.decoding = 'async'; // decoding a cover never holds up a frame of the stack
 
       img.onerror = () => {
         img.style.display = 'none';
@@ -140,7 +147,14 @@ export class CrateController {
       // Depth shading: a black veil whose opacity changes (cheap to animate), in place of a per-frame brightness filter
       const dim = document.createElement('div');
       dim.className = 'sleeve-dim';
-      coverWrap.appendChild(dim);
+
+      // What lifts the front album off the stack: its deep shadow and its shine. They are layers whose opacity follows
+      // the album's distance from the front, so they fade in and out with the scroll instead of switching at a halfway point.
+      const lift = document.createElement('div');
+      lift.className = 'sleeve-lift';
+      const frontSheen = document.createElement('div');
+      frontSheen.className = 'sleeve-sheen-front';
+      coverWrap.append(frontSheen, dim);
 
       // The jacket's thickness: a bevelled edge and a lit top lip just outside the artwork, never over it
       const edge = document.createElement('div');
@@ -152,7 +166,7 @@ export class CrateController {
       // Cover and thickness share one wrapper, so a hover lift or tilt moves them together as a single jacket
       const body = document.createElement('div');
       body.className = 'sleeve-body';
-      body.append(coverWrap, edge, lip);
+      body.append(lift, coverWrap, edge, lip);
       el.appendChild(body);
 
       // Tilt and glare follow the pointer over the active cover (touch screens have no hover, so skip them)
@@ -187,7 +201,7 @@ export class CrateController {
       });
 
       this.container.appendChild(el);
-      this.sleeveElements.push({ el, dim, img, record, index: i });
+      this.sleeveElements.push({ el, dim, lift, frontSheen, img, record, index: i, z: '' });
     }
 
 
@@ -209,6 +223,7 @@ export class CrateController {
     }
 
     this.measure();
+    this.scrubIndex = -1; // the list may have changed under the same position: say who is at the front again
 
     if (this.reducedMotion) {
       this.pos = this.currentIndex;
@@ -227,7 +242,9 @@ export class CrateController {
     this.visibleBelow = Math.min(45, Math.ceil(screenHeight / 40) + 3);
     // On a phone the sliver of every album above only adds noise behind the controls
     this.visibleAbove = typeof window !== 'undefined' && window.innerWidth <= 640 ? 5 : 12;
-    this.gap = this.compactMq?.matches ? 64 : 0;
+    // Compact layouts host the title, artist and year under the front cover: phones need room for a two-line title
+    const phone = typeof window !== 'undefined' && window.innerWidth <= 640;
+    this.gap = this.compactMq?.matches ? (phone ? 90 : 64) : 0;
   }
 
   kick() {
@@ -254,6 +271,7 @@ export class CrateController {
     if (settled) {
       this.pos = this.currentIndex;
       this.vel = 0;
+      this.speed = 0;
     }
 
     this.render();
@@ -333,10 +351,43 @@ export class CrateController {
       const p = this.pose(offset);
       item.el.style.transform = `perspective(1200px) translate3d(0, ${p.y.toFixed(2)}px, ${p.z.toFixed(2)}px) rotateX(${p.rx.toFixed(3)}deg) scale(${p.s.toFixed(4)})`;
       item.dim.style.opacity = (1 - p.b).toFixed(3);
+      const front = Math.max(0, 1 - Math.abs(offset)).toFixed(3);
+      item.lift.style.opacity = front;
+      item.frontSheen.style.opacity = front;
 
-      item.el.style.zIndex = String(this.zFor(offset));
+      const z = String(this.zFor(offset));
+      if (item.z !== z) {
+        item.z = z;
+        item.el.style.zIndex = z;
+      }
     }
 
+    this.reportScrub();
+  }
+
+  // Tells the app which record is nearest the front and how settled the stack is, so the caption under the cover can
+  // follow the stack: gone while albums fly past, back (and showing the right album) once they land.
+  reportScrub() {
+    if (!this.onScrub || !this.records.length) return;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (this.lastRenderT) {
+      const seconds = Math.max((now - this.lastRenderT) / 1000, 1 / 120);
+      this.speed = this.speed * 0.6 + (Math.abs(this.pos - this.lastPos) / seconds) * 0.4;
+    }
+    this.lastPos = this.pos;
+    this.lastRenderT = now;
+
+    const nearest = Math.round(this.pos);
+    const index = Math.max(0, Math.min(this.records.length - 1, nearest));
+    const between = Math.abs(this.pos - nearest); // 0 when an album is squarely at the front, 0.5 midway
+    const still = Math.min(1, Math.max(0, (6 - this.speed) / 4)); // full below 2 albums a second, gone above 6
+    const raw = Math.max(0, 1 - between * 2.5) * still;
+    const fade = raw > 0.98 ? 1 : raw;
+    if (index !== this.scrubIndex || Math.abs(fade - this.scrubFade) > 0.02 || (fade === 1) !== (this.scrubFade === 1)) {
+      this.scrubIndex = index;
+      this.scrubFade = fade;
+      this.onScrub(index, fade, this.records[index]);
+    }
   }
 
   next() {
@@ -444,6 +495,7 @@ export class CrateController {
     let start = null;
     let samples = [];
     let swallowClick = false;
+    let dragFrame = null;
 
     area.addEventListener('touchstart', (e) => {
       if (e.touches.length !== 1 || !this.records.length) return;
@@ -461,14 +513,21 @@ export class CrateController {
       this.pos = Math.max(0, Math.min(this.records.length - 1, start.pos - (y - start.y) / ROW));
       samples.push({ y, t: e.timeStamp });
       if (samples.length > 6) samples.shift();
-      if (this.counter) this.counter.textContent = `${Math.round(this.pos) + 1} / ${this.records.length}`;
-      this.render();
+      // Touch events can arrive faster than the screen refreshes: draw once per frame, not once per event
+      if (!dragFrame) {
+        dragFrame = requestAnimationFrame(() => {
+          dragFrame = null;
+          if (this.counter) this.counter.textContent = `${Math.round(this.pos) + 1} / ${this.records.length}`;
+          this.render();
+        });
+      }
     }, { passive: true });
 
     const finish = (e) => {
       if (!start) return;
       const moved = start.moved;
       start = null;
+      if (dragFrame) { cancelAnimationFrame(dragFrame); dragFrame = null; }
       if (!moved) return; // a plain tap is left to the click handler
       swallowClick = true;
       setTimeout(() => { swallowClick = false; }, 350);
