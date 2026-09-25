@@ -389,6 +389,7 @@ export class BrowseView {
     art.append(disc, this.art(record, 300, 'bv-cover'));
     const sub = [record.artist, d.year].filter(Boolean).join(' · ');
     tile.append(art, el('span', 'bv-title', record.title || 'Untitled'), el('span', 'bv-sub', sub));
+    if (d.track) tile.append(el('span', 'bv-hit', `Track: ${d.track}`));
     this.items.push(tile);
     return tile;
   }
@@ -403,6 +404,7 @@ export class BrowseView {
     const line = el('span', 'bv-line');
     line.append(el('span', 'bv-sub', record.artist || ''), this.tagsEl(record));
     main.append(el('span', 'bv-title', record.title || 'Untitled'), line);
+    if (d.track) main.append(el('span', 'bv-hit', `Track: ${d.track}`));
     row.append(
       this.art(record, 120, 'bv-thumb'),
       main,

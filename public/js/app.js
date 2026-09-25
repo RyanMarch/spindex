@@ -9,6 +9,7 @@ import { emptyState } from './emptystate.js';
 import { Wall, wallSupported } from './wall.js';
 import { createRunOnce } from './jobs.js';
 import { WELCOME, progressLabel, progressFraction, recentCovers } from './welcome.js';
+import { searchWords, matchRecord } from './search.js';
 import { GatefoldController } from './notes.js';
 import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichDeezerArtInBackground, verifyArtInBackground, recheckArtInBackground, needsArtRecheck, enrichMasterTitleArtInBackground, needsMasterTitleArt, needsDeezerArt, needsItunesArt, needsArtVerification, loadRecordDetails, needsDetails, refreshCollectionFields } from './sync.js';
 import { sortYear } from './years.js';
@@ -212,6 +213,7 @@ class App {
           year: year ? String(year) : '',
           genre: tags[0] ? tagLabel(tags[0]) : '',
           length: calculateTotalDuration(record.tracklist) || '',
+          track: this.searchHits.get(record.id)?.track || '',
         };
       },
       onOpen: (index) => {
@@ -876,11 +878,8 @@ class App {
     });
   }
 
-  matchesSearch(record) {
-    const fold = (text) => String(text || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    const haystack = fold(`${record.title} ${record.artist}`);
-    return fold(this.searchQuery).split(/\s+/).filter(Boolean).every((word) => haystack.includes(word));
-  }
+  // Which track each record matched on, when the words were found in a track title rather than the album's own
+  searchHits = new Map();
 
   // The crate's contents in the current filter and sort, without touching the screen
   computeList() {
@@ -892,7 +891,15 @@ class App {
       list = list.filter((r) => getGenreTags(r).some((t) => t.toLowerCase() === target));
     }
 
-    if (this.searchQuery.trim()) list = list.filter((r) => this.matchesSearch(r));
+    this.searchHits = new Map();
+    const words = searchWords(this.searchQuery);
+    if (words.length) {
+      list = list.filter((r) => {
+        const hit = matchRecord(r, words);
+        if (hit?.track) this.searchHits.set(r.id, hit);
+        return Boolean(hit);
+      });
+    }
     if (activeCount(this.filters)) list = list.filter((r) => matchesFilters(r, this.filters));
 
     const getSortYear = sortYear;
@@ -1234,6 +1241,7 @@ class App {
     const info = this.shareInfo;
     document.getElementById('share-off').hidden = Boolean(info);
     document.getElementById('share-on').hidden = !info;
+    document.getElementById('share-summary').textContent = info ? 'Shared' : 'Off';
     if (!info) return;
     document.getElementById('share-link').value = info.url;
     const n = info.count || 0;
@@ -1248,6 +1256,7 @@ class App {
       const res = await publishShare(records);
       this.shareInfo = res.shared;
       this.renderShare();
+      if (first) document.getElementById('share-group').open = true;
       if (!quiet) this.toast(first ? 'Link ready' : 'Link updated');
     } catch (err) {
       if (!quiet) this.showShareError(err.message);
@@ -1450,6 +1459,10 @@ class App {
     if (this.view !== 'stack') this.browse.refresh(this.filteredRecords);
     this.buildRoutes();
     this.updateActiveMetadata(this.filteredRecords[this.crate.currentIndex] || null);
+    if (this.gatefold?.isOpen() && this.gatefold.activeRecord) {
+      const freshOpen = byId.get(this.gatefold.activeRecord.id);
+      if (freshOpen) this.gatefold.refreshOpenRecord(freshOpen);
+    }
     this.checkPendingOrder();
   }
 
@@ -1543,7 +1556,8 @@ class App {
       const tracks = record.tracklist || [];
       const groups = tracks.length ? groupTracksBySide(tracks) : null;
       const notes = pressingNotes({ sideKeys: (groups || []).map((g) => g.sideKey), formats: record.details?.formats });
-      this.metaLine.textContent = [sortYear(record) || '', firstTag ? tagLabel(firstTag) : '', ...notes].filter(Boolean).join(' · ');
+      const hit = this.searchHits.get(record.id);
+      this.metaLine.textContent = [hit ? `Track: ${hit.track}` : '', sortYear(record) || '', firstTag ? tagLabel(firstTag) : '', ...notes].filter(Boolean).join(' · ');
     }
     if (this.metaArtist) this.metaArtist.textContent = record.artist || 'Unknown Artist';
     const primaryYear = sortYear(record);
@@ -1684,6 +1698,7 @@ class App {
 
   openRecordDetail(record, mode = 'push') {
     if (this.gatefold) {
+      this.gatefold.trackHint = this.searchHits.get(record?.id)?.track || null;
       this.gatefold.openGatefold(record, mode);
     }
   }

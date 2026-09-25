@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import {
   splitCreditRoles, creditKinds, groupCredits, parseCollectionFields, mapDiscogsTracklist, parseReleaseDetails,
   normalizeItunesGenre, getGenreTags, getRecordTags, tagLabel, calculateTotalDuration,
+  cleanTrackAudioTags, stripFeaturing, normalizeTrackTitle,
 } from '../public/js/sync.js';
 import { pickAlbumPage, isVariousArtists, pickBackCoverReleases, pickReleaseGroup, infoboxField } from '../public/js/wiki.js';
 import { usefulValue, isCustomRelease } from '../public/js/values.js';
 import { pickDeezerAlbum, pickDeezerCover, searchTitle, normalize as deezerNormalize } from '../functions/_lib/deezer.js';
+import { cleanArtistName, cleanTrackTitle, parseDurationToSeconds, formatLyricsHTML } from '../public/js/lyrics.js';
 
 // ---- credit roles ---------------------------------------------------------------------------------------------
 assert.deepEqual(splitCreditRoles('Producer, Engineer [Assistant, Studio X], Guitar'), [
@@ -108,6 +110,16 @@ assert.deepEqual(parsed.labels.map((l) => l.name), ['Rise Records', 'Rise Record
 assert.equal(parsed.labels[0].catno, 'RISE-1');
 assert.equal(parsed.labels[1].catno, '', '"none" is not a catalogue number');
 assert.deepEqual(parsed.credits.map((c) => c.name), ['Ann'], 'credits need a name and a role');
+
+const withTrackCredits = parseReleaseDetails({
+  extraartists: [{ id: 1, name: 'Ann', role: 'Vocals' }],
+  tracklist: [
+    { title: 'Track 1', extraartists: [{ id: 2, name: 'Bob', role: 'Bass' }, { id: 1, name: 'Ann', role: 'Vocals' }] },
+    { title: 'Track 2', extraartists: [{ id: 3, name: 'Charlie', role: 'Drums' }] },
+  ],
+});
+assert.deepEqual(withTrackCredits.credits.map((c) => c.name), ['Ann', 'Bob', 'Charlie'], 'includes and dedupes track extraartists');
+
 
 // ---- genres and tags ------------------------------------------------------------------------------------------
 assert.equal(normalizeItunesGenre('Pop'), 'Pop');
@@ -1060,4 +1072,162 @@ import { noteSource, sourceSnapshot, resetSourceStats } from '../public/js/sourc
   assert.equal(healthSummary({ total: 50, pending: { art: 0, details: 0 } }), 'All caught up');
   assert.equal(healthSummary({ total: 50, pending: { art: 3, details: 10 } }), 'Filling in 10 details and 3 covers');
   assert.equal(healthSummary({ total: 50, pending: { art: 3, details: 0 } }), 'Filling in 3 covers');
+}
+
+// ---- fun stats and curiosities -------------------------------------------------------------------------------------
+{
+  const { computeStats, computeFunStats } = await import('../public/js/stats.js');
+  const { statsHTML } = await import('../public/js/statsview.js');
+
+  const testRecords = [
+    {
+      id: 'r1',
+      title: 'Kind of Blue',
+      artist: 'Miles Davis',
+      year: 1959,
+      dateAdded: '2023-01-15T10:00:00Z',
+      tracklist: [
+        { title: 'So What', duration: '9:22' },
+        { title: 'All Blues', duration: '11:33' },
+      ],
+    },
+    {
+      id: 'r2',
+      title: 'A Love Supreme',
+      artist: 'John Coltrane',
+      year: 1965,
+      dateAdded: '2023-01-15T11:00:00Z',
+      tracklist: [
+        { title: 'Part I', duration: '7:42' },
+        { title: 'Part II', duration: '17:50' },
+      ],
+    },
+    {
+      id: 'r3',
+      title: 'Boston',
+      artist: 'Boston',
+      year: 1976,
+      dateAdded: '2024-05-20T14:00:00Z',
+      tracklist: [
+        { title: 'More Than a Feeling', duration: '4:45' },
+        { title: 'Peace of Mind', duration: '5:02' },
+        { title: 'Foreplay / Long Time', duration: '7:48' },
+      ],
+    },
+    {
+      id: 'r4',
+      title: 'Third',
+      artist: 'Soft Machine',
+      year: 1970,
+      dateAdded: '2024-06-01T12:00:00Z',
+      tracklist: [
+        { title: 'Facelift', duration: '18:45' },
+        { title: 'Slightly All the Time', duration: '18:12' },
+        { title: 'Moon in June', duration: '19:08' },
+      ],
+    },
+  ];
+
+  const fun = computeFunStats(testRecords);
+  assert.ok(fun.length > 0, 'generates fun stats from records');
+  assert.ok(fun.some((f) => f.id === 'first-added'), 'identifies first added record');
+  assert.ok(fun.some((f) => f.id === 'biggest-haul-day'), 'identifies single-day haul');
+  assert.ok(fun.some((f) => f.id === 'longest-track'), 'identifies longest track');
+
+  const stats = computeStats(testRecords);
+  assert.ok(stats.standoutsPool && stats.standoutsPool.length > 0, 'builds standoutsPool');
+  const html = statsHTML(stats);
+  assert.ok(html.includes('Standouts'), 'renders Standouts section');
+}
+
+// ---- lyrics helpers --------------------------------------------------------------------------------------------
+{
+  assert.equal(cleanArtistName('Nirvana (2)'), 'Nirvana');
+  assert.equal(cleanArtistName('Miles Davis'), 'Miles Davis');
+  assert.equal(cleanArtistName(''), '');
+
+  assert.equal(cleanTrackTitle('01. Come Together'), 'Come Together');
+  assert.equal(cleanTrackTitle('A1. Blue in Green'), 'Blue in Green');
+  assert.equal(cleanTrackTitle('Here Comes the Sun - 2019 Mix'), 'Here Comes the Sun');
+  assert.equal(cleanTrackTitle('Paranoid Android (Remastered 2011)'), 'Paranoid Android');
+  assert.equal(cleanTrackTitle('Time [Bonus Track]'), 'Time');
+  assert.equal(cleanTrackTitle('Speak to Me'), 'Speak to Me');
+
+  assert.equal(parseDurationToSeconds('4:20'), 260);
+  assert.equal(parseDurationToSeconds('0:45'), 45);
+  assert.equal(parseDurationToSeconds('1:02:15'), 3735);
+  assert.equal(parseDurationToSeconds(''), null);
+  assert.equal(parseDurationToSeconds('invalid'), null);
+
+  assert.equal(formatLyricsHTML(''), '');
+  const formatted = formatLyricsHTML('Line 1\nLine 2\n\nLine 3 <script>');
+  assert.ok(formatted.includes('<p class="lyrics-stanza">Line 1<br>Line 2</p>'));
+  assert.ok(formatted.includes('&lt;script&gt;'), 'escapes HTML tags');
+  assert.ok(!formatted.includes('<script>'), 'no unescaped scripts');
+}
+
+// ---- track normalization & duration matching --------------------------------------------------
+{
+  // Part / Pt and Roman numerals
+  assert.equal(normalizeTrackTitle('Encom Part 1'), 'encompart1');
+  assert.equal(normalizeTrackTitle('Encom, Pt. I'), 'encompart1');
+  assert.equal(normalizeTrackTitle('Encom, Pt. 1'), 'encompart1');
+  assert.equal(normalizeTrackTitle('Encom Part One'), 'encompart1');
+  assert.equal(normalizeTrackTitle('Encom Part 2'), 'encompart2');
+  assert.equal(normalizeTrackTitle('Encom, Pt. II'), 'encompart2');
+  assert.equal(normalizeTrackTitle('Encom, Pt. 2'), 'encompart2');
+
+  // Featuring abbreviations (feat., feat, ft., ft, featuring, with, w/)
+  const feat1 = normalizeTrackTitle('Get Lucky (feat. Pharrell)');
+  const feat2 = normalizeTrackTitle('Get Lucky (ft. Pharrell)');
+  const feat3 = normalizeTrackTitle('Get Lucky [featuring Pharrell]');
+  const feat4 = normalizeTrackTitle('Get Lucky feat Pharrell');
+  const feat5 = normalizeTrackTitle('Get Lucky (with Pharrell)');
+  const feat6 = normalizeTrackTitle('Get Lucky (w/ Pharrell)');
+  assert.equal(feat1, 'getluckyfeatpharrell');
+  assert.equal(feat1, feat2);
+  assert.equal(feat1, feat3);
+  assert.equal(feat1, feat4);
+  assert.equal(feat1, feat5);
+  assert.equal(feat1, feat6);
+
+  // Common symbols and abbreviations: &, vs., vol., no., ver.
+  assert.equal(normalizeTrackTitle('Rock & Roll'), normalizeTrackTitle('Rock and Roll'));
+  assert.equal(normalizeTrackTitle('Godzilla vs. Kong'), normalizeTrackTitle('Godzilla vs Kong'));
+  assert.equal(normalizeTrackTitle('Kill Bill Vol. 1'), normalizeTrackTitle('Kill Bill Volume I'));
+  assert.equal(normalizeTrackTitle('Symphony No. 5'), normalizeTrackTitle('Symphony #5'));
+  assert.equal(normalizeTrackTitle('Symphony #5'), normalizeTrackTitle('Symphony 5'));
+
+  // Stripping audio tags
+  assert.equal(normalizeTrackTitle('Track Title (Album Version)'), 'tracktitle');
+  assert.equal(normalizeTrackTitle('Track Title - 2011 Remaster'), 'tracktitle');
+  assert.equal(normalizeTrackTitle('Track Title (Remastered 2021)'), 'tracktitle');
+
+  // stripFeaturing helper
+  assert.equal(stripFeaturing('Starboy (feat. Daft Punk)'), 'Starboy');
+  assert.equal(stripFeaturing('Starboy (ft. Daft Punk)'), 'Starboy');
+  assert.equal(stripFeaturing('Starboy [featuring Daft Punk]'), 'Starboy');
+  assert.equal(stripFeaturing('Starboy feat. Daft Punk'), 'Starboy');
+  assert.equal(stripFeaturing('Starboy ft. Daft Punk'), 'Starboy');
+  assert.equal(stripFeaturing('Starboy (with Daft Punk)'), 'Starboy');
+  assert.equal(stripFeaturing('Starboy (w/ Daft Punk)'), 'Starboy');
+  assert.equal(stripFeaturing('Stay With Me'), 'Stay With Me', 'does not strip legitimate English "with"');
+}
+
+import { searchWords, matchRecord, fold as foldText } from '../public/js/search.js';
+{
+  const rec = { title: 'Selected Ambient Works 85-92', artist: 'Aphex Twin', tracklist: [{ title: 'Xtal' }, { title: 'Tha' }, { title: 'Ageispolis' }] };
+  const m = (q, r = rec) => matchRecord(r, searchWords(q));
+  assert.deepEqual(m(''), { track: null }, 'no words matches everything');
+  assert.deepEqual(m('aphex ambient'), { track: null }, 'title and artist words still match the album');
+  assert.deepEqual(m('xtal'), { track: 'Xtal', index: 0 }, 'a track title matches');
+  assert.deepEqual(m('AGEISPOLIS'), { track: 'Ageispolis', index: 2 }, 'case is ignored');
+  assert.deepEqual(m('aphex tha'), { track: 'Tha', index: 1 }, 'artist plus track works');
+  assert.equal(m('xtal ageispolis'), null, 'words spread across two tracks do not match');
+  assert.equal(m('nothing'), null);
+  assert.deepEqual(m('ambient'), { track: null }, 'album match wins over a track match');
+  assert.deepEqual(m('cafe', { title: 'X', artist: 'Y', tracklist: [{ title: 'Café del Mar' }] }), { track: 'Café del Mar', index: 0 }, 'accents are folded');
+  assert.equal(m('x', { title: 'Q', artist: 'R' }), null, 'records without a tracklist still work');
+  assert.equal(foldText('Éclair'), 'eclair');
+  console.log('Search tests passed.');
 }

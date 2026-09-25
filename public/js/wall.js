@@ -7,10 +7,10 @@
 import { crateArtUrl } from './crate.js';
 import { smallArtUrl } from './browse.js';
 
-export const SPOT_HOLD_MS = 7000;
-export const SPOT_RISE_MS = 1200;
-export const SPOT_FALL_MS = 1000;
-export const SPOT_GAP_MS = 1800;
+export const SPOT_HOLD_MS = 8000;
+export const SPOT_RISE_MS = 1500;
+export const SPOT_FALL_MS = 1200;
+export const SPOT_GAP_MS = 8500;
 export const RECENT_SPOTS = 8;
 
 // Big enough to be worth showing: a phone (in either direction) is not
