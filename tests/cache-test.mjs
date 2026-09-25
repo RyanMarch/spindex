@@ -13,11 +13,11 @@ assert.equal(cacheablePath('/oauth/identity'), null);
 assert.equal(cacheablePath('/releases/abc'), null);
 assert.equal(cacheKey('/releases/1').url, 'https://cache.spindex.internal/discogs/releases/1');
 
-assert.equal(ttlSeconds({}), 604800, 'a week by default');
+assert.equal(ttlSeconds({}), 2592000, 'thirty days by default');
 assert.equal(ttlSeconds({ DISCOGS_CACHE_SECONDS: '600' }), 600);
 assert.equal(ttlSeconds({ DISCOGS_CACHE_SECONDS: '0' }), 0, '0 turns it off');
 assert.equal(ttlSeconds({ DISCOGS_CACHE_SECONDS: '99999999' }), 2592000, 'capped at thirty days');
-assert.equal(ttlSeconds({ DISCOGS_CACHE_SECONDS: 'nonsense' }), 604800);
+assert.equal(ttlSeconds({ DISCOGS_CACHE_SECONDS: 'nonsense' }), 2592000);
 
 assert.deepEqual(JSON.parse(stripMarketplace('{"title":"A","lowest_price":9.5,"num_for_sale":4}')), { title: 'A' }, 'prices are removed');
 assert.equal(stripMarketplace('not json'), 'not json');

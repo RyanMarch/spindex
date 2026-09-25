@@ -672,6 +672,21 @@ class App {
     });
   }
 
+  // First-sync step: with a progress bar, find as many original years as fit in about 25 seconds
+  async firstRunYears() {
+    try {
+      const records = (await getAllRecords()).filter((r) => !String(r.id).startsWith('discogs_mock_'));
+      const total = records.filter((r) => r.masterId && r.masterYear == null && !r.masterChecked).length;
+      if (total === 0) return;
+      let done = 0;
+      const show = () => this.showFirstSync({ label: `Finding original release years… ${done} of ${total}`, fraction: total ? done / total : 1 });
+      show();
+      await enrichYearsInBackground(records, (count) => { done = Math.min(total, done + count); show(); }, { until: Date.now() + 25000 });
+    } catch {
+      // The crate opens either way; years keep filling in afterwards
+    }
+  }
+
   // Where a record files in the crate depends on its original release year, which only its Discogs master knows
   fillMissingYears() {
     return this.runOnce('years', async () => {
@@ -759,11 +774,13 @@ class App {
   renderFillStatus() {
     const el = this.fillStatusEl;
     if (!el) return;
-    const { low, pausedUntil } = this.queueStats;
-    const active = low > 0 || pausedUntil > 0;
+    const { low, high, pausedUntil } = this.queueStats;
+    // Background work backs off quietly. The notice is only for a wait someone is sitting through.
+    const waiting = pausedUntil > 0 && high > 0;
+    const active = low > 0 || waiting;
     el.hidden = !active;
     if (!active) return;
-    el.textContent = pausedUntil > 0
+    el.textContent = waiting
       ? 'Discogs asked us to slow down. Resuming shortly…'
       : this.fill?.total
         ? `${this.fill.label || 'Filling in details…'} ${this.fill.done} of ${this.fill.total}`
@@ -813,8 +830,7 @@ class App {
 
       const needsEnrichment = this.allRecords.filter((r) => {
         if (!r.discogsId) return false;
-        if (!r.tracklist || r.tracklist.length === 0) return true;
-        return r.tracklist.some((t) => !t.duration);
+        return !r.tracklist || r.tracklist.length === 0;
       });
       if (needsEnrichment.length === 0) return;
 
@@ -1456,14 +1472,15 @@ class App {
     if (welcome.hidden || !this.firstSync) {
       this.firstSync = { covers: [] };
       document.getElementById('welcome-title').textContent = 'Bringing in your crate';
-      document.getElementById('welcome-body').textContent = 'This takes a minute the first time. After that, new records show up on their own.';
+      document.getElementById('welcome-body').textContent = 'This takes a moment the first time. Once you are in, the rest fills in quietly in the background.';
       document.getElementById('welcome-actions').replaceChildren();
       document.getElementById('welcome-progress').hidden = false;
       document.getElementById('welcome-count').hidden = false;
       welcome.hidden = false;
     }
-    document.getElementById('welcome-count').textContent = progressLabel(update);
-    document.getElementById('welcome-bar').style.width = `${Math.round(progressFraction(update) * 100)}%`;
+    // A later step (finding years) sends its own line and fraction; the collection download sends page and record counts
+    document.getElementById('welcome-count').textContent = update.label ?? progressLabel(update);
+    document.getElementById('welcome-bar').style.width = `${Math.round((update.fraction ?? progressFraction(update)) * 100)}%`;
     if (update.recent) {
       const before = this.firstSync.covers.length;
       this.firstSync.covers = recentCovers(update.recent, this.firstSync.covers);
@@ -1910,6 +1927,10 @@ class App {
 
       const stale = (await getAllRecords()).filter((r) => String(r.id).startsWith('discogs_mock_'));
       if (stale.length > 0) await deleteRecords(stale.map((r) => r.id));
+
+      // A brand-new crate gets its original years before anyone sees it, so it opens already in the right order. The wait is
+      // capped; whatever isn't found by then keeps filling in behind the scenes. A crate that already has records never waits.
+      if (!hadRealRecords) await this.firstRunYears();
 
       this.setSyncStatus(result.quick
         ? (result.added > 0 ? `Added ${result.added} new ${result.added === 1 ? 'record' : 'records'}.` : 'Already up to date.')

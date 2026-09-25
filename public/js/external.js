@@ -4,7 +4,7 @@
 import { createLimiter } from './limiter.js';
 import { noteSource } from './sourcestats.js';
 
-const PROXIED = new Set(['en.wikipedia.org', 'www.wikidata.org', 'commons.wikimedia.org', 'musicbrainz.org', 'coverartarchive.org']);
+const PROXIED = new Set(['en.wikipedia.org', 'www.wikidata.org', 'query.wikidata.org', 'commons.wikimedia.org', 'musicbrainz.org', 'coverartarchive.org']);
 const isHit = (res) => res?.headers?.get?.('x-spindex-cache') === 'HIT';
 
 async function viaProxy(url) {
@@ -24,7 +24,7 @@ const musicbrainz = createLimiter({
   maxRetries: 2,
 });
 
-const SOURCE_NAMES = { 'en.wikipedia.org': 'Wikipedia', 'www.wikidata.org': 'Wikidata', 'commons.wikimedia.org': 'Wikimedia Commons', 'musicbrainz.org': 'MusicBrainz', 'coverartarchive.org': 'Cover Art Archive' };
+const SOURCE_NAMES = { 'en.wikipedia.org': 'Wikipedia', 'www.wikidata.org': 'Wikidata', 'query.wikidata.org': 'Wikidata', 'commons.wikimedia.org': 'Wikimedia Commons', 'musicbrainz.org': 'MusicBrainz', 'coverartarchive.org': 'Cover Art Archive' };
 
 export async function externalFetch(url) {
   let host = '';

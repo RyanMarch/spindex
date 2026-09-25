@@ -573,16 +573,7 @@ import { sortYear, masterYearUpdates, itunesYearUpdates, isEditionTitle } from '
 }
 
 // ---- stale release details ---------------------------------------------------------------------------------------
-import { detailsAreStale, needsDeezerArt, needsItunesArt, buildCollectionRecord, scoreAlbumMatch, ART_SEARCH_VERSION, needsMasterTitleArt, titlesDiffer, needsDetails } from '../public/js/sync.js';
-
-{
-  const now = Date.parse('2026-09-24T00:00:00Z');
-  const day = 86400000;
-  assert.equal(detailsAreStale({}, now), false, 'nothing saved yet is missing, not stale');
-  assert.equal(detailsAreStale({ details: { fetchedAt: new Date(now - 5 * day).toISOString() } }, now), false);
-  assert.equal(detailsAreStale({ details: { fetchedAt: new Date(now - 31 * day).toISOString() } }, now), true);
-  assert.equal(detailsAreStale({ details: {} }, now), true, 'no timestamp counts as stale');
-}
+import { needsDeezerArt, needsItunesArt, buildCollectionRecord, scoreAlbumMatch, ART_SEARCH_VERSION, needsMasterTitleArt, titlesDiffer, needsDetails } from '../public/js/sync.js';
 
 // ---- artwork choices -------------------------------------------------------------------------------------------
 {
@@ -1235,4 +1226,21 @@ import { searchWords, matchRecord, fold as foldText } from '../public/js/search.
   assert.equal(m('x', { title: 'Q', artist: 'R' }), null, 'records without a tracklist still work');
   assert.equal(foldText('Éclair'), 'eclair');
   console.log('Search tests passed.');
+}
+
+// ---- original years from Wikidata, and formats that arrive with the collection list ----------------------------
+{
+  const { wikidataYearUpdates } = await import('../public/js/years.js');
+  const { formatsOf } = await import('../public/js/vinyl.js');
+  const { facetsFor } = await import('../public/js/filters.js');
+
+  assert.equal(wikidataYearUpdates({ title: 'Suede', pressingYear: 2011 }, 1993).originalYear, 1993, 'the original year beats a later pressing');
+  assert.equal(wikidataYearUpdates({ title: 'Suede', pressingYear: 1990 }, 1993), null, 'an original can not come after the pressing in hand');
+  assert.equal(wikidataYearUpdates({ title: 'Suede' }, 1200), null, 'an unbelievable year is ignored');
+  assert.equal(wikidataYearUpdates({ title: 'Nevermind (Deluxe)', pressingYear: 2011 }, 1991).year, 2011, 'editions keep their own pressing year');
+
+  const listed = { id: 'a', title: 'A', artist: 'B', year: 1990, listFormats: [{ name: 'Vinyl', qty: '2', descriptions: ['LP', 'Album'], text: 'Red' }] };
+  assert.equal(formatsOf(listed).length, 1, 'formats from the collection list are used when details are not in yet');
+  assert.deepEqual(formatsOf({ ...listed, details: { formats: [{ name: 'Vinyl' }] } }), [{ name: 'Vinyl' }], 'full details win once they arrive');
+  assert.equal(facetsFor([listed]).discs[0]?.key, 'multi', 'filters work from the list alone');
 }

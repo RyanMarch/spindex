@@ -31,6 +31,16 @@ export function masterYearUpdates(record, master) {
   return { masterYear, originalYear: year, year, masterChecked: true, ...(masterTitle && { masterTitle }) };
 }
 
+// A year Wikidata gives for the album (its first publication date). Trusted only if it is a believable year and not later than
+// the pressing in hand, since an original can't come after a copy of it. Editions ("Deluxe") keep their own pressing year.
+export function wikidataYearUpdates(record, year) {
+  const y = Number(year) || 0;
+  if (y < 1900 || y > new Date().getFullYear() + 1) return null;
+  if (record.pressingYear && y > record.pressingYear) return null;
+  const filed = isEditionTitle(record.title) && record.pressingYear ? record.pressingYear : y;
+  return { masterYear: y, originalYear: filed, year: filed, masterChecked: true, yearSource: 'wikidata' };
+}
+
 // A year from iTunes is only a fallback for records with no Discogs master, and only if it is earlier than what we
 // already have: an iTunes date is often a remaster's, and must never push an album later.
 export function itunesYearUpdates(record, itunesYear) {
