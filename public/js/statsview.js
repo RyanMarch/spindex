@@ -75,8 +75,11 @@ function renderStatIcon(icon) {
 function standouts(stats) {
   const pool = stats.standoutsPool || [];
   if (pool.length === 0) return '';
-  // Pick up to 4 items from the unified pool
-  const chosen = [...pool].sort(() => Math.random() - 0.5).slice(0, 4);
+  const topArtistItem = pool.find((item) => item.id === 'top-artist');
+  const others = pool.filter((item) => item.id !== 'top-artist');
+  const chosen = topArtistItem
+    ? [topArtistItem, ...others.sort(() => Math.random() - 0.5).slice(0, 3)]
+    : others.sort(() => Math.random() - 0.5).slice(0, 4);
   return chosen.map(renderStandoutItem).join('');
 }
 

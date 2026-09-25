@@ -7,6 +7,7 @@ import {
 import { pickAlbumPage, isVariousArtists, pickBackCoverReleases, pickReleaseGroup, infoboxField } from '../public/js/wiki.js';
 import { usefulValue, isCustomRelease } from '../public/js/values.js';
 import { pickDeezerAlbum, pickDeezerCover, searchTitle, normalize as deezerNormalize } from '../functions/_lib/deezer.js';
+import { cleanArtistName, cleanTrackTitle, parseDurationToSeconds, formatLyricsHTML } from '../public/js/lyrics.js';
 
 // ---- credit roles ---------------------------------------------------------------------------------------------
 assert.deepEqual(splitCreditRoles('Producer, Engineer [Assistant, Studio X], Guitar'), [
@@ -1128,4 +1129,50 @@ import { noteSource, sourceSnapshot, resetSourceStats } from '../public/js/sourc
   assert.ok(html.includes('Standouts'), 'renders Standouts section');
 }
 
+// ---- lyrics helpers --------------------------------------------------------------------------------------------
+{
+  assert.equal(cleanArtistName('Nirvana (2)'), 'Nirvana');
+  assert.equal(cleanArtistName('Miles Davis'), 'Miles Davis');
+  assert.equal(cleanArtistName(''), '');
 
+  assert.equal(cleanTrackTitle('01. Come Together'), 'Come Together');
+  assert.equal(cleanTrackTitle('A1. Blue in Green'), 'Blue in Green');
+  assert.equal(cleanTrackTitle('Here Comes the Sun - 2019 Mix'), 'Here Comes the Sun');
+  assert.equal(cleanTrackTitle('Paranoid Android (Remastered 2011)'), 'Paranoid Android');
+  assert.equal(cleanTrackTitle('Time [Bonus Track]'), 'Time');
+  assert.equal(cleanTrackTitle('Speak to Me'), 'Speak to Me');
+
+  assert.equal(parseDurationToSeconds('4:20'), 260);
+  assert.equal(parseDurationToSeconds('0:45'), 45);
+  assert.equal(parseDurationToSeconds('1:02:15'), 3735);
+  assert.equal(parseDurationToSeconds(''), null);
+  assert.equal(parseDurationToSeconds('invalid'), null);
+
+  assert.equal(formatLyricsHTML(''), '');
+  const formatted = formatLyricsHTML('Line 1\nLine 2\n\nLine 3 <script>');
+  assert.ok(formatted.includes('<p class="lyrics-stanza">Line 1<br>Line 2</p>'));
+  assert.ok(formatted.includes('&lt;script&gt;'), 'escapes HTML tags');
+  assert.ok(!formatted.includes('<script>'), 'no unescaped scripts');
+}
+
+
+
+
+// ---- Search: album fields and track titles ----
+import { searchWords, matchRecord, fold as foldText } from '../public/js/search.js';
+{
+  const rec = { title: 'Selected Ambient Works 85-92', artist: 'Aphex Twin', tracklist: [{ title: 'Xtal' }, { title: 'Tha' }, { title: 'Ageispolis' }] };
+  const m = (q, r = rec) => matchRecord(r, searchWords(q));
+  assert.deepEqual(m(''), { track: null }, 'no words matches everything');
+  assert.deepEqual(m('aphex ambient'), { track: null }, 'title and artist words still match the album');
+  assert.deepEqual(m('xtal'), { track: 'Xtal', index: 0 }, 'a track title matches');
+  assert.deepEqual(m('AGEISPOLIS'), { track: 'Ageispolis', index: 2 }, 'case is ignored');
+  assert.deepEqual(m('aphex tha'), { track: 'Tha', index: 1 }, 'artist plus track works');
+  assert.equal(m('xtal ageispolis'), null, 'words spread across two tracks do not match');
+  assert.equal(m('nothing'), null);
+  assert.deepEqual(m('ambient'), { track: null }, 'album match wins over a track match');
+  assert.deepEqual(m('cafe', { title: 'X', artist: 'Y', tracklist: [{ title: 'Café del Mar' }] }), { track: 'Café del Mar', index: 0 }, 'accents are folded');
+  assert.equal(m('x', { title: 'Q', artist: 'R' }), null, 'records without a tracklist still work');
+  assert.equal(foldText('Éclair'), 'eclair');
+  console.log('Search tests passed.');
+}
