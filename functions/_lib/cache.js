@@ -4,7 +4,7 @@
 // never cached. Marketplace figures (prices, copies for sale) are the fast-moving data Discogs' six-hour rule is about,
 // and Spindex never shows them, so they are removed before anything is stored.
 
-const DEFAULT_TTL = 7 * 24 * 60 * 60; // album and artist details change rarely; Discogs confirmed the six-hour rule targets pricing
+const DEFAULT_TTL = 30 * 24 * 60 * 60; // a pressing's tracklist and credits almost never change; Discogs confirmed the six-hour rule targets pricing
 const MAX_TTL = 30 * 24 * 60 * 60;
 
 const MARKETPLACE_FIELDS = ['lowest_price', 'num_for_sale'];

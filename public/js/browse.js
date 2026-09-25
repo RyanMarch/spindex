@@ -1,7 +1,7 @@
 // browse.js - the grid and list views of the collection. The stack is one way to look through a crate; these are
 // the others: every cover at once, or a table with the details beside each one.
 import { crateArtUrl } from './crate.js';
-import { parseVinyl, vinylFill } from './vinyl.js';
+import { parseVinyl, vinylFill, formatsOf } from './vinyl.js';
 import { parseSortArtist } from './sync.js';
 import { sortYear } from './years.js';
 
@@ -31,7 +31,7 @@ const TAG_WORDS = [
 ];
 
 export function cardTags(record) {
-  const formats = record.details?.formats;
+  const formats = formatsOf(record);
   if (!formats?.length) return [];
   const tags = [];
   const vinyl = formats.find((f) => /vinyl|^lp$/i.test(f.name || '')) || formats[0];
@@ -50,7 +50,7 @@ export function cardTags(record) {
 const GROOVES = 'repeating-radial-gradient(circle, rgba(0, 0, 0, 0.3) 0px, rgba(0, 0, 0, 0.3) 1px, rgba(255, 255, 255, 0.05) 1px, rgba(255, 255, 255, 0.05) 2px, rgba(0, 0, 0, 0) 2px, rgba(0, 0, 0, 0) 4px)';
 function discBackground(record) {
   try {
-    const look = parseVinyl(record.details?.formats);
+    const look = parseVinyl(formatsOf(record));
     if (look.kind === 'black' || look.kind === 'picture') return '';
     return `${GROOVES}, ${vinylFill(look, '')}`;
   } catch {

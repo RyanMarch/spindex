@@ -6,7 +6,8 @@ import { noteSource } from './sourcestats.js';
 import { fingerprintFromUrl, sameArtwork, discogsImageUrl } from './imagematch.js';
 import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds } from './syncplan.js';
 import { isCustomRelease } from './values.js';
-import { masterYearUpdates, itunesYearUpdates, isEditionTitle } from './years.js';
+import { masterYearUpdates, itunesYearUpdates, isEditionTitle, wikidataYearUpdates } from './years.js';
+import { externalJSON } from './external.js';
 
 // Apple allows roughly 20 iTunes searches a minute per address, and when it says no, it leaves out the CORS header, so
 // the browser reports a rejected request rather than a 429. Everything goes through one paced queue, and a rejection
@@ -528,6 +529,7 @@ export function buildCollectionRecord(item, existing, fieldNames) {
     genres: basic.genres || [],
     styles: basic.styles || [],
     format: basic.formats ? basic.formats.map((f) => f.name) : ['Vinyl'],
+    listFormats: (basic.formats || []).map((f) => ({ name: f.name || '', qty: f.qty || '1', descriptions: f.descriptions || [], text: f.text || '' })),
     dateAdded: item.date_added || new Date().toISOString(),
     notes: fields.collectionNotes.map((n) => n.value).join('\n'),
     mediaCondition: fields.mediaCondition,
@@ -604,9 +606,29 @@ export async function syncDiscogsCollection(username, onProgress, { full = false
   return { records: fetchedRecords, added: fetchedRecords.filter((r) => !existingMap.has(r.id)).length, removed, quick: stoppedEarly };
 }
 
-// Find each record's original release year from its Discogs master. This decides where a record files in the crate, so it
-// runs before the other background work. Records that share a master cost one request between them.
-export async function enrichYearsInBackground(records, onEach) {
+// Original release years for a batch of Discogs masters in one request: many albums are on Wikidata with their Discogs
+// master ID and first publication date. Resolves with a Map of master ID (string) to year; masters Wikidata doesn't know are
+// simply absent. Throws if Wikidata can't be reached, so the caller can fall back to Discogs.
+export async function fetchWikidataYears(masterIds) {
+  const ids = [...new Set(masterIds.map(String).filter((id) => /^\d+$/.test(id)))];
+  const years = new Map();
+  for (let i = 0; i < ids.length; i += 80) {
+    const values = ids.slice(i, i + 80).map((id) => `"${id}"`).join(' ');
+    const query = `SELECT ?id (MIN(?d) AS ?date) WHERE { VALUES ?id { ${values} } ?item wdt:P1954 ?id . ?item wdt:P577 ?d } GROUP BY ?id`;
+    const data = await externalJSON(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(query)}`);
+    for (const row of data?.results?.bindings || []) {
+      const year = parseInt(String(row.date?.value || '').slice(0, 4), 10);
+      if (row.id?.value && year) years.set(row.id.value, year);
+    }
+  }
+  return years;
+}
+
+// Find each record's original release year. This decides where a record files in the crate, so it runs before the other
+// background work. Wikidata answers for most well-known albums in one request; only what it doesn't know is asked of the
+// Discogs master, one request per master (records that share a master share the request). `until` (a timestamp) stops
+// the Discogs part early; whatever is left is picked up next time.
+export async function enrichYearsInBackground(records, onEach, { until = 0 } = {}) {
   const byMaster = new Map();
   for (const record of records) {
     if (!record.masterId || record.masterYear != null || record.masterChecked) continue;
@@ -614,7 +636,30 @@ export async function enrichYearsInBackground(records, onEach) {
     byMaster.get(record.masterId).push(record);
   }
 
+  try {
+    const known = await fetchWikidataYears([...byMaster.keys()]);
+    for (const [masterId, group] of [...byMaster]) {
+      const year = known.get(String(masterId));
+      if (!year) continue;
+      let used = 0;
+      for (const record of group) {
+        const updates = wikidataYearUpdates(record, year);
+        if (!updates) continue;
+        await updateRecord(record.id, updates);
+        Object.assign(record, updates);
+        used++;
+      }
+      if (used === group.length) {
+        byMaster.delete(masterId);
+        if (onEach) onEach(group.length);
+      }
+    }
+  } catch {
+    // Wikidata had trouble: Discogs answers for everything instead
+  }
+
   for (const [masterId, group] of byMaster) {
+    if (until && Date.now() > until) break;
     let res;
     try {
       res = await discogsFetch(`/masters/${masterId}`, {}, 'low');
@@ -1464,7 +1509,9 @@ export async function fetchReleaseDetails(record, priority = 'high') {
 
   // Fallback: If this release has no credits but has a master release, try backfilling
   // credits from the master's main release
-  if (details.credits.length === 0 && masterId) {
+  // Only when someone opened the record: it can cost two more requests, so background filling never does it
+  const tryMaster = priority === 'high';
+  if (tryMaster && details.credits.length === 0 && masterId) {
     try {
       const masterRes = await discogsFetch(`/masters/${masterId}`, {}, priority);
       if (masterRes.ok) {
@@ -1485,7 +1532,7 @@ export async function fetchReleaseDetails(record, priority = 'high') {
       // Ignore master fallback errors
     }
   }
-  details.creditsFallbackChecked = true;
+  details.creditsFallbackChecked = tryMaster;
 
   return {
     status: 'ok',
@@ -1493,15 +1540,6 @@ export async function fetchReleaseDetails(record, priority = 'high') {
     tracklist: mapDiscogsTracklist(data.tracklist),
     masterId,
   };
-}
-
-export const DETAILS_MAX_AGE_DAYS = 30;
-
-// Saved details older than this are quietly fetched again the next time the record is looked at
-export function detailsAreStale(record, now = Date.now()) {
-  if (!record.details) return false;
-  const fetched = Date.parse(record.details.fetchedAt || '');
-  return !Number.isFinite(fetched) || now - fetched > DETAILS_MAX_AGE_DAYS * 86400000;
 }
 
 const detailsInFlight = new Map();

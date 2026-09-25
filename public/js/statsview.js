@@ -72,28 +72,42 @@ function renderStatIcon(icon) {
   }
 }
 
+// Four facts picked at random from the whole pool each time the panel opens (Fisher-Yates, so every fact is equally likely)
 function standouts(stats) {
-  const pool = stats.standoutsPool || [];
+  const pool = [...(stats.standoutsPool || [])];
   if (pool.length === 0) return '';
-  const topArtistItem = pool.find((item) => item.id === 'top-artist');
-  const others = pool.filter((item) => item.id !== 'top-artist');
-  const chosen = topArtistItem
-    ? [topArtistItem, ...others.sort(() => Math.random() - 0.5).slice(0, 3)]
-    : others.sort(() => Math.random() - 0.5).slice(0, 4);
-  return chosen.map(renderStandoutItem).join('');
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, 4).map(renderStandoutItem).join('');
 }
 
-// Cumulative line: the shape of how the collection grew
+// Cumulative line: the shape of how the collection grew. The horizontal axis is time (months with nothing added take
+// their true share of the width), and every new year gets a faint line and a label so it is easy to keep track.
 function growthChart(growth) {
   if (growth.length < 2) return '';
   const w = 300;
   const h = 72;
   const top = growth[growth.length - 1].total;
-  const x = (i) => (i / (growth.length - 1)) * w;
+  const monthIndex = (m) => { const [yr, mo] = String(m).split('-').map(Number); return yr * 12 + (mo - 1); };
+  const start = monthIndex(growth[0].month);
+  const end = monthIndex(growth[growth.length - 1].month);
+  const span = Math.max(end - start, 1);
+  const x = (m) => ((monthIndex(m) - start) / span) * w;
   const y = (total) => h - (total / top) * (h - 6) - 2;
-  const line = growth.map((g, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(g.total).toFixed(1)}`).join(' ');
-  const svg = `<svg class="st-growth" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Records owned over time, ${number(top)} in total"><path d="${line}" class="st-growth-line"></path></svg>`;
-  return `${svg}<div class="st-axis"><span>${esc(monthLabel(growth[0].month))}</span><span>${number(top)} records</span><span>${esc(monthLabel(growth[growth.length - 1].month))}</span></div>`;
+  const line = growth.map((g, i) => `${i === 0 ? 'M' : 'L'}${x(g.month).toFixed(1)},${y(g.total).toFixed(1)}`).join(' ');
+
+  const firstYear = Math.floor(start / 12);
+  const lastYear = Math.floor(end / 12);
+  const years = [];
+  for (let yr = firstYear + 1; yr <= lastYear; yr++) years.push({ yr, at: ((yr * 12 - start) / span) });
+  const every = Math.max(1, Math.ceil(years.length / 6)); // label a few when there are many
+  const rules = years.map((t) => `<line x1="${(t.at * w).toFixed(1)}" x2="${(t.at * w).toFixed(1)}" y1="0" y2="${h}" class="st-year-rule"></line>`).join('');
+  const labels = years.filter((_, i) => i % every === 0).map((t) => `<span class="st-year" style="left:${(t.at * 100).toFixed(2)}%">${t.yr}</span>`).join('');
+
+  const svg = `<svg class="st-growth" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Records owned over time, ${number(top)} in total">${rules}<path d="${line}" class="st-growth-line"></path></svg>`;
+  return `<div class="st-chart">${svg}${labels}</div><div class="st-axis"><span>${esc(monthLabel(growth[0].month))}</span><span>${esc(monthLabel(growth[growth.length - 1].month))}</span></div>`;
 }
 
 export function statsHTML(stats) {
@@ -106,7 +120,7 @@ export function statsHTML(stats) {
   const parts = [lede, '<div id="stat-value"></div>'];
   if (stats.decades.length) parts.push(section('On the shelf', spinesHTML(stats.decades), stats.undated ? `${stats.undated} without a year.` : ''));
   const stand = standouts(stats);
-  if (stand) parts.push(section('Standouts', `<ul class="st-standouts">${stand}</ul>`));
+  if (stand) parts.push(section('Fun facts', `<ul class="st-standouts">${stand}</ul>`));
 
   if (stats.genres.length) parts.push(section('Filed under', `<ul class="st-index">${stats.genres.map((g) => indexRow(g.name, g.count)).join('')}</ul>`));
 
