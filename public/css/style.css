@@ -4328,6 +4328,9 @@ body.jump-open[data-view="stack"] .browse-rail:not([hidden]) {
   body:not([data-view="stack"]) .floating-nav-pill,
   .floating-nav-pill {
     display: flex;
+    opacity: 1;
+    pointer-events: auto;
+    visibility: visible;
     gap: 0.1rem;
     padding: 0.3rem 0.4rem;
     bottom: calc(0.8rem + var(--sab));
