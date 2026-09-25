@@ -1795,7 +1795,12 @@ body.sleeve-open .station-container {
   color: var(--text-muted);
 }
 
-.gf-tag+.gf-tag::before {
+.gf-tags {
+  row-gap: 0.4rem;
+}
+
+/* The slash trails each tag (not leads the next), so when the list wraps a line never starts with a stray slash */
+.gf-tag:not(:last-child)::after {
   content: '/';
   margin: 0 0.8rem;
   font-weight: 400;
@@ -6303,5 +6308,80 @@ body:has(.settings-drawer.open) .status-stack .reorder-pill {
   .gf-lyrics:hover {
     color: rgba(244, 244, 247, 0.62);
     background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* Phones, album page bar: a compact position counter between full-size arrows, so the title gets the room, and a
+   little more air above the section tabs */
+@media (max-width: 640px) and (min-height: 521px) {
+  .gf-bar {
+    gap: 0.85rem 0.4rem;
+  }
+
+  .gf-stepper {
+    gap: 0;
+  }
+
+  .gf-step-count {
+    min-width: 0;
+    padding: 0 0.15rem;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+}
+
+/* The bottom pill's counter centres its text explicitly (Safari left it hugging the right edge of the slot in list and grid) */
+@media (max-width: 640px) {
+  .floating-nav-pill #crate-counter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 6.6rem;
+  }
+
+  body:not([data-view="stack"]) .floating-nav-pill #crate-counter::after {
+    display: block;
+    text-align: center;
+    white-space: nowrap;
+  }
+}
+
+/* The "N records" label is centred in the counter on its own, not beside the (hidden) position text, which Safari
+   still gave some width */
+@media (max-width: 640px) {
+  .floating-nav-pill #crate-counter {
+    position: relative;
+  }
+
+  body:not([data-view="stack"]) .floating-nav-pill #crate-counter::after {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Stats and Settings: the heading and close button stay put while the content scrolls beneath them */
+#stats-drawer .drawer-card,
+#settings-drawer .drawer-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#stats-drawer .stats-content,
+#settings-drawer .settings-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Phones: the stats panel reaches both edges like the others */
+@media (max-width: 640px) {
+  .stats-drawer .drawer-card {
+    width: 100%;
   }
 }
