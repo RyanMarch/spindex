@@ -17,6 +17,19 @@ async function getJSON(url) {
   }
 }
 
+// Wikipedia draws a time signature (9/8) as a numerator over a denominator in styled <sup>/<sub> spans. Inside running text
+// that looks like a glitch, so each one becomes plain "9/8".
+export function fixTimeSignatures(html) {
+  if (!html || !String(html).includes('music-symbol') || typeof DOMParser === 'undefined') return html;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('.music-symbol').forEach((el) => {
+    const top = el.querySelector('sup')?.textContent.trim();
+    const bottom = el.querySelector('sub')?.textContent.trim();
+    if (/^\d+$/.test(top || '') && /^\d+$/.test(bottom || '')) el.replaceWith(`${top}/${bottom}`);
+  });
+  return doc.body.innerHTML;
+}
+
 // Plain text from a chunk of Wikipedia article HTML: first paragraphs only, no citations, tables or figures
 function paragraphsFromHTML(html, maxChars = 700) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -25,7 +38,7 @@ function paragraphsFromHTML(html, maxChars = 700) {
   const out = [];
   let total = 0;
   for (const p of doc.querySelectorAll('p')) {
-    const text = p.textContent.replace(/\[\d+\]/g, '').replace(/\s+/g, ' ').trim();
+    const text = p.textContent.replace(/\[\d+\]/g, '').replace(/\u2044/g, '/').replace(/\s+/g, ' ').trim();
     if (text.length < 40) continue;
     out.push(text);
     total += text.length;

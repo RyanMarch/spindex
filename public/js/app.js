@@ -3,7 +3,7 @@ import { openDB, getAllRecords, clearRecords, deleteRecords, getRecord, upsertRe
 import { shareIdFromPath, fetchShareStatus, publishShare, stopSharing, loadShare, shareIsStale } from './share.js';
 import { seedDefaultRecordsIfEmpty, resetToMockRecords, MOCK_RECORDS } from './mock-data.js';
 import { CrateController } from './crate.js';
-import { BrowseView, normalizeView, railLabel } from './browse.js';
+import { BrowseView, normalizeView, railLabel, smallArtUrl } from './browse.js';
 import { facetsFor, matchesFilters, activeCount, toggleOption, describeSelection, emptySelection, GROUPS } from './filters.js';
 import { emptyState } from './emptystate.js';
 import { Wall, wallSupported } from './wall.js';
@@ -17,7 +17,7 @@ import { computeStats } from './stats.js';
 import { computeHealth, describeStorage, healthSummary } from './health.js';
 import { watchForUpdates, shouldAutoReload } from './updates.js';
 import { trackSummary, pressingNotes } from './vinyl.js';
-import { needsAutoSync, timeAgo, readSyncMeta } from './syncplan.js';
+import { timeAgo, readSyncMeta } from './syncplan.js';
 import { sourceSnapshot } from './sourcestats.js';
 import { statsHTML, valueHTML } from './statsview.js';
 import { initDiscogs, discogsFetch, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
@@ -200,7 +200,8 @@ class App {
       this.stackContainer,
       this.counterEl,
       (record) => this.openRecordDetail(record),
-      (currIndex, total, currentRecord) => this.onCrateIndexChange(currIndex, total, currentRecord)
+      (currIndex, total, currentRecord) => this.onCrateIndexChange(currIndex, total, currentRecord),
+      (index, fade, record) => this.onCrateScrub(fade, record)
     );
 
     this.browse = new BrowseView({
@@ -264,7 +265,8 @@ class App {
       if (btn.dataset.view) btn.addEventListener('click', () => this.setView(btn.dataset.view));
     });
     // Phones: search and the letter jump live in the bottom bar, in reach of a thumb
-    document.getElementById('mobile-search-btn')?.addEventListener('click', () => this.searchToggleBtn?.click());
+    document.getElementById('mobile-search-btn')?.addEventListener('click', () => (this.isPhone() ? this.openSearchSheet() : this.searchToggleBtn?.click()));
+    this.initSearchSheet();
     this.counterEl?.addEventListener('click', () => { if (window.matchMedia('(max-width: 640px)').matches) this.openJump(); });
     document.addEventListener('pointerdown', (e) => {
       if (document.body.classList.contains('jump-open') && !e.target.closest('#browse-rail, #crate-counter')) this.closeJump();
@@ -286,7 +288,6 @@ class App {
     this.initFilters();
     this.initEmptyState();
     this.initShortcuts();
-    this.initPullToRefresh();
     this.initShare();
     this.initWall();
     this.initFillStatus();
@@ -401,7 +402,7 @@ class App {
     }
     document.getElementById('demo-note')?.addEventListener('click', () => this.openSettings());
 
-    // Coming back to the app after a while: look for new records
+    // Coming back to the app after a while: pick up a new version of the app if one is waiting
     document.getElementById('update-pill')?.addEventListener('click', () => location.reload());
     let hiddenAt = 0;
     document.addEventListener('visibilitychange', () => {
@@ -416,7 +417,6 @@ class App {
         return;
       }
       updates?.check();
-      this.autoSyncIfDue();
     });
   }
 
@@ -631,6 +631,7 @@ class App {
       if (active) label = pill.textContent;
     });
     if (this.browseToggleLabel) this.browseToggleLabel.textContent = label;
+    this.updateFilterBadge();
   }
 
   // Condition grades and notes come from Discogs collection fields; fetch them once for records that predate them
@@ -988,9 +989,13 @@ class App {
   updateFilterBadge() {
     const badge = document.getElementById('filter-badge');
     if (!badge) return;
-    const n = activeCount(this.filters);
+    const n = activeCount(this.filters) + (this.isPhone() && this.activeVibe !== 'all' ? 1 : 0);
     badge.hidden = n === 0;
     badge.textContent = String(n);
+  }
+
+  isPhone() {
+    return window.matchMedia('(max-width: 640px)').matches;
   }
 
   initFilters() {
@@ -1001,16 +1006,110 @@ class App {
     this.filterDrawer?.addEventListener('click', (e) => { if (e.target === this.filterDrawer) this.closeFilters(); });
     document.getElementById('filter-clear-btn')?.addEventListener('click', () => {
       this.filters = emptySelection();
+      if (this.isPhone()) { this.activeVibe = 'all'; this.syncVibeTabs(); }
       this.applyFiltersAndSort();
       this.renderFilterSheet();
     });
     document.getElementById('filter-content')?.addEventListener('click', (e) => {
       const chip = e.target.closest('.fl-chip');
       if (!chip) return;
+      if (chip.dataset.vibe !== undefined) {
+        this.activeVibe = chip.dataset.vibe || 'all';
+        this.syncVibeTabs();
+        this.applyFiltersAndSort();
+        this.renderFilterSheet();
+        return;
+      }
+      if (chip.dataset.sort !== undefined) {
+        this.currentSort = chip.dataset.sort;
+        if (this.sortSelect) this.sortSelect.value = this.currentSort;
+        this.applyFiltersAndSort();
+        this.renderFilterSheet();
+        return;
+      }
       this.filters = toggleOption(this.filters, chip.dataset.group, chip.dataset.key);
       this.applyFiltersAndSort();
       this.renderFilterSheet();
     });
+  }
+
+  // Phones: search takes over the screen, with live results below the field
+  initSearchSheet() {
+    this.searchSheet = document.getElementById('search-sheet');
+    if (!this.searchSheet) return;
+    const input = document.getElementById('search-sheet-input');
+    const results = document.getElementById('search-sheet-results');
+    const apply = document.getElementById('search-sheet-apply');
+    input.addEventListener('input', () => this.renderSearchResults());
+    document.getElementById('search-sheet-cancel').addEventListener('click', () => this.closeSearchSheet());
+    document.getElementById('search-sheet-form').addEventListener('submit', (e) => { e.preventDefault(); this.applySearchFromSheet(); });
+    apply.addEventListener('click', () => this.applySearchFromSheet());
+    results.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-id]');
+      if (!row) return;
+      this.closeSearchSheet();
+      this.jumpToRecord(row.dataset.id);
+    });
+  }
+
+  openSearchSheet() {
+    if (!this.searchSheet) return;
+    const input = document.getElementById('search-sheet-input');
+    input.value = this.searchQuery || '';
+    this.searchSheet.hidden = false;
+    this.searchSheet.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('search-sheet-open');
+    this.renderSearchResults();
+    input.focus();
+  }
+
+  closeSearchSheet() {
+    if (!this.searchSheet) return;
+    this.searchSheet.hidden = true;
+    this.searchSheet.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('search-sheet-open');
+    document.getElementById('search-sheet-input').blur();
+  }
+
+  // Applies what was typed to the whole crate (an empty field clears the search)
+  applySearchFromSheet() {
+    this.searchQuery = document.getElementById('search-sheet-input').value;
+    if (this.searchInput) this.searchInput.value = this.searchQuery;
+    document.getElementById('mobile-search-btn')?.classList.toggle('is-on', Boolean(this.searchQuery.trim()));
+    this.closeSearchSheet();
+    this.applyFiltersAndSort();
+  }
+
+  renderSearchResults() {
+    const results = document.getElementById('search-sheet-results');
+    const apply = document.getElementById('search-sheet-apply');
+    const words = searchWords(document.getElementById('search-sheet-input').value);
+    if (!words.length) {
+      results.innerHTML =  /*html*/ `<p class="search-sheet-hint">Search ${this.allRecords.length.toLocaleString('en-US')} records by title, artist or song.</p>`;
+      apply.hidden = true;
+      return;
+    }
+    const hits = [];
+    for (const record of this.allRecords) {
+      const hit = matchRecord(record, words);
+      if (hit) hits.push({ record, hit });
+    }
+    if (!hits.length) {
+      results.innerHTML =  /*html*/ '<p class="search-sheet-hint">Nothing matches. Try fewer words.</p>';
+      apply.hidden = true;
+      return;
+    }
+    results.innerHTML =  /*html*/ hits.slice(0, 40).map(({ record, hit }) => `
+      <button type="button" class="ss-row" role="listitem" data-id="${this.escapeHTML(String(record.id))}">
+        <img class="ss-art" src="${this.escapeHTML(smallArtUrl(record, 120))}" alt="" loading="lazy" decoding="async" />
+        <span class="ss-text">
+          <span class="ss-title">${this.escapeHTML(record.title || 'Untitled')}</span>
+          <span class="ss-sub">${this.escapeHTML(record.artist || '')}</span>
+          ${hit.track ? `<span class="ss-track">Track: ${this.escapeHTML(hit.track)}</span>` : ''}
+        </span>
+      </button>`).join('');
+    apply.hidden = false;
+    apply.textContent = hits.length > 40 ? `Show all ${hits.length} in the crate` : `Show ${hits.length} in the crate`;
   }
 
   openFilters() {
@@ -1038,12 +1137,30 @@ class App {
     const partial = facets.detailed < facets.total
       ? `<p class="fl-note">Size, pressing, discs and speed are known for ${facets.detailed} of ${facets.total} records so far. The rest fill in as their details load.</p>`
       : '';
-    content.innerHTML =  /*html*/ groups + partial;
+    // On a phone the genre tabs and the sort order live here too, so there is one place to narrow and order the crate
+    let extra = '';
+    let after = '';
+    const phone = this.isPhone();
+    const title = document.getElementById('filter-title');
+    if (title) title.textContent = phone ? 'Browse' : 'Filter';
+    if (phone) {
+      const genreChips = [...(this.vibeBar?.querySelectorAll('.vibe-pill') || [])].map((pill) => {
+        const vibe = pill.dataset.vibe || 'all';
+        return `<button type="button" class="fl-chip" data-vibe="${this.escapeHTML(vibe)}" aria-pressed="${vibe === this.activeVibe}">${this.escapeHTML(pill.textContent)}</button>`;
+      }).join('');
+      const total = this.allRecords.length;
+      const shown = this.filteredRecords.length;
+      const summary = shown === total ? `Showing all ${total.toLocaleString('en-US')} records` : `Showing ${shown.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} records`;
+      extra = `<p class="fl-summary">${summary}</p>SORTSECTION<section class="fl-group"><h4>Genre</h4><div class="fl-chips">${genreChips}</div></section>`;
+      const sortChips = [...(this.sortSelect?.options || [])].map((o) => `<button type="button" class="fl-chip" data-sort="${this.escapeHTML(o.value)}" aria-pressed="${o.value === this.currentSort}">${this.escapeHTML(o.textContent)}</button>`).join('');
+      extra = extra.replace('SORTSECTION', `<section class="fl-group"><h4>Sort by</h4><div class="fl-chips">${sortChips}</div></section>`);
+    }
+    content.innerHTML =  /*html*/ extra + groups + partial + after;
     const n = this.filteredRecords.length;
     const done = document.getElementById('filter-done-btn');
     if (done) done.textContent = `Show ${n} ${n === 1 ? 'record' : 'records'}`;
     const clear = document.getElementById('filter-clear-btn');
-    if (clear) clear.hidden = activeCount(this.filters) === 0;
+    if (clear) clear.hidden = activeCount(this.filters) + (phone && this.activeVibe !== 'all' ? 1 : 0) === 0;
   }
 
   currentVibeLabel() {
@@ -1378,6 +1495,8 @@ class App {
     document.body.dataset.view = this.view;
     this.closeJump();
     this.viewButtons.forEach((btn) => { if (btn.dataset.view) btn.setAttribute('aria-pressed', String(btn.dataset.view === this.view)); });
+    // The grid and list are in the page but hidden until asked for: opening straight into one has to show it
+    if (nextView !== 'stack' && this.browseRoot) this.browseRoot.hidden = false;
     const leavingStack = prevView === 'stack' && nextView !== 'stack';
     const enteringStack = prevView !== 'stack' && nextView === 'stack';
 
@@ -1436,6 +1555,7 @@ class App {
 
   renderBrowse() {
     if (!this.browseRoot || this.view === 'stack') return;
+    if (this.counterEl) this.counterEl.dataset.total = String(this.filteredRecords.length);
     const modeChanged = this.browseRoot.dataset.mode !== this.view;
     if (this.browseDirty || modeChanged) {
       const scrollTop = this.browseRoot.scrollTop;
@@ -1483,17 +1603,12 @@ class App {
     }
 
     this.prefetchDetails(currentRecord);
+  }
 
-    if (this.stationMetadataCol) {
-      clearTimeout(this.metaFadeTimeout);
-      this.stationMetadataCol.classList.add('is-updating');
-      this.metaFadeTimeout = setTimeout(() => {
-        this.updateActiveMetadata(currentRecord);
-        this.stationMetadataCol.classList.remove('is-updating');
-      }, 140);
-    } else {
-      this.updateActiveMetadata(currentRecord);
-    }
+  // The caption follows the stack: it shows whichever album is at the front, fading out while albums fly past
+  onCrateScrub(fade, record) {
+    this.stationMetadataCol?.style.setProperty('--scrub', fade === 1 ? '1' : fade.toFixed(2));
+    if (record && record.id !== this.lastMetaRecordId) this.updateActiveMetadata(record);
   }
 
   // Resting on a record for a moment usually means its page is next, so fetch its Discogs details now. Opening it then
@@ -1717,13 +1832,13 @@ class App {
     }
   }
 
-  // Opening the app (or coming back to it) checks for new records when it has been a while. Nobody needs to press anything.
+  // New records are only looked for when asked (Settings > Check now). The exception is a crate with nothing real in it,
+  // such as after the browser cleared its saved data, which fills itself again.
   async autoSyncIfDue({ force = false } = {}) {
     if (this.syncing || !isDiscogsConnected()) return;
-    const { username } = discogsState();
     const hasRealRecords = this.allRecords.some((r) => !String(r.id).startsWith('discogs_mock_'));
+    if (hasRealRecords && !force) return;
     if (hasRealRecords && !this.crateBelongsToCurrentUser()) return; // someone else's crate: that is for a person to decide
-    if (!force && !needsAutoSync(readSyncMeta(username))) return;
     await this.handleSync({ auto: true });
   }
 
@@ -1740,6 +1855,14 @@ class App {
     const count = this.allRecords.filter((r) => !String(r.id).startsWith('discogs_mock_')).length;
     const records = count ? `${count.toLocaleString('en-US')} ${count === 1 ? 'record' : 'records'} · ` : '';
     el.textContent = last ? `${records}Up to date. Checked ${timeAgo(last)}.` : `${records}Not checked yet.`;
+    // Checking is optional once the crate is up to date, so the button is quiet; it is the main action only when
+    // nothing has been checked yet or the crate is empty
+    const button = document.getElementById('sync-discogs-btn');
+    if (button) {
+      const settled = Boolean(last) && count > 0;
+      button.classList.toggle('btn-primary', !settled);
+      button.classList.toggle('btn-secondary', settled);
+    }
   }
 
   // The demo crate is for a first visit: it goes away once Discogs is connected
@@ -1824,42 +1947,7 @@ class App {
     if (ms) this.toastTimer = setTimeout(() => { el.hidden = true; }, ms);
   }
 
-  // Pull the grid or list down from the top to look for new records, the way mail apps do
-  initPullToRefresh() {
-    const root = this.browseRoot;
-    if (!root) return;
-    const THRESHOLD = 90;
-    let startY = null;
-    let pulled = 0;
-    root.addEventListener('touchstart', (e) => {
-      startY = root.scrollTop <= 0 && e.touches.length === 1 ? e.touches[0].clientY : null;
-      pulled = 0;
-    }, { passive: true });
-    root.addEventListener('touchmove', (e) => {
-      if (startY === null) return;
-      pulled = e.touches[0].clientY - startY;
-      if (pulled > 20 && isDiscogsConnected() && !this.syncing) this.toast(pulled > THRESHOLD ? 'Release to check for new records' : 'Pull to check for new records', 0);
-    }, { passive: true });
-    root.addEventListener('touchend', () => {
-      if (startY === null) return;
-      const go = pulled > THRESHOLD && isDiscogsConnected() && !this.syncing;
-      startY = null;
-      if (go) {
-        this.toastSync = true;
-        this.toast('Checking for new records…', 0);
-        this.handleSync({});
-      } else {
-        const el = document.getElementById('toast');
-        if (el && /^(Pull|Release)/.test(el.textContent)) el.hidden = true;
-      }
-    }, { passive: true });
-  }
-
   setSyncStatus(msg, type = '') {
-    if (this.toastSync && msg && type) {
-      this.toastSync = false;
-      this.toast(msg);
-    }
     if (!this.syncStatus) return;
     this.syncStatus.textContent = msg;
     this.syncStatus.className = `sync-status ${type}`.trim();

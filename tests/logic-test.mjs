@@ -244,7 +244,12 @@ import { statsHTML, valueHTML, spinesHTML, playTime } from '../public/js/statsvi
   const html = statsHTML(computeStats([rec('a', 'AFI', 1999), rec('b', 'AFI', 2003), rec('c', 'Miles Davis', 1959)]));
   assert.ok(html.includes('<b>3</b> records by <b>2</b> artists'), 'the numbers sit in a sentence');
   assert.ok(html.includes('released between <b>1959</b> and <b>2003</b>'));
-  assert.ok(html.includes('Most collected') && html.includes('2 records'), 'the artist you own most of');
+  const stats3 = computeStats([rec('a', 'AFI', 1999), rec('b', 'AFI', 2003), rec('c', 'Miles Davis', 1959)]);
+  const topArtistFact = stats3.standoutsPool.find((item) => item.id === 'top-artist');
+  assert.ok(topArtistFact && topArtistFact.count === 2, 'the artist you own most of is one of the facts to choose from');
+  // The panel shows four facts drawn at random from the pool, so any one of them may or may not appear
+  const shown = (statsHTML(stats3).match(/<li class="st-standout/g) || []).length;
+  assert.equal(shown, Math.min(4, stats3.standoutsPool.length), 'four facts are shown (or all of them, if there are fewer)');
   assert.ok(html.includes('st-dots'), 'genres are an index with leaders');
   assert.ok(!html.includes('stat-bar'), 'the old bar charts are gone');
   assert.equal(statsHTML(computeStats([])), '<p class="st-note">Nothing in the crate yet.</p>');
@@ -1137,7 +1142,7 @@ import { noteSource, sourceSnapshot, resetSourceStats } from '../public/js/sourc
   const stats = computeStats(testRecords);
   assert.ok(stats.standoutsPool && stats.standoutsPool.length > 0, 'builds standoutsPool');
   const html = statsHTML(stats);
-  assert.ok(html.includes('Standouts'), 'renders Standouts section');
+  assert.ok(html.includes('Fun facts'), 'renders the Fun facts section');
 }
 
 // ---- lyrics helpers --------------------------------------------------------------------------------------------

@@ -28,7 +28,7 @@ browser, and works offline once loaded.
 - **Grid and list views**, filters (decade, size, pressing, discs, speed), a jump rail (A to Z or decades), "surprise me", and a `?` list of keyboard shortcuts.
 - **Screensaver** (tablets and larger): Settings > Screensaver shows an endless wall of covers drifting slowly, its direction gradually turning (a full circle in about twelve minutes); every few seconds one lifts out with its title. Any key or click leaves; clicking the raised cover opens it. It goes fullscreen and keeps the screen awake where the browser allows. `/?wall` starts it directly, for a tablet on a stand.
 - **Read-only link**: Settings > Share your crate publishes a snapshot others can browse at `/s/<id>`. See "Sharing" below.
-- **Stays up to date by itself**: opening the app (or coming back to it) checks Discogs for new records when it has been a few hours. Settings shows when it last checked.
+- **New records on request**: Settings > Check now looks for new records in Discogs and shows when it last checked. Nothing checks in the background, except that an empty crate fills itself.
 
 ## Local development
 

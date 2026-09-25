@@ -16,7 +16,7 @@ import {
 import { usefulValue, isCustomRelease } from './values.js';
 import { externalFetch } from './external.js';
 import { artControl, artChoiceUpdates } from './artwork.js';
-import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover, findAlbumPage, isVariousArtists } from './wiki.js';
+import { fixTimeSignatures, fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover, findAlbumPage, isVariousArtists } from './wiki.js';
 import { isDiscogsConnected } from './discogs.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
 import { crateArtUrl } from './crate.js';
@@ -585,8 +585,10 @@ export class GatefoldController {
     if (this.storySection) this.storySection.hidden = !show;
     if (!show) return;
 
-    const paragraphs = (text) => text.split('\n\n').map((p) => `<p>${this.escapeHTML(p)}</p>`).join('');
-    const parts = [`<div class="gf-lede">${ctx.wikiExtract}</div>`];
+    // Wikipedia writes 9/8 with a fraction slash, which the serif font draws as a stacked fraction: use a plain slash
+    const plain = (text) => String(text || '').replace(/\u2044/g, '/');
+    const paragraphs = (text) => plain(text).split('\n\n').map((p) => `<p>${this.escapeHTML(p)}</p>`).join('');
+    const parts = [`<div class="gf-lede">${fixTimeSignatures(ctx.wikiExtract)}</div>`];
     if (ctx.sections?.background) {
       parts.push(`<h4 class="gf-prose-head">${this.escapeHTML(ctx.sections.background.heading)}</h4>${paragraphs(ctx.sections.background.text)}`);
     }
@@ -1032,9 +1034,13 @@ export class GatefoldController {
     }
     // Keep the active tab in view on phones
     const tab = this.tabsEl?.querySelector('.active');
-    if (tab && this.tabsEl.scrollWidth > this.tabsEl.clientWidth) {
-      this.tabsEl.scrollTo({ left: tab.offsetLeft - 24, behavior: 'smooth' });
+    // Only when it has slid out of sight, and only once per change, so the strip doesn't chase the content as it scrolls
+    if (tab && tab !== this.lastActiveTab && this.tabsEl.scrollWidth > this.tabsEl.clientWidth) {
+      const left = this.tabsEl.scrollLeft;
+      const outOfView = tab.offsetLeft < left + 8 || tab.offsetLeft + tab.offsetWidth > left + this.tabsEl.clientWidth - 8;
+      if (outOfView) this.tabsEl.scrollTo({ left: tab.offsetLeft - 24, behavior: 'smooth' });
     }
+    this.lastActiveTab = tab;
   }
 
   // ------------------------------------------------------------------------
