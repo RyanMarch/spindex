@@ -636,6 +636,78 @@ export async function enrichYearsInBackground(records, onEach) {
   }
 }
 
+const ROMAN_NUMERALS = {
+  i: '1', ii: '2', iii: '3', iv: '4', v: '5',
+  vi: '6', vii: '7', viii: '8', ix: '9', x: '10',
+  xi: '11', xii: '12', xiii: '13', xiv: '14', xv: '15',
+};
+
+const WORD_NUMBERS = {
+  one: '1', two: '2', three: '3', four: '4', five: '5',
+  six: '6', seven: '7', eight: '8', nine: '9', ten: '10',
+};
+
+export function cleanTrackAudioTags(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .replace(/\s*-\s*\d{4}\s+(?:Remaster(?:ed)?|Mix|Stereo|Mono)(?:\s+Version)?/gi, '')
+    .replace(/\s*-\s*Remaster(?:ed)?(?:\s+\d{4})?(?:\s+Version)?/gi, '')
+    .replace(/\s*-\s*(?:Live|Mono|Stereo|Single Version|Album Version|Original Mix|Original Version)$/i, '')
+    .replace(/\s*\((?:remastered|remaster|mono|stereo|bonus track|live|single version|album version|explicit|\d{4}\s+mix|original mix|original version).*?\)/gi, '')
+    .replace(/\s*\[(?:remastered|remaster|mono|stereo|bonus track|live|explicit|\d{4}\s+mix|original mix|original version).*?\]/gi, '')
+    .trim();
+}
+
+export function stripFeaturing(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .replace(/\s*[\(\[](?:featuring|feat\.?|ft\.?|with|\bw\/)\s+[^\)\]]+[\)\]]/gi, '')
+    .replace(/\s+(?:featuring|feat\.?|ft\.?|\bw\/)\s+.*$/i, '')
+    .trim();
+}
+
+export function normalizeTrackTitle(str) {
+  if (!str || typeof str !== 'string') return '';
+  let s = cleanTrackAudioTags(str).toLowerCase().trim();
+
+  // Strip leading track numbers like "01. " or "A1. "
+  s = s.replace(/^(?:[a-z]\d|\d{1,2})[\.\-\s]\s*/i, '');
+
+  // Normalize & and + to and
+  s = s.replace(/[\&\+]/g, ' and ');
+
+  // Normalize featuring abbreviations: feat., feat, ft., ft, featuring, with, w/
+  s = s.replace(/\s*[\(\[]?\s*w\/\s*/gi, ' feat ');
+  s = s.replace(/([\(\[])\s*with\s+/gi, '$1feat ');
+  s = s.replace(/\b(?:featuring|feat\.?|ft\.?)\b/gi, 'feat');
+
+  // Normalize versus: vs., vs, v.
+  s = s.replace(/\b(?:vs\.?|v\.)\b/gi, 'vs');
+
+  // Normalize volume: vol., vol, volume + roman numerals or numbers
+  s = s.replace(/\b(?:volume|vol\.?)\s*(x[ivx]*|i{1,3}|iv|v|vi{0,3}|ix|one|two|three|four|five|six|seven|eight|nine|ten|\d+)\b/gi, (m, num) => {
+    const lower = num.toLowerCase();
+    const n = ROMAN_NUMERALS[lower] || WORD_NUMBERS[lower] || lower;
+    return `vol ${n}`;
+  });
+
+  // Normalize number: no., no, number, # + digits -> digits
+  s = s.replace(/(?:\b(?:number|no\.?)|#)\s*(\d+)\b/gi, '$1');
+
+  // Normalize version: ver., ver, version
+  s = s.replace(/\b(?:version|ver\.)\b/gi, 'ver');
+
+  // Normalize part: pt., pt, part + numbers or words or roman numerals
+  s = s.replace(/\b(?:part|pt\.?)\s*(x[ivx]*|i{1,3}|iv|v|vi{0,3}|ix|one|two|three|four|five|six|seven|eight|nine|ten|\d+)\b/gi, (m, num) => {
+    const lower = num.toLowerCase();
+    const n = ROMAN_NUMERALS[lower] || WORD_NUMBERS[lower] || lower;
+    return `part ${n}`;
+  });
+
+  // Strip all non-alphanumeric characters
+  return s.replace(/[^a-z0-9]/g, '');
+}
+
 export async function enrichTracklistsInBackground(records) {
   // Fetch release tracklist, and if durations are missing, match by title against master release
   // Respect Discogs API rate limits: max 60 requests/minute (~1 req/second)
@@ -687,7 +759,7 @@ export async function enrichTracklistsInBackground(records) {
       if (currentTracklist.length === 0) {
         try {
           const query = encodeURIComponent(`${record.artist} ${record.title}`);
-          const itunesRes = await itunesFetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=50`);
+          const itunesRes = await itunesFetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=200`);
           if (itunesRes.ok) {
             const itunesData = await itunesRes.json();
             const songs = (itunesData.results || []).filter((s) => s.trackName);
@@ -740,22 +812,25 @@ export async function enrichTracklistsInBackground(records) {
               await updateRecord(record.id, updates);
             }
 
-            const normalizeTitle = (str) =>
-              str.toLowerCase().replace(/[^a-z0-9]/g, '');
-
             const masterLookup = new Map();
             for (const mt of masterTracks) {
-              const norm = normalizeTitle(mt.title);
+              const norm = normalizeTrackTitle(mt.title);
+              const baseNorm = normalizeTrackTitle(stripFeaturing(mt.title));
               if (norm && mt.duration) {
                 masterLookup.set(norm, mt.duration);
+              }
+              if (baseNorm && mt.duration && !masterLookup.has(baseNorm)) {
+                masterLookup.set(baseNorm, mt.duration);
               }
             }
 
             for (const t of currentTracklist) {
               if (!t.duration) {
-                const norm = normalizeTitle(t.title);
-                if (masterLookup.has(norm)) {
-                  t.duration = masterLookup.get(norm);
+                const norm = normalizeTrackTitle(t.title);
+                const baseNorm = normalizeTrackTitle(stripFeaturing(t.title));
+                const matchedDuration = masterLookup.get(norm) || (baseNorm ? masterLookup.get(baseNorm) : null);
+                if (matchedDuration) {
+                  t.duration = matchedDuration;
                 }
               }
             }
@@ -770,28 +845,34 @@ export async function enrichTracklistsInBackground(records) {
       if (stillMissing) {
         try {
           const query = encodeURIComponent(`${record.artist} ${record.title}`);
-          const itunesRes = await itunesFetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=50`);
+          const itunesRes = await itunesFetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=200`);
           if (itunesRes.ok) {
             const itunesData = await itunesRes.json();
-            const normalizeTitle = (str) =>
-              str.toLowerCase().replace(/[^a-z0-9]/g, '');
-
             const itunesLookup = new Map();
             for (const song of itunesData.results || []) {
               if (song.trackName && song.trackTimeMillis) {
-                const norm = normalizeTitle(song.trackName);
+                const norm = normalizeTrackTitle(song.trackName);
+                const baseNorm = normalizeTrackTitle(stripFeaturing(song.trackName));
                 const totalSec = Math.round(song.trackTimeMillis / 1000);
                 const m = Math.floor(totalSec / 60);
                 const s = String(totalSec % 60).padStart(2, '0');
-                itunesLookup.set(norm, `${m}:${s}`);
+                const dur = `${m}:${s}`;
+                if (norm) {
+                  itunesLookup.set(norm, dur);
+                }
+                if (baseNorm && !itunesLookup.has(baseNorm)) {
+                  itunesLookup.set(baseNorm, dur);
+                }
               }
             }
 
             for (const t of currentTracklist) {
               if (!t.duration) {
-                const norm = normalizeTitle(t.title);
-                if (itunesLookup.has(norm)) {
-                  t.duration = itunesLookup.get(norm);
+                const norm = normalizeTrackTitle(t.title);
+                const baseNorm = normalizeTrackTitle(stripFeaturing(t.title));
+                const matchedDur = itunesLookup.get(norm) || (baseNorm ? itunesLookup.get(baseNorm) : null);
+                if (matchedDur) {
+                  t.duration = matchedDur;
                 }
               }
             }
@@ -803,6 +884,7 @@ export async function enrichTracklistsInBackground(records) {
 
       // Only write to database if we obtained tracks (never wipe out a tracklist)
       if (currentTracklist.length > 0) {
+        record.tracklist = currentTracklist;
         await updateRecord(record.id, { tracklist: currentTracklist });
       }
     } catch {
@@ -1244,11 +1326,26 @@ export function parseReleaseDetails(data) {
       text: f.text || '',
     })),
     artists: (data.artists || []).map((a) => ({ id: a.id, name: stripDisambiguation(a.name) })),
-    credits: (data.extraartists || []).map((a) => ({
-      id: a.id,
-      name: stripDisambiguation(a.name),
-      role: String(a.role || '').trim(),
-    })).filter((c) => c.name && c.role),
+    credits: (() => {
+      const rawCredits = [...(data.extraartists || [])];
+      for (const t of data.tracklist || []) {
+        if (t.extraartists) {
+          for (const a of t.extraartists) rawCredits.push(a);
+        }
+      }
+      const seen = new Set();
+      const list = [];
+      for (const a of rawCredits) {
+        const name = stripDisambiguation(a.name);
+        const role = String(a.role || '').trim();
+        if (!name || !role) continue;
+        const key = `${name.toLowerCase()}|${role.toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        list.push({ id: a.id || null, name, role });
+      }
+      return list;
+    })(),
     companies: (data.companies || []).map((c) => ({
       name: stripDisambiguation(c.name),
       role: c.entity_type_name || '',
@@ -1362,11 +1459,39 @@ export async function fetchReleaseDetails(record, priority = 'high') {
   if (!res.ok) return { status: 'error' };
 
   const data = await res.json();
+  const details = parseReleaseDetails(data);
+  const masterId = data.master_id || record.masterId || null;
+
+  // Fallback: If this release has no credits but has a master release, try backfilling
+  // credits from the master's main release
+  if (details.credits.length === 0 && masterId) {
+    try {
+      const masterRes = await discogsFetch(`/masters/${masterId}`, {}, priority);
+      if (masterRes.ok) {
+        const masterData = await masterRes.json();
+        const mainRelId = masterData.main_release;
+        if (mainRelId && String(mainRelId) !== String(record.discogsId)) {
+          const mainRes = await discogsFetch(`/releases/${mainRelId}`, {}, priority);
+          if (mainRes.ok) {
+            const mainData = await mainRes.json();
+            const mainDetails = parseReleaseDetails(mainData);
+            if (mainDetails.credits.length > 0) {
+              details.credits = mainDetails.credits;
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore master fallback errors
+    }
+  }
+  details.creditsFallbackChecked = true;
+
   return {
     status: 'ok',
-    details: parseReleaseDetails(data),
+    details,
     tracklist: mapDiscogsTracklist(data.tracklist),
-    masterId: data.master_id || null,
+    masterId,
   };
 }
 

@@ -11,6 +11,7 @@ import {
   detailsAreStale,
   needsDetails,
   fetchArtistLinks,
+  enrichTracklistsInBackground,
 } from './sync.js';
 import { usefulValue, isCustomRelease } from './values.js';
 import { externalFetch } from './external.js';
@@ -19,6 +20,7 @@ import { fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover, findA
 import { isDiscogsConnected } from './discogs.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
 import { crateArtUrl } from './crate.js';
+import { getLyricsDrawer } from './lyrics-drawer.js';
 
 // How long opening an album waits for its Discogs details before showing what it has
 const SETTLE_MS = 160;
@@ -103,8 +105,21 @@ export class GatefoldController {
       this.toggleFlip();
     });
 
-    // Delegated clicks for things rendered later: jumps into the crate and section links
+    // Delegated clicks for things rendered later: jumps into the crate, section links, and lyrics
     this.workspace?.addEventListener('click', (e) => {
+      const lyricsBtn = e.target.closest('[data-action="lyrics"]');
+      if (lyricsBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const trackIndex = parseInt(lyricsBtn.dataset.trackIndex || '0', 10);
+        const drawer = getLyricsDrawer();
+        if (drawer.isOpen() && drawer.record?.id === this.activeRecord?.id && drawer.trackIndex === trackIndex) {
+          drawer.close();
+        } else {
+          drawer.open(this.activeRecord, trackIndex, lyricsBtn);
+        }
+        return;
+      }
       const jump = e.target.closest('[data-jump-id]');
       if (jump) {
         this.onJump?.(jump.dataset.jumpId);
@@ -153,6 +168,7 @@ export class GatefoldController {
 
     window.addEventListener('keydown', (e) => {
       if (!this.isOpen()) return;
+      if (getLyricsDrawer().isOpen()) return;
       if (e.key === 'Escape') this.closeGatefold();
       else if (e.key === 'ArrowLeft') this.step(-1);
       else if (e.key === 'ArrowRight') this.step(1);
@@ -195,6 +211,8 @@ export class GatefoldController {
       if (this.renderToken !== token) return;
     }
 
+    this.hitTrack = this.trackHint || null;
+    this.trackHint = null;
     this.resetView();
     this.renderAll(fresh);
     if (mode !== 'none') this.onRoute?.(fresh, mode);
@@ -245,6 +263,7 @@ export class GatefoldController {
 
   // silent: the address bar already changed (Back button), so don't touch it again
   closeGatefold(silent = false) {
+    getLyricsDrawer().close();
     this.renderToken++;
     this.popInReady = false;
     this.vinylDisc?.classList.remove('ejected');
@@ -261,9 +280,17 @@ export class GatefoldController {
     if (!this.isOpen() || !this.onStep) return;
     const next = this.onStep(direction);
     if (next && next.id !== this.activeRecord?.id) {
+      getLyricsDrawer().close();
       this.vinylDisc?.classList.remove('ejected');
       await this.openGatefold(next, 'replace');
     }
+  }
+
+  refreshOpenRecord(updatedRecord) {
+    if (!this.isOpen() || !updatedRecord || this.activeRecord?.id !== updatedRecord.id) return;
+    this.activeRecord = updatedRecord;
+    this.renderTracklist(updatedRecord);
+    this.renderSpecs(updatedRecord);
   }
 
   resetView() {
@@ -327,6 +354,13 @@ export class GatefoldController {
       } else if (detailsAreStale(record)) {
         // Refresh in the background and keep it for next time; the page in front of you doesn't change under you
         loadRecordDetails(record, 'low').catch(() => { });
+      } else if ((!record.details?.credits || record.details.credits.length === 0) && !record.details?.creditsFallbackChecked) {
+        const updates = await loadRecordDetails(record);
+        if (updates) Object.assign(record, updates);
+      }
+
+      if (record.tracklist && record.tracklist.length > 0 && record.tracklist.some((t) => !t.duration)) {
+        await enrichTracklistsInBackground([record]);
       }
     }
     if (this.isCurrent(record, token)) this.renderAll(record);
@@ -505,14 +539,23 @@ export class GatefoldController {
     if (this.tracklistSection) this.tracklistSection.hidden = tracks.length === 0;
     if (tracks.length === 0) return;
 
-    const row = (t) => `<li><span class="gf-tpos">${this.escapeHTML(t.position || '·')}</span><span class="gf-tname">${this.escapeHTML(t.title)}</span><span class="gf-ttime">${this.escapeHTML(t.duration || '')}</span><a class="gf-lyrics" href="${this.escapeHTML(this.lyricsUrl(record, t))}" target="_blank" rel="noopener" aria-label="Search lyrics for ${this.escapeHTML(t.title)}" title="Find lyrics on Genius">↗</a></li>`;
+    let hitShown = false;
+    const row = (t, idx) => `<li${!hitShown && this.hitTrack && t.title === this.hitTrack && (hitShown = true) ? ' class="is-hit"' : ''}><span class="gf-tpos">${this.escapeHTML(t.position || '·')}</span><span class="gf-tname">${this.escapeHTML(t.title)}</span><span class="gf-ttime">${this.escapeHTML(t.duration || '')}</span><button type="button" class="gf-lyrics" data-action="lyrics" data-track-index="${idx}" aria-label="View lyrics for ${this.escapeHTML(t.title)}" title="View lyrics"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 11h11M4 16h16M4 21h8"/></svg></button></li>`;
 
     const sides = groupTracksBySide(tracks);
     if (sides && sides.length > 0) {
-      const cols = sides.map((side) => `<div class="gatefold-side-col"><div class="gatefold-side-hdr">${this.escapeHTML(side.title)}</div><ul class="gatefold-tracks">${side.tracks.map(row).join('')}</ul></div>`);
+      let globalIdx = 0;
+      const cols = sides.map((side) => {
+        const sideTracks = side.tracks.map((t) => {
+          const item = row(t, globalIdx);
+          globalIdx += 1;
+          return item;
+        }).join('');
+        return `<div class="gatefold-side-col"><div class="gatefold-side-hdr">${this.escapeHTML(side.title)}</div><ul class="gatefold-tracks">${sideTracks}</ul></div>`;
+      });
       this.tracklistEl.innerHTML =  /*html*/ `<div class="gatefold-sides-grid">${cols.join('')}</div>`;
     } else {
-      this.tracklistEl.innerHTML =  /*html*/ `<ul class="gatefold-tracks">${tracks.map(row).join('')}</ul>`;
+      this.tracklistEl.innerHTML =  /*html*/ `<ul class="gatefold-tracks">${tracks.map((t, idx) => row(t, idx)).join('')}</ul>`;
     }
   }
 
