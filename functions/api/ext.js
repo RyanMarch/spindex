@@ -15,6 +15,7 @@ const NOT_FOUND_TTL = DAY; // "no such page" answers are cached briefly, so a pa
 export const SOURCES = {
   'en.wikipedia.org': { ttl: 7 * DAY, paths: [/^\/w\/api\.php$/, /^\/w\/rest\.php\/v1\/search\/title$/, /^\/api\/rest_v1\/page\/summary\/[^/]+$/] },
   'www.wikidata.org': { ttl: 7 * DAY, paths: [/^\/w\/api\.php$/] },
+  'query.wikidata.org': { ttl: 30 * DAY, paths: [/^\/sparql$/] },
   'commons.wikimedia.org': { ttl: 30 * DAY, paths: [/^\/w\/api\.php$/] },
   'musicbrainz.org': { ttl: 30 * DAY, paths: [/^\/ws\/2\/(release-group|release)\/?$/] },
   'coverartarchive.org': { ttl: 30 * DAY, paths: [/^\/release\/[0-9a-f-]{36}$/] },

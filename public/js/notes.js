@@ -8,7 +8,6 @@ import {
   groupCredits,
   creditKinds,
   loadRecordDetails,
-  detailsAreStale,
   needsDetails,
   fetchArtistLinks,
   enrichTracklistsInBackground,
@@ -351,9 +350,6 @@ export class GatefoldController {
       if (needsDetails(record)) {
         const updates = await loadRecordDetails(record);
         if (updates) Object.assign(record, updates);
-      } else if (detailsAreStale(record)) {
-        // Refresh in the background and keep it for next time; the page in front of you doesn't change under you
-        loadRecordDetails(record, 'low').catch(() => { });
       } else if ((!record.details?.credits || record.details.credits.length === 0) && !record.details?.creditsFallbackChecked) {
         const updates = await loadRecordDetails(record);
         if (updates) Object.assign(record, updates);

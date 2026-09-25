@@ -23,6 +23,10 @@ export async function onRequestGet({ request, env, params, waitUntil }) {
   const cachePath = cacheablePath(upstreamPath);
   const ttl = ttlSeconds(env);
   const cache = cachePath && ttl > 0 && typeof caches !== 'undefined' ? caches.default : null;
+  // An optional KV namespace (DISCOGS_DATA) keeps answers for the long term and across data centres; the edge cache
+  // alone is per-location and can be emptied at any time.
+  const store = cachePath && ttl > 0 ? env.DISCOGS_DATA : null;
+  const kvKey = cachePath ? `discogs:${cachePath}` : null;
   if (cache) {
     const hit = await cache.match(cacheKey(cachePath));
     if (hit) {
@@ -30,6 +34,12 @@ export async function onRequestGet({ request, env, params, waitUntil }) {
         status: 200,
         headers: { 'Content-Type': hit.headers.get('Content-Type') || 'application/json', 'Cache-Control': 'private, no-store', 'X-Spindex-Cache': 'HIT' },
       });
+    }
+  }
+  if (store) {
+    const saved = await store.get(kvKey).catch(() => null);
+    if (saved) {
+      return new Response(saved, { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store', 'X-Spindex-Cache': 'HIT' } });
     }
   }
 
@@ -48,12 +58,15 @@ export async function onRequestGet({ request, env, params, waitUntil }) {
   // Discogs no longer accepts this token (the user revoked the app): drop the session so the UI can reconnect
   if (upstream.status === 401) headers.append('Set-Cookie', clearCookie(request, SESSION_COOKIE));
 
-  if (cache && upstream.ok) {
+  if ((cache || store) && upstream.ok) {
     headers.set('X-Spindex-Cache', 'MISS');
     const body = stripMarketplace(await upstream.text());
     const contentType = upstream.headers.get('content-type') || 'application/json';
     const stored = new Response(body, { status: 200, headers: { 'Content-Type': contentType, 'Cache-Control': `public, max-age=${ttl}` } });
-    const put = cache.put(cacheKey(cachePath), stored).catch(() => {});
+    const put = Promise.all([
+      cache ? cache.put(cacheKey(cachePath), stored).catch(() => {}) : null,
+      store ? store.put(kvKey, body, { expirationTtl: Math.max(60, ttl) }).catch(() => {}) : null,
+    ]);
     if (waitUntil) waitUntil(put);
     else await put;
     return new Response(body, { status: 200, headers });

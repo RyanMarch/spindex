@@ -181,3 +181,7 @@ export function trackSummary({ trackCount = 0, sideKeys = [], formats = [] } = {
   if (trackCount > 0) parts.push(`${trackCount} track${trackCount === 1 ? '' : 's'}`);
   return [...parts, ...pressingNotes({ sideKeys, formats })].join(' · ');
 }
+
+// A record's formats: the full release's when we have them, otherwise the ones Discogs sends with the collection list
+// (same shape), so filters and pressing colours work from the first sync
+export const formatsOf = (record) => (record?.details?.formats?.length ? record.details.formats : record?.listFormats || []);

@@ -5,3 +5,7 @@ pages_build_output_dir = "public"
 [[kv_namespaces]]
 binding = "SHARES"
 id = "387782961e59471397243af59b7fec39"
+
+[[kv_namespaces]]
+binding = "DISCOGS_DATA"
+id = "1edf2c71601942c6b831ae1f83781965"

@@ -2,7 +2,7 @@
 // functions over the records already in this browser. Within one group a record may match any chosen option; across
 // groups it must match every group that has a choice.
 import { sortYear } from './years.js';
-import { parseVinyl, discCount, unusualSpeed } from './vinyl.js';
+import { parseVinyl, discCount, unusualSpeed, formatsOf } from './vinyl.js';
 import { colorGroup } from './stats.js';
 
 export const GROUPS = [
@@ -15,8 +15,8 @@ export const GROUPS = [
 
 export const emptySelection = () => ({ decades: [], sizes: [], pressings: [], discs: [], speeds: [] });
 
-const hasDetails = (r) => Boolean(r.details?.formats?.length);
-const vinylOf = (r) => (r.details?.formats || []).find((f) => /vinyl|^lp$|^12"|^10"|^7"/i.test(f?.name || '')) || null;
+const hasDetails = (r) => Boolean(formatsOf(r).length);
+const vinylOf = (r) => formatsOf(r).find((f) => /vinyl|^lp$|^12"|^10"|^7"/i.test(f?.name || '')) || null;
 
 const VALUE = {
   decades: (r) => {
@@ -29,12 +29,12 @@ const VALUE = {
     const size = (vinyl.descriptions || []).find((d) => /^(7|10|12)"$/.test(d));
     return size || ((vinyl.descriptions || []).includes('LP') ? '12"' : null); // an LP is a twelve-inch
   },
-  pressings: (r) => (hasDetails(r) ? colorGroup(parseVinyl(r.details.formats)) : null),
+  pressings: (r) => (hasDetails(r) ? colorGroup(parseVinyl(formatsOf(r))) : null),
   discs: (r) => {
     if (!vinylOf(r)) return null;
-    return discCount(r.details.formats) >= 2 ? 'multi' : 'single';
+    return discCount(formatsOf(r)) >= 2 ? 'multi' : 'single';
   },
-  speeds: (r) => (vinylOf(r) ? unusualSpeed(r.details.formats) || null : null),
+  speeds: (r) => (vinylOf(r) ? unusualSpeed(formatsOf(r)) || null : null),
 };
 
 const LABEL = { multi: 'Two or more discs', single: 'One disc' };

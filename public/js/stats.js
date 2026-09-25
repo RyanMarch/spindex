@@ -1,6 +1,6 @@
 // stats.js - numbers about the whole collection, worked out from the records already in this browser. Pure functions:
 // no network and nothing stored, so they are easy to test.
-import { parseVinyl } from './vinyl.js';
+import { parseVinyl, formatsOf } from './vinyl.js';
 import { sortYear } from './years.js';
 import { getGenreTags } from './sync.js';
 
@@ -77,10 +77,10 @@ export function computeStats(records, { topGenres = 7, topArtists = 8 } = {}) {
   const topArtist = topName ? { ...topName, records: real.filter((r) => r.artist === topName.name).slice(0, 4) } : null;
 
   // Pressings: colour needs the full Discogs details, which fill in gradually
-  const withDetails = real.filter((r) => r.details?.formats?.length);
+  const withDetails = real.filter((r) => formatsOf(r).length);
   const colorMap = new Map();
   for (const record of withDetails) {
-    const vinyl = parseVinyl(record.details.formats);
+    const vinyl = parseVinyl(formatsOf(record));
     const name = colorGroup(vinyl);
     const entry = colorMap.get(name) || { name, count: 0, sample: vinyl };
     entry.count++;
