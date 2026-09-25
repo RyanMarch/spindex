@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="Spindex">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
   <title>Spindex | Your record collection</title>
-  <link rel="stylesheet" href="/css/style.css?v=124">
+  <link rel="stylesheet" href="/css/style.css?v=128">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%23121214%22 stroke=%22%23e4e4e7%22 stroke-width=%224%22/><circle cx=%2250%22 cy=%2250%22 r=%2220%22 fill=%22%23e11d48%22/><circle cx=%2250%22 cy=%2250%22 r=%224%22 fill=%22%23fff%22/></svg>">
@@ -399,11 +399,25 @@
   </div>
 
   <!-- Filters -->
+  <!-- Phones: search takes over the screen -->
+  <div id="search-sheet" class="search-sheet" role="dialog" aria-label="Search the crate" aria-hidden="true" hidden>
+    <form id="search-sheet-form" class="search-sheet-bar" role="search" autocomplete="off">
+      <input id="search-sheet-input" class="search-sheet-input" type="search" placeholder="Title, artist or song"
+        aria-label="Search by album title, artist or song title" enterkeyhint="search" autocapitalize="off"
+        spellcheck="false" />
+      <button id="search-sheet-cancel" class="text-btn" type="button">Cancel</button>
+    </form>
+    <div id="search-sheet-results" class="search-sheet-results" role="list"></div>
+    <div class="search-sheet-foot">
+      <button id="search-sheet-apply" class="btn btn-primary" type="button" hidden></button>
+    </div>
+  </div>
+
   <aside id="filter-drawer" class="settings-drawer filter-drawer" aria-hidden="true">
     <div class="drawer-card">
       <div class="drawer-top">
         <div>
-          <h3>Filter</h3>
+          <h3 id="filter-title">Filter</h3>
         </div>
         <button id="filter-close-btn" class="modal-close" aria-label="Close filters">
           <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
@@ -651,7 +665,7 @@
     </div>
   </aside>
 
-  <script type="module" src="/js/app.js?v=123"></script>
+  <script type="module" src="/js/app.js?v=128"></script>
 </body>
 
 </html>

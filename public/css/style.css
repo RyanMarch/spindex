@@ -2563,9 +2563,8 @@ body.sleeve-open .station-container {
     text-align: center;
   }
 
-  /* fades out without giving up its room, so the bar doesn't reflow while the sheet scrolls */
   .gf-bar.is-scrolled .gf-back-text {
-    opacity: 0;
+    display: none;
   }
 
   .gf-tabs {
@@ -4408,8 +4407,25 @@ body.jump-open[data-view="stack"] .browse-rail:not([hidden]) {
     border-left: 1px solid var(--border-subtle);
   }
 
+  /* The bottom pill keeps the same width in every view: the stack shows the position, the others show how many records */
+  .floating-nav-pill #crate-counter {
+    box-sizing: content-box;
+    width: 6.4rem;
+    padding: 0;
+    white-space: nowrap;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
   body:not([data-view="stack"]) .floating-nav-pill #crate-counter {
-    display: none;
+    font-size: 0;
+  }
+
+  body:not([data-view="stack"]) .floating-nav-pill #crate-counter::after {
+    content: attr(data-total) " records";
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
   }
 
   .crate-stage {
@@ -6102,5 +6118,190 @@ body:has(.settings-drawer.open) .status-stack .reorder-pill {
 
   .station-metadata-col {
     margin-top: 30px;
+  }
+}
+
+/* Time signatures in the liner notes (9/8, 5/4) are text, not fractions: the serif font turns them into stacked ones */
+.gatefold-workspace {
+  font-feature-settings: "frac" 0, "calt" 0;
+  font-variant-ligatures: none;
+}
+
+/* Phones: the filter sheet reaches both edges like the others */
+@media (max-width: 640px) {
+  .filter-drawer .drawer-card {
+    width: 100%;
+  }
+}
+
+/* Phones, album page: the title in the bar takes all the room the buttons leave, so it can be read */
+@media (max-width: 640px) and (min-height: 521px) {
+  .gf-bar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.6rem;
+  }
+
+  .gf-bar-title {
+    max-width: none;
+    min-width: 0;
+    text-align: center;
+  }
+}
+
+/* Phones: genre and sort live in the filter sheet (now "Browse"), so the toolbar loses the genre menu */
+@media (max-width: 640px) {
+  #browse-toggle-btn {
+    display: none;
+  }
+
+  .fl-summary {
+    margin: -0.4rem 0 1rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+
+  #mobile-search-btn.is-on {
+    color: var(--color-accent);
+  }
+}
+
+/* Phones: full-screen search */
+.search-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  display: flex;
+  flex-direction: column;
+  background: #0c0c10;
+  padding-top: var(--sat, 0px);
+}
+
+.search-sheet[hidden] {
+  display: none;
+}
+
+.search-sheet-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.search-sheet-input {
+  flex: 1;
+  min-width: 0;
+  height: 2.6rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 1rem;
+}
+
+.search-sheet-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.search-sheet-results {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.5rem 1rem 1rem;
+}
+
+.search-sheet-hint {
+  margin: 2rem 0;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.ss-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.6rem 0;
+  border: 0;
+  border-bottom: 1px solid rgba(233, 225, 207, 0.08);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ss-art {
+  flex: 0 0 auto;
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 3px;
+  object-fit: cover;
+  background: var(--bg-card);
+}
+
+.ss-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ss-title {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ss-sub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ss-track {
+  font-size: 0.78rem;
+  color: var(--color-accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-sheet-foot {
+  padding: 0.75rem 1rem calc(0.75rem + var(--sab, 0px));
+  border-top: 1px solid var(--border-subtle);
+}
+
+.search-sheet-foot .btn {
+  width: 100%;
+}
+
+.search-sheet-foot [hidden] {
+  display: none;
+}
+
+/* Track rows: dimmed with plain colours, not opacity (a phone draws some rows on their own layer for opacity and they
+   came out brighter and heavier), and no hover look on touch screens (a tapped row kept it). */
+.gf-tpos,
+.gf-ttime {
+  opacity: 1;
+  color: rgba(244, 244, 247, 0.55);
+}
+
+.gf-lyrics {
+  opacity: 1;
+  color: rgba(244, 244, 247, 0.62);
+}
+
+@media (hover: none) {
+  .gatefold-tracks li:hover .gf-lyrics,
+  .gf-lyrics:hover {
+    color: rgba(244, 244, 247, 0.62);
+    background: rgba(255, 255, 255, 0.05);
   }
 }
