@@ -6,6 +6,8 @@ import { CrateController } from './crate.js';
 import { BrowseView, normalizeView, railLabel } from './browse.js';
 import { facetsFor, matchesFilters, activeCount, toggleOption, describeSelection, emptySelection, GROUPS } from './filters.js';
 import { emptyState } from './emptystate.js';
+import { Wall, wallSupported } from './wall.js';
+import { createRunOnce } from './jobs.js';
 import { WELCOME, progressLabel, progressFraction, recentCovers } from './welcome.js';
 import { GatefoldController } from './notes.js';
 import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBackground, groupTracksBySide, calculateTotalDuration, parseSortArtist, getGenreTags, getRecordTags, tagLabel, enrichDetailsInBackground, enrichYearsInBackground, enrichArtInBackground, enrichDeezerArtInBackground, verifyArtInBackground, recheckArtInBackground, needsArtRecheck, enrichMasterTitleArtInBackground, needsMasterTitleArt, needsDeezerArt, needsItunesArt, needsArtVerification, loadRecordDetails, needsDetails, refreshCollectionFields } from './sync.js';
@@ -106,6 +108,7 @@ class App {
     this.lastMetaRecordId = null;
 
     // /s/<id> is someone's shared crate, opened read-only in a database of its own so the visitor's collection is untouched
+    this.runOnce = createRunOnce();
     this.shareId = shareIdFromPath(location.pathname);
     this.routeBase = this.shareId ? `/s/${this.shareId}` : '';
     if (this.shareId) {
@@ -283,6 +286,7 @@ class App {
     this.initShortcuts();
     this.initPullToRefresh();
     this.initShare();
+    this.initWall();
     this.initFillStatus();
     this.requestPersistentStorage();
 
@@ -644,41 +648,47 @@ class App {
   }
 
   // Full Discogs release (label, credits, pressing, videos) for the album inspector, fetched once per record
-  async fillMissingDetails() {
-    if (!isDiscogsConnected()) return;
+  fillMissingDetails() {
+    return this.runOnce('details', async () => {
+      if (!isDiscogsConnected()) return;
 
-    const missing = this.allRecords.filter(needsDetails);
-    if (missing.length === 0) return;
+      const missing = this.allRecords.filter(needsDetails);
+      if (missing.length === 0) return;
 
-    this.fill = { total: missing.length, done: 0 };
-    try {
-      await enrichDetailsInBackground(missing, () => {
-        this.fill.done++;
-        this.renderFillStatus();
-      });
-    } finally {
-      this.fill = null;
-    }
-    await this.refreshInPlace();
+      const fill = { total: missing.length, done: 0 };
+      this.fill = fill;
+      try {
+        await enrichDetailsInBackground(missing, () => {
+          fill.done++;
+          this.renderFillStatus();
+        });
+      } finally {
+        if (this.fill === fill) this.fill = null;
+      }
+      await this.refreshInPlace();
+    });
   }
 
   // Where a record files in the crate depends on its original release year, which only its Discogs master knows
-  async fillMissingYears() {
-    if (!isDiscogsConnected()) return;
+  fillMissingYears() {
+    return this.runOnce('years', async () => {
+      if (!isDiscogsConnected()) return;
 
-    const needsYear = this.allRecords.filter((r) => r.masterId && r.masterYear == null && !r.masterChecked && !String(r.id).startsWith('discogs_mock_'));
-    if (needsYear.length === 0) return;
+      const needsYear = this.allRecords.filter((r) => r.masterId && r.masterYear == null && !r.masterChecked && !String(r.id).startsWith('discogs_mock_'));
+      if (needsYear.length === 0) return;
 
-    this.fill = { label: 'Finding original release years…', total: needsYear.length, done: 0 };
-    try {
-      await enrichYearsInBackground(needsYear, (count) => {
-        this.fill.done += count;
-        this.renderFillStatus();
-      });
-    } finally {
-      this.fill = null;
-    }
-    await this.refreshInPlace();
+      const fill = { label: 'Finding original release years…', total: needsYear.length, done: 0 };
+      this.fill = fill;
+      try {
+        await enrichYearsInBackground(needsYear, (count) => {
+          fill.done = Math.min(fill.total, fill.done + count);
+          this.renderFillStatus();
+        });
+      } finally {
+        if (this.fill === fill) this.fill = null;
+      }
+      await this.refreshInPlace();
+    });
   }
 
   // Without this a browser may clear stored data when space runs short. It is only a request, and browsers may decline.
@@ -758,20 +768,22 @@ class App {
   }
 
   // Records still showing a Discogs photo of the sleeve get clean cover art: Deezer first (fast), then iTunes for the rest
-  async fillMissingArt() {
-    if (!this.allRecords.some((r) => needsDeezerArt(r) || needsItunesArt(r) || needsArtVerification(r) || needsArtRecheck(r) || needsMasterTitleArt(r))) return;
+  fillMissingArt() {
+    return this.runOnce('art', async () => {
+      if (!this.allRecords.some((r) => needsDeezerArt(r) || needsItunesArt(r) || needsArtVerification(r) || needsArtRecheck(r) || needsMasterTitleArt(r))) return;
 
-    const onEach = () => this.scheduleRefresh();
-    await recheckArtInBackground(this.allRecords.filter(needsArtRecheck), onEach);
-    this.allRecords = await getAllRecords();
-    await verifyArtInBackground(this.allRecords.filter(needsArtVerification), onEach);
-    this.allRecords = await getAllRecords();
-    await enrichDeezerArtInBackground(this.allRecords.filter(needsDeezerArt), onEach);
-    this.allRecords = await getAllRecords();
-    await enrichArtInBackground(this.allRecords.filter(needsItunesArt), onEach);
-    this.allRecords = await getAllRecords();
-    await enrichMasterTitleArtInBackground(this.allRecords.filter(needsMasterTitleArt), onEach);
-    await this.refreshInPlace();
+      const onEach = () => this.scheduleRefresh();
+      await recheckArtInBackground(this.allRecords.filter(needsArtRecheck), onEach);
+      this.allRecords = await getAllRecords();
+      await verifyArtInBackground(this.allRecords.filter(needsArtVerification), onEach);
+      this.allRecords = await getAllRecords();
+      await enrichDeezerArtInBackground(this.allRecords.filter(needsDeezerArt), onEach);
+      this.allRecords = await getAllRecords();
+      await enrichArtInBackground(this.allRecords.filter(needsItunesArt), onEach);
+      this.allRecords = await getAllRecords();
+      await enrichMasterTitleArtInBackground(this.allRecords.filter(needsMasterTitleArt), onEach);
+      await this.refreshInPlace();
+    });
   }
 
   // New artwork shows up in the stack as it arrives, in batches rather than one repaint per record
@@ -784,23 +796,28 @@ class App {
   }
 
   fillMissingGenres() {
-    const needsGenre = this.allRecords.filter((r) => !r.genreChecked || r.itunesUrl === undefined);
-    if (needsGenre.length === 0) return;
-
-    enrichGenresInBackground(needsGenre).then(() => this.refreshInPlace());
+    return this.runOnce('genres', async () => {
+      const needsGenre = this.allRecords.filter((r) => !r.genreChecked || r.itunesUrl === undefined);
+      if (needsGenre.length === 0) return;
+      await enrichGenresInBackground(needsGenre);
+      await this.refreshInPlace();
+    });
   }
 
   fillMissingTracklists() {
-    if (!isDiscogsConnected()) return;
+    return this.runOnce('tracklists', async () => {
+      if (!isDiscogsConnected()) return;
 
-    const needsEnrichment = this.allRecords.filter((r) => {
-      if (!r.discogsId) return false;
-      if (!r.tracklist || r.tracklist.length === 0) return true;
-      return r.tracklist.some((t) => !t.duration);
+      const needsEnrichment = this.allRecords.filter((r) => {
+        if (!r.discogsId) return false;
+        if (!r.tracklist || r.tracklist.length === 0) return true;
+        return r.tracklist.some((t) => !t.duration);
+      });
+      if (needsEnrichment.length === 0) return;
+
+      await enrichTracklistsInBackground(needsEnrichment);
+      await this.refreshInPlace();
     });
-    if (needsEnrichment.length === 0) return;
-
-    enrichTracklistsInBackground(needsEnrichment).then(() => this.refreshInPlace());
   }
 
   setBrowseOpen(open) {
@@ -1099,6 +1116,9 @@ class App {
         help.hidden = !help.hidden;
       } else if (['1', '2', '3'].includes(e.key) && !document.querySelector('.gatefold-workspace.open, .settings-drawer.open')) {
         this.setView(['stack', 'grid', 'list'][Number(e.key) - 1]);
+      } else if (e.key === '4' && !document.querySelector('.gatefold-workspace.open, .settings-drawer.open')) {
+        closeHelp();
+        this.startWall();
       }
     });
   }
@@ -1234,6 +1254,37 @@ class App {
     }
   }
 
+  // ---- Screensaver: the wall of covers ---------------------------------------------------------------------------
+
+  initWall() {
+    const root = document.getElementById('wall');
+    if (!root) return;
+    this.wall = new Wall({
+      root,
+      getRecords: () => (this.filteredRecords.length ? this.filteredRecords : this.allRecords),
+      onOpen: (record) => {
+        this.showInCrate(record);
+        this.openRecordDetail(record);
+      },
+    });
+    const row = document.getElementById('settings-wall-btn');
+    const sync = () => { if (row) row.hidden = !wallSupported(window.innerWidth, window.innerHeight); };
+    sync();
+    window.addEventListener('resize', sync);
+    row?.addEventListener('click', () => {
+      this.settingsDrawer?.classList.remove('open');
+      this.settingsDrawer?.setAttribute('aria-hidden', 'true');
+      this.startWall();
+    });
+    // /?wall starts it on its own: a bookmark for a tablet on a stand
+    if (new URLSearchParams(location.search).has('wall')) setTimeout(() => this.startWall(), 1500);
+  }
+
+  startWall() {
+    if (!wallSupported(window.innerWidth, window.innerHeight) || this.shareId) return;
+    this.wall?.start();
+  }
+
   // ---- Welcome (first visit) and the first sync ----------------------------------------------------------------------
 
   // Someone who has never connected sees one clear invitation, over the demo crate. Once, and never on a direct album link.
@@ -1309,17 +1360,45 @@ class App {
 
   // Stack, grid or list. The choice is remembered; the record you were on stays in view across all three.
   setView(view, { initial = false } = {}) {
-    this.view = normalizeView(view);
+    const nextView = normalizeView(view);
+    if (!initial && this.view === nextView) return;
+
+    const prevView = this.view;
+    this.view = nextView;
     try { localStorage.setItem('spindex_view', this.view); } catch { /* fine */ }
     document.body.dataset.view = this.view;
     this.closeJump();
     this.viewButtons.forEach((btn) => { if (btn.dataset.view) btn.setAttribute('aria-pressed', String(btn.dataset.view === this.view)); });
-    if (this.browseRoot) this.browseRoot.hidden = this.view === 'stack';
-    if (this.view === 'stack') {
-      if (!initial) this.crate.refreshLayout();
+    const leavingStack = prevView === 'stack' && nextView !== 'stack';
+    const enteringStack = prevView !== 'stack' && nextView === 'stack';
+
+    if (leavingStack) {
+      if (this.browseRoot) {
+        this.browseRoot.hidden = false;
+        this.renderBrowse();
+      }
       return;
     }
-    if (!initial || this.filteredRecords.length) this.renderBrowse();
+
+    if (enteringStack) {
+      if (!initial) this.crate.refreshLayout();
+      setTimeout(() => {
+        if (this.view === 'stack' && this.browseRoot) {
+          this.browseRoot.hidden = true;
+        }
+      }, 340);
+      return;
+    }
+
+    if (!initial && prevView && prevView !== nextView && this.browseRoot) {
+      this.browseRoot.classList.add('is-switching');
+      setTimeout(() => {
+        if (this.filteredRecords.length) this.renderBrowse();
+        requestAnimationFrame(() => this.browseRoot.classList.remove('is-switching'));
+      }, 100);
+    } else {
+      if (!initial || this.filteredRecords.length) this.renderBrowse();
+    }
   }
 
   railKey(record) {

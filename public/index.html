@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="Spindex">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
   <title>Spindex | Your record collection</title>
-  <link rel="stylesheet" href="/css/style.css?v=107">
+  <link rel="stylesheet" href="/css/style.css?v=110">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%23121214%22 stroke=%22%23e4e4e7%22 stroke-width=%224%22/><circle cx=%2250%22 cy=%2250%22 r=%2220%22 fill=%22%23e11d48%22/><circle cx=%2250%22 cy=%2250%22 r=%224%22 fill=%22%23fff%22/></svg>">
@@ -369,6 +369,7 @@
         <dt><kbd>A</kbd> to <kbd>Z</kbd></dt><dd>Jump to that letter</dd>
         <dt><kbd>/</kbd></dt><dd>Search</dd>
         <dt><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></dt><dd>Stack, grid or list</dd>
+        <dt><kbd>4</kbd></dt><dd>Screensaver</dd>
         <dt><kbd>Esc</kbd></dt><dd>Close whatever is open</dd>
         <dt><kbd>?</kbd></dt><dd>This list</dd>
       </dl>
@@ -389,6 +390,9 @@
       <div id="welcome-actions" class="welcome-actions"></div>
     </div>
   </div>
+
+  <!-- Screensaver: the wall of covers (tablets and larger) -->
+  <div id="wall" class="wall" hidden aria-hidden="true"></div>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
@@ -493,6 +497,7 @@
 
         <div class="settings-group settings-rows">
           <button id="settings-stats-btn" class="settings-row" type="button">Collection stats</button>
+          <button id="settings-wall-btn" class="settings-row" type="button" hidden>Screensaver</button>
           <button id="settings-help-btn" class="settings-row settings-row-keys" type="button">Keyboard shortcuts</button>
           <details class="settings-advanced" id="health-details">
             <summary>Diagnostics <span class="health-summary" id="health-summary"></span></summary>
@@ -516,7 +521,7 @@
     </div>
   </aside>
 
-  <script type="module" src="/js/app.js?v=111"></script>
+  <script type="module" src="/js/app.js?v=116"></script>
 </body>
 
 </html>
