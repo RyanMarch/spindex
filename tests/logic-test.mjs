@@ -1061,3 +1061,71 @@ import { noteSource, sourceSnapshot, resetSourceStats } from '../public/js/sourc
   assert.equal(healthSummary({ total: 50, pending: { art: 3, details: 10 } }), 'Filling in 10 details and 3 covers');
   assert.equal(healthSummary({ total: 50, pending: { art: 3, details: 0 } }), 'Filling in 3 covers');
 }
+
+// ---- fun stats and curiosities -------------------------------------------------------------------------------------
+{
+  const { computeStats, computeFunStats } = await import('../public/js/stats.js');
+  const { statsHTML } = await import('../public/js/statsview.js');
+
+  const testRecords = [
+    {
+      id: 'r1',
+      title: 'Kind of Blue',
+      artist: 'Miles Davis',
+      year: 1959,
+      dateAdded: '2023-01-15T10:00:00Z',
+      tracklist: [
+        { title: 'So What', duration: '9:22' },
+        { title: 'All Blues', duration: '11:33' },
+      ],
+    },
+    {
+      id: 'r2',
+      title: 'A Love Supreme',
+      artist: 'John Coltrane',
+      year: 1965,
+      dateAdded: '2023-01-15T11:00:00Z',
+      tracklist: [
+        { title: 'Part I', duration: '7:42' },
+        { title: 'Part II', duration: '17:50' },
+      ],
+    },
+    {
+      id: 'r3',
+      title: 'Boston',
+      artist: 'Boston',
+      year: 1976,
+      dateAdded: '2024-05-20T14:00:00Z',
+      tracklist: [
+        { title: 'More Than a Feeling', duration: '4:45' },
+        { title: 'Peace of Mind', duration: '5:02' },
+        { title: 'Foreplay / Long Time', duration: '7:48' },
+      ],
+    },
+    {
+      id: 'r4',
+      title: 'Third',
+      artist: 'Soft Machine',
+      year: 1970,
+      dateAdded: '2024-06-01T12:00:00Z',
+      tracklist: [
+        { title: 'Facelift', duration: '18:45' },
+        { title: 'Slightly All the Time', duration: '18:12' },
+        { title: 'Moon in June', duration: '19:08' },
+      ],
+    },
+  ];
+
+  const fun = computeFunStats(testRecords);
+  assert.ok(fun.length > 0, 'generates fun stats from records');
+  assert.ok(fun.some((f) => f.id === 'first-added'), 'identifies first added record');
+  assert.ok(fun.some((f) => f.id === 'biggest-haul-day'), 'identifies single-day haul');
+  assert.ok(fun.some((f) => f.id === 'longest-track'), 'identifies longest track');
+
+  const stats = computeStats(testRecords);
+  assert.ok(stats.standoutsPool && stats.standoutsPool.length > 0, 'builds standoutsPool');
+  const html = statsHTML(stats);
+  assert.ok(html.includes('Standouts'), 'renders Standouts section');
+}
+
+

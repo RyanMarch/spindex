@@ -118,5 +118,304 @@ export function computeStats(records, { topGenres = 7, topArtists = 8 } = {}) {
     runtimeSeconds,
     growth,
     firstAdded: growth[0]?.month || null,
+    standoutsPool: buildStandoutsPool({
+      oldest,
+      newest,
+      longest,
+      topArtist,
+      records: real,
+      dated,
+      lengths,
+      runtimeSeconds,
+    }),
   };
+}
+
+// Build a unified pool of standout and curiosity items for the Standouts section
+export function buildStandoutsPool({
+  oldest = null,
+  newest = null,
+  longest = null,
+  topArtist = null,
+  records = [],
+  dated = [],
+  lengths = [],
+  runtimeSeconds = 0,
+} = {}) {
+  const pool = [];
+
+  // Core anchor standouts
+  if (oldest) {
+    pool.push({
+      id: 'oldest-release',
+      type: 'record',
+      kicker: 'Oldest Release',
+      record: oldest.record,
+      detail: `${oldest.year}`,
+    });
+  }
+  if (newest && newest.record !== oldest?.record) {
+    pool.push({
+      id: 'newest-release',
+      type: 'record',
+      kicker: 'Newest Release',
+      record: newest.record,
+      detail: `${newest.year}`,
+    });
+  }
+  if (longest) {
+    const minutes = Math.round(longest.seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    const durStr = minutes < 60 ? `${minutes} min` : (rest ? `${hours} hr ${rest} min` : `${hours} hr`);
+    pool.push({
+      id: 'longest-album',
+      type: 'record',
+      kicker: 'Longest Album',
+      record: longest.record,
+      detail: durStr,
+    });
+  }
+  if (topArtist) {
+    pool.push({
+      id: 'top-artist',
+      type: 'artist-fan',
+      kicker: 'Most collected',
+      artist: topArtist.name,
+      records: topArtist.records,
+      count: topArtist.count,
+    });
+  }
+
+  // Fun curiosity stats
+  const fun = computeFunStats(records, { dated, lengths, runtimeSeconds });
+  pool.push(...fun);
+
+  return pool;
+}
+
+// Fun stats pool: evaluated purely in-memory from loaded records.
+export function computeFunStats(records, { dated = [], lengths = [], runtimeSeconds = 0 } = {}) {
+  const pool = [];
+  if (!records || records.length === 0) return pool;
+
+  // 1. Earliest added record to collection
+  const withDateAdded = records
+    .filter((r) => r.dateAdded && !Number.isNaN(new Date(r.dateAdded).getTime()))
+    .sort((a, b) => new Date(a.dateAdded) - new Date(b.dateAdded));
+
+  if (withDateAdded.length > 0) {
+    const earliest = withDateAdded[0];
+    const dateStr = new Date(earliest.dateAdded).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+    pool.push({
+      id: 'first-added',
+      type: 'record',
+      kicker: 'First logged addition',
+      record: earliest,
+      detail: dateStr,
+    });
+
+    // 2. Latest added record (if distinct from earliest and at least 3 records)
+    if (withDateAdded.length >= 3) {
+      const latest = withDateAdded[withDateAdded.length - 1];
+      if (latest !== earliest) {
+        const latestDateStr = new Date(latest.dateAdded).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          timeZone: 'UTC',
+        });
+        pool.push({
+          id: 'latest-added',
+          type: 'record',
+          kicker: 'Latest addition',
+          record: latest,
+          detail: latestDateStr,
+        });
+      }
+    }
+  }
+
+  // 3. Biggest haul day (single calendar day with the most records added, if >= 2)
+  if (withDateAdded.length >= 4) {
+    const dayCounts = new Map();
+    for (const r of withDateAdded) {
+      const d = r.dateAdded.slice(0, 10);
+      dayCounts.set(d, (dayCounts.get(d) || 0) + 1);
+    }
+    const sortedDays = [...dayCounts.entries()].sort((a, b) => b[1] - a[1]);
+    if (sortedDays.length > 0 && sortedDays[0][1] >= 2) {
+      const [topDay, count] = sortedDays[0];
+      const [y, m, d] = topDay.split('-').map(Number);
+      const formatted = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
+      pool.push({
+        id: 'biggest-haul-day',
+        type: 'fact',
+        icon: 'calendar',
+        kicker: 'Biggest haul in one day',
+        title: `${count} records added`,
+        detail: formatted,
+      });
+    }
+  }
+
+  // 4. Primary cataloging day of the week
+  if (withDateAdded.length >= 10) {
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const weekdayCounts = new Array(7).fill(0);
+    for (const r of withDateAdded) {
+      weekdayCounts[new Date(r.dateAdded).getUTCDay()]++;
+    }
+    const maxDayCount = Math.max(...weekdayCounts);
+    const topDayIdx = weekdayCounts.indexOf(maxDayCount);
+    const pct = Math.round((maxDayCount / withDateAdded.length) * 100);
+    if (pct >= 25) {
+      pool.push({
+        id: 'favorite-add-day',
+        type: 'fact',
+        icon: 'clock',
+        kicker: 'Cataloging habit',
+        title: `${dayNames[topDayIdx]}s`,
+        detail: `${pct}% of records cataloged`,
+      });
+    }
+  }
+
+  // 5. Shortest album (minimum 3 tracks, over 10 min runtime)
+  const validLengths = (lengths.length > 0 ? lengths : records.map((r) => ({
+    record: r,
+    seconds: (r.tracklist || []).reduce((sum, t) => sum + durationSeconds(t.duration), 0),
+  }))).filter((x) => x.seconds >= 600 && (x.record.tracklist || []).length >= 3);
+
+  if (validLengths.length >= 2) {
+    const shortest = [...validLengths].sort((a, b) => a.seconds - b.seconds)[0];
+    if (shortest) {
+      const mins = Math.round(shortest.seconds / 60);
+      pool.push({
+        id: 'shortest-album',
+        type: 'record',
+        kicker: 'Quickest spin',
+        record: shortest.record,
+        detail: `${mins} min runtime`,
+      });
+    }
+  }
+
+  // 6. Album with the most tracks (if >= 14 tracks)
+  const withTracklists = records.filter((r) => Array.isArray(r.tracklist) && r.tracklist.length >= 14);
+  if (withTracklists.length > 0) {
+    const mostTracks = [...withTracklists].sort((a, b) => b.tracklist.length - a.tracklist.length)[0];
+    pool.push({
+      id: 'most-tracks',
+      type: 'record',
+      kicker: 'Most tracks on one record',
+      record: mostTracks,
+      detail: `${mostTracks.tracklist.length} tracks`,
+    });
+  }
+
+  // 7. Longest single track (if >= 10 minutes)
+  let longestTrack = null;
+  for (const r of records) {
+    for (const t of r.tracklist || []) {
+      const sec = durationSeconds(t.duration);
+      if (sec >= 600 && (!longestTrack || sec > longestTrack.sec)) {
+        longestTrack = { record: r, track: t.title || 'Untitled', sec, duration: t.duration };
+      }
+    }
+  }
+  if (longestTrack) {
+    pool.push({
+      id: 'longest-track',
+      type: 'record',
+      kicker: 'Longest single track',
+      record: longestTrack.record,
+      detail: `“${longestTrack.track}” · ${longestTrack.duration}`,
+    });
+  }
+
+  // 8. Self-titled releases (artist matches title)
+  const selfTitled = records.filter((r) => {
+    if (!r.title || !r.artist || isVarious(r.artist)) return false;
+    const a = r.artist.trim().toLowerCase().replace(/^the\s+/, '');
+    const t = r.title.trim().toLowerCase().replace(/^the\s+/, '');
+    return a === t;
+  });
+  if (selfTitled.length >= 2) {
+    pool.push({
+      id: 'self-titled-count',
+      type: 'fact',
+      icon: 'sparkles',
+      kicker: 'Self-titled releases',
+      title: `${selfTitled.length} albums`,
+      detail: 'Matching artist & album title',
+    });
+  }
+
+  // 9. Single-record artists ("one-and-done" crate presence)
+  const artistCounts = new Map();
+  for (const r of records) {
+    if (r.artist && !isVarious(r.artist)) {
+      artistCounts.set(r.artist, (artistCounts.get(r.artist) || 0) + 1);
+    }
+  }
+  let soloArtists = 0;
+  for (const count of artistCounts.values()) {
+    if (count === 1) soloArtists++;
+  }
+  if (artistCounts.size >= 8 && soloArtists >= 4) {
+    const pct = Math.round((soloArtists / artistCounts.size) * 100);
+    pool.push({
+      id: 'one-album-artists',
+      type: 'fact',
+      icon: 'disc',
+      kicker: 'Solo discoveries',
+      title: `${soloArtists} single-record artists`,
+      detail: `${pct}% of artists in your crate`,
+    });
+  }
+
+  // 10. Golden release year (peak year by release count)
+  if (dated.length >= 8) {
+    const yearCounts = new Map();
+    for (const { year } of dated) {
+      yearCounts.set(year, (yearCounts.get(year) || 0) + 1);
+    }
+    const sortedYears = [...yearCounts.entries()].sort((a, b) => b[1] - a[1]);
+    if (sortedYears.length > 0 && sortedYears[0][1] >= 3) {
+      pool.push({
+        id: 'golden-year',
+        type: 'fact',
+        icon: 'star',
+        kicker: 'Favorite release year',
+        title: `${sortedYears[0][0]}`,
+        detail: `${sortedYears[0][1]} records released that year`,
+      });
+    }
+  }
+
+  // 11. Estimated physical weight of the collection
+  if (records.length >= 10) {
+    const approxLbs = Math.round(records.length * 0.52);
+    pool.push({
+      id: 'collection-weight',
+      type: 'fact',
+      icon: 'scale',
+      kicker: 'Estimated weight',
+      title: `~${approxLbs} lbs`,
+      detail: `~${Math.round(approxLbs * 0.453592)} kg of vinyl`,
+    });
+  }
+
+  return pool;
 }

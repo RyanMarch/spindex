@@ -42,15 +42,42 @@ function standout(kicker, record, detail) {
   return `<li class="st-standout">${cover(record)}<span class="st-standout-text"><em>${esc(kicker)}</em><strong>${esc(record.title)}</strong><span>${esc(record.artist)} · ${esc(detail)}</span></span></li>`;
 }
 
+function renderStandoutItem(item) {
+  if (item.type === 'artist-fan') {
+    const stack = (item.records || []).map((r, i) => `<span style="--i:${i}">${cover(r, 'st-cover')}</span>`).join('');
+    return `<li class="st-standout st-artist"><span class="st-fan">${stack}</span><span class="st-standout-text"><em>${esc(item.kicker)}</em><strong>${esc(item.artist)}</strong><span>${number(item.count)} records</span></span></li>`;
+  }
+  if (item.type === 'record') {
+    return `<li class="st-standout">${cover(item.record)}<span class="st-standout-text"><em>${esc(item.kicker)}</em><strong>${esc(item.record.title)}</strong><span>${esc(item.record.artist)} · ${esc(item.detail)}</span></span></li>`;
+  }
+  // Text facts with an icon badge aligned in the 60x60 cover slot
+  return `<li class="st-standout"><span class="st-standout-icon">${renderStatIcon(item.icon)}</span><span class="st-standout-text"><em>${esc(item.kicker)}</em><strong>${esc(item.title)}</strong><span>${esc(item.detail)}</span></span></li>`;
+}
+
+function renderStatIcon(icon) {
+  switch (icon) {
+    case 'calendar':
+      return `<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`;
+    case 'clock':
+      return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
+    case 'scale':
+      return `<svg viewBox="0 0 24 24"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path><path d="M7 21h10"></path><path d="M12 3v18"></path><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"></path></svg>`;
+    case 'star':
+      return `<svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+    case 'sparkles':
+      return `<svg viewBox="0 0 24 24"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path></svg>`;
+    case 'disc':
+    default:
+      return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>`;
+  }
+}
+
 function standouts(stats) {
-  const items = [];
-  if (stats.oldest) items.push(standout('Oldest', stats.oldest.record, stats.oldest.year));
-  if (stats.newest && stats.newest.record !== stats.oldest?.record) items.push(standout('Newest', stats.newest.record, stats.newest.year));
-  if (stats.longest) items.push(standout('Longest', stats.longest.record, playTime(stats.longest.seconds)));
-  const out = items.join('');
-  if (!stats.topArtist) return out;
-  const stack = stats.topArtist.records.map((r, i) => `<span style="--i:${i}">${cover(r, 'st-cover')}</span>`).join('');
-  return `${out}<li class="st-standout st-artist"><span class="st-fan">${stack}</span><span class="st-standout-text"><em>Most collected</em><strong>${esc(stats.topArtist.name)}</strong><span>${number(stats.topArtist.count)} records</span></span></li>`;
+  const pool = stats.standoutsPool || [];
+  if (pool.length === 0) return '';
+  // Pick up to 4 items from the unified pool
+  const chosen = [...pool].sort(() => Math.random() - 0.5).slice(0, 4);
+  return chosen.map(renderStandoutItem).join('');
 }
 
 // Cumulative line: the shape of how the collection grew
@@ -77,6 +104,7 @@ export function statsHTML(stats) {
   if (stats.decades.length) parts.push(section('On the shelf', spinesHTML(stats.decades), stats.undated ? `${stats.undated} without a year.` : ''));
   const stand = standouts(stats);
   if (stand) parts.push(section('Standouts', `<ul class="st-standouts">${stand}</ul>`));
+
   if (stats.genres.length) parts.push(section('Filed under', `<ul class="st-index">${stats.genres.map((g) => indexRow(g.name, g.count)).join('')}</ul>`));
 
   if (stats.colors.length) {
