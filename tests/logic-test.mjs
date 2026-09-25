@@ -337,6 +337,126 @@ import { progressLabel, progressFraction, recentCovers } from '../public/js/welc
   assert.equal(many[13].id, 'r29', 'the latest are kept');
 }
 
+
+// ---- the wall (screensaver) ----------------------------------------------------------------------------------------
+import { wallSupported, planWall, wallPattern, headingAt, recycled, spotSize, pickSpot } from '../public/js/wall.js';
+
+{
+  assert.equal(wallSupported(1366, 1024), true, 'an iPad');
+  assert.equal(wallSupported(744, 1133), true, 'a small tablet upright');
+  assert.equal(wallSupported(1920, 1080), true);
+  assert.equal(wallSupported(402, 874), false, 'a phone');
+  assert.equal(wallSupported(874, 402), false, 'a phone on its side is still a phone');
+
+  // Tiles: about one per record, but within a sensible size, with a spare tile waiting beyond every edge
+  const few = planWall({ width: 1280, height: 800, count: 12 });
+  assert.equal(few.tile, 230, 'a small collection: large tiles, and covers repeat');
+  const some = planWall({ width: 1280, height: 800, count: 60 });
+  assert.ok(some.tile > 110 && some.tile < 230);
+  const many = planWall({ width: 1280, height: 800, count: 5000 });
+  assert.equal(many.tile, 110, 'a huge collection: never smaller than 110px');
+  for (const p of [few, some, many]) {
+    assert.ok(p.cols * p.tile >= 1280 + 2 * p.tile - p.tile, 'covers the screen with a spare tile at each side');
+    assert.ok(p.rows * p.tile >= 800 + p.tile);
+    assert.equal(p.cells, p.cols * p.rows);
+    assert.ok(p.speed >= 3 && p.speed < 10, 'a slow drift, a few pixels a second');
+  }
+
+  // What sits where: every record once before any repeats, and no record beside itself, above or below, anywhere
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (const n of [1, 2, 3, 6, 12, 51, 300]) {
+    const pool = Array.from({ length: n }, (_, i) => ({ id: i }));
+    const at = wallPattern(pool, rand);
+    assert.equal(new Set(Array.from({ length: n }, (_, c) => at(c, 0).id)).size, n, `a row of ${n} shows each record once`);
+    if (n > 1) {
+      for (let r = -20; r < 20; r++) {
+        for (let c = -20; c < 20; c++) {
+          assert.notEqual(at(c, r), at(c + 1, r), `${n}: nothing beside itself`);
+          assert.notEqual(at(c, r), at(c, r + 1), `${n}: nothing above itself`);
+        }
+      }
+    }
+    assert.equal(at(5, 7), at(5, 7), 'the same place always shows the same record');
+  }
+  assert.equal(wallPattern([], rand)(3, 4), null, 'nothing to show');
+
+  // The heading turns slowly: a few degrees a minute, all the way round in about twelve minutes, never jumping
+  const degrees = (rad) => (rad * 180) / Math.PI;
+  const perMinute = degrees(headingAt(60) - headingAt(0));
+  assert.ok(Math.abs(perMinute) < 60 && Math.abs(perMinute) > 5, `a gradual turn (${perMinute.toFixed(0)}° a minute)`);
+  assert.ok(Math.abs(degrees(headingAt(720) - headingAt(0)) - 360) < 40, 'about one full turn in twelve minutes, give or take the sway');
+  let widest = 0;
+  for (let t = 0; t < 1800; t += 0.5) widest = Math.max(widest, Math.abs(degrees(headingAt(t + 0.5) - headingAt(t))));
+  assert.ok(widest < 1, `never more than a degree in half a second (${widest.toFixed(2)}°)`);
+  assert.notEqual(headingAt(0, { start: 1 }), headingAt(0, { start: 2 }), 'each start can face its own way');
+
+  // Tiles that leave one side reappear ahead of the drift on the other
+  assert.equal(recycled(10, 200, 2400, 1280, 8), 18, 'gone off the left: moved to the right');
+  assert.equal(recycled(20, 200, 2400, 1280, 8), 12, 'beyond the right: moved to the left');
+  assert.equal(recycled(15, 200, 2400, 1280, 8), 15, 'on screen: left alone');
+  assert.equal(recycled(11, 200, 2400, 1280, 8), 11, 'only just leaving: left alone until it has gone completely');
+
+  // The raised cover leaves room for its title, and is never tiny or enormous
+  assert.equal(spotSize(1280, 800), 464);
+  assert.equal(spotSize(2560, 1600), 620, 'capped on a big screen');
+  assert.equal(spotSize(300, 300), 200, 'and floored');
+
+  // Which tile: inside the screen, not among the recent
+  const R = (l, t) => ({ left: l, top: t, right: l + 100, bottom: t + 100 });
+  const rects = [R(-50, 100), R(400, 300), R(1250, 300), R(600, 400), R(200, 200)];
+  const screen = { width: 1280, height: 800 };
+  assert.equal(pickSpot(rects, [], screen, () => 0), 1, 'tiles half off the edge are skipped');
+  assert.equal(pickSpot(rects, [1], screen, () => 0), 3, 'so are recent ones');
+  assert.equal(pickSpot(rects, [1, 3, 4], screen, () => 0), 1, 'when everything is recent, recent ones are allowed again');
+  assert.equal(pickSpot([R(-90, 0)], [], screen), -1, 'nothing suitable on screen');
+}
+
+
+// ---- background jobs run one at a time -------------------------------------------------------------------------
+import { createRunOnce } from '../public/js/jobs.js';
+
+{
+  const runOnce = createRunOnce();
+  let runs = 0;
+  let active = 0;
+  let overlapped = false;
+  const job = async () => {
+    runs++;
+    active++;
+    if (active > 1) overlapped = true;
+    await new Promise((r) => setTimeout(r, 15));
+    active--;
+  };
+
+  // Three requests at once: one run, then one more pass because it was asked for again while running
+  await Promise.all([runOnce('years', job), runOnce('years', job), runOnce('years', job)]);
+  assert.equal(overlapped, false, 'never two at a time');
+  assert.equal(runs, 2, 'and the request that came in mid-run gets one more pass, not two');
+
+  // A single request runs once
+  runs = 0;
+  await runOnce('years', job);
+  assert.equal(runs, 1);
+
+  // Different jobs do not hold each other up
+  runs = 0;
+  await Promise.all([runOnce('a', job), runOnce('b', job)]);
+  assert.equal(runs, 2);
+
+  // A job that fails does not block the next attempt, and the failure is reported to whoever asked
+  let attempts = 0;
+  await assert.rejects(runOnce('flaky', async () => { attempts++; throw new Error('offline'); }), /offline/);
+  await runOnce('flaky', async () => { attempts++; });
+  assert.equal(attempts, 2, 'the next request tries again');
+
+  // Everyone who asked while it ran gets the same answer at the same time
+  const order = [];
+  const slow = async () => { await new Promise((r) => setTimeout(r, 10)); order.push('job'); };
+  await Promise.all([runOnce('s', slow).then(() => order.push('first')), runOnce('s', slow).then(() => order.push('second'))]);
+  assert.deepEqual(order.slice(0, 2), ['job', 'job'], 'the job (and its extra pass) finishes before either caller carries on');
+}
+
 console.log('Logic tests passed.');
 
 // ---- Discogs request queue ------------------------------------------------------------------------------------
