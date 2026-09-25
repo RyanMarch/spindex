@@ -201,7 +201,7 @@ export class CrateController {
       });
 
       this.container.appendChild(el);
-      this.sleeveElements.push({ el, dim, lift, frontSheen, img, record, index: i, z: '' });
+      this.sleeveElements.push({ el, dim, lift, frontSheen, img, record, index: i, z: '', haze: '' });
     }
 
 
@@ -241,10 +241,13 @@ export class CrateController {
     const screenHeight = typeof window !== 'undefined' ? window.innerHeight : 1000;
     this.visibleBelow = Math.min(45, Math.ceil(screenHeight / 40) + 3);
     // On a phone the sliver of every album above only adds noise behind the controls
-    this.visibleAbove = typeof window !== 'undefined' && window.innerWidth <= 640 ? 5 : 12;
-    // Compact layouts host the title, artist and year under the front cover: phones need room for a two-line title
     const phone = typeof window !== 'undefined' && window.innerWidth <= 640;
-    this.gap = this.compactMq?.matches ? (phone ? 90 : 64) : 0;
+    this.visibleAbove = phone ? 5 : 12;
+    // On a phone the albums stacked above the front one thin out with distance, like objects fading into the haze,
+    // and are gone before the header. It is continuous in the album's position, so nothing ever pops in or out.
+    this.aboveFadeSpan = phone ? 3.2 : 0;
+    // Compact layouts host the title, artist and year under the front cover: phones need room for a two-line title
+    this.gap = this.compactMq?.matches ? (phone ? 98 : 64) : 0;
   }
 
   kick() {
@@ -354,6 +357,15 @@ export class CrateController {
       const front = Math.max(0, 1 - Math.abs(offset)).toFixed(3);
       item.lift.style.opacity = front;
       item.frontSheen.style.opacity = front;
+      if (this.aboveFadeSpan) {
+        // Above the front album: full at the front, thinning to nothing over aboveFadeSpan albums
+        const t = offset < -1 ? Math.max(0, 1 - (-offset - 1) / this.aboveFadeSpan) : 1;
+        const haze = (t * t * (3 - 2 * t)).toFixed(3); // eased, so it thins gently at first
+        if (item.haze !== haze) {
+          item.haze = haze;
+          item.el.style.opacity = haze;
+        }
+      }
 
       const z = String(this.zFor(offset));
       if (item.z !== z) {

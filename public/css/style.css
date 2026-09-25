@@ -346,7 +346,6 @@ summary {
   position: absolute;
   inset: 0;
   transform-origin: center center;
-  transition: opacity 400ms ease;
   will-change: transform;
   cursor: pointer;
 }
@@ -6055,5 +6054,53 @@ body:has(.settings-drawer.open) .status-stack .reorder-pill {
     box-shadow:
       0 8px 16px -4px rgba(0, 0, 0, 0.5),
       0 16px 26px -10px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Phones, top of the screen: the controls share one solid pill (they used to float, unreadable, over the albums
+   stacked behind them), the wordmark fills the empty left side, and the front cover sits lower, clear of the bar. */
+@media (max-width: 640px) {
+  .app-header .brand {
+    display: flex;
+  }
+
+  .app-header .brand-title {
+    display: inline;
+  }
+
+  .header-actions {
+    margin-left: auto;
+    align-items: center;
+    gap: 0.1rem;
+    padding: 3px 6px;
+    border-radius: 9999px;
+    border: 1px solid var(--border-subtle);
+    background: rgba(20, 20, 26, 0.94);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  }
+
+  .header-actions .browse-toggle-btn {
+    background: none;
+    border: 0;
+  }
+
+  .header-actions .icon-btn {
+    color: var(--text-main);
+    opacity: 1;
+  }
+
+  .station-container {
+    padding-top: 2.4rem;
+  }
+
+  /* hugs the cover rather than falling far below it, so it doesn't sit over the caption */
+  .sleeve-lift {
+    box-shadow:
+      0 5px 12px -2px rgba(0, 0, 0, 0.5),
+      0 10px 20px -8px rgba(0, 0, 0, 0.45);
+  }
+
+  .station-metadata-col {
+    margin-top: 30px;
   }
 }
