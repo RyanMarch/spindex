@@ -6385,3 +6385,10 @@ body:has(.settings-drawer.open) .status-stack .reorder-pill {
     width: 100%;
   }
 }
+
+/* Phones have no keyboard to press these on, so the row isn't offered (a paired keyboard can still press ? for the list) */
+@media (max-width: 640px) {
+  #settings-help-btn {
+    display: none;
+  }
+}

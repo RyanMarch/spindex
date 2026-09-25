@@ -1855,6 +1855,14 @@ class App {
     const count = this.allRecords.filter((r) => !String(r.id).startsWith('discogs_mock_')).length;
     const records = count ? `${count.toLocaleString('en-US')} ${count === 1 ? 'record' : 'records'} · ` : '';
     el.textContent = last ? `${records}Up to date. Checked ${timeAgo(last)}.` : `${records}Not checked yet.`;
+    // Checking is optional once the crate is up to date, so the button is quiet; it is the main action only when
+    // nothing has been checked yet or the crate is empty
+    const button = document.getElementById('sync-discogs-btn');
+    if (button) {
+      const settled = Boolean(last) && count > 0;
+      button.classList.toggle('btn-primary', !settled);
+      button.classList.toggle('btn-secondary', settled);
+    }
   }
 
   // The demo crate is for a first visit: it goes away once Discogs is connected
