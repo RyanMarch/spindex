@@ -6392,3 +6392,48 @@ body:has(.settings-drawer.open) .status-stack .reorder-pill {
     display: none;
   }
 }
+
+/* Added over time: a faint line and label for each new year */
+.st-chart {
+  position: relative;
+  padding-top: 1.1rem;
+}
+
+.st-year-rule {
+  stroke: rgba(233, 225, 207, 0.16);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.st-year {
+  position: absolute;
+  top: 0;
+  padding-left: 0.3rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* Stats: nothing may be wider than the panel. The list column can shrink (a long title used to stretch it), long titles
+   wrap to two lines, and the panel never scrolls sideways. */
+.st-standouts {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.st-standout {
+  min-width: 0;
+}
+
+.st-standout-text strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+#stats-drawer .stats-content {
+  overflow-x: hidden;
+}
