@@ -26,6 +26,7 @@ browser, and works offline once loaded.
 - **Phones and tablets**: touch-sized controls, safe-area support, and layouts for portrait and landscape.
 - **Demo crate**: a first visit (before Discogs is connected) shows a built-in 12-album collection. It goes away once you connect. Add `?demo` to the address to reload it while testing.
 - **Grid and list views**, filters (decade, size, pressing, discs, speed), a jump rail (A to Z or decades), "surprise me", and a `?` list of keyboard shortcuts.
+- **Screensaver** (tablets and larger): Settings > Screensaver shows an endless wall of covers drifting slowly, its direction gradually turning (a full circle in about twelve minutes); every few seconds one lifts out with its title. Any key or click leaves; clicking the raised cover opens it. It goes fullscreen and keeps the screen awake where the browser allows. `/?wall` starts it directly, for a tablet on a stand.
 - **Read-only link**: Settings > Share your crate publishes a snapshot others can browse at `/s/<id>`. See "Sharing" below.
 - **Stays up to date by itself**: opening the app (or coming back to it) checks Discogs for new records when it has been a few hours. Settings shows when it last checked.
 
