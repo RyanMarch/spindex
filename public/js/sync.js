@@ -425,9 +425,9 @@ export function calculateTotalDuration(tracks) {
 // each identified by a field id. Read them by name so condition grades never masquerade as notes.
 const DEFAULT_FIELD_NAMES = new Map([[1, 'Media Condition'], [2, 'Sleeve Condition'], [3, 'Notes']]);
 
-export async function fetchCollectionFieldNames(username) {
+export async function fetchCollectionFieldNames(username, priority = 'high') {
   try {
-    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/fields`);
+    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/fields`, {}, priority);
     if (!res.ok) return DEFAULT_FIELD_NAMES;
     const data = await res.json();
     const map = new Map((data.fields || []).map((f) => [f.id, f.name]));
@@ -452,12 +452,12 @@ export function parseCollectionFields(notes, fieldNames = DEFAULT_FIELD_NAMES) {
 
 // Refresh only the condition grades and notes on records that are already in the crate (one request per 100 records)
 export async function refreshCollectionFields(username) {
-  const fieldNames = await fetchCollectionFieldNames(username);
+  const fieldNames = await fetchCollectionFieldNames(username, 'low');
   let page = 1;
   let totalPages = 1;
 
   while (page <= totalPages) {
-    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=100`);
+    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=100`, {}, 'low');
     if (!res.ok) return;
     const data = await res.json();
     totalPages = data.pagination?.pages || 1;

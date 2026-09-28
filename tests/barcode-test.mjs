@@ -89,4 +89,25 @@ for (let y = 0; y < imgHeight; y++) {
 const decoded = decode1DBarcodeFromImageData({ width: imgWidth, height: imgHeight, data: pixelData });
 assert.equal(decoded, '4006381333931', 'Successfully decoded synthetic EAN-13 barcode');
 
+// 6. Decoding vertically rotated EAN-13 barcode image
+const vertWidth = 40;
+const vertHeight = bits.length * scale;
+const vertPixelData = new Uint8ClampedArray(vertWidth * vertHeight * 4);
+
+for (let y = 0; y < vertHeight; y++) {
+  const bitIndex = Math.floor(y / scale);
+  const bit = bits[bitIndex] === '1';
+  const color = bit ? 0 : 255;
+  for (let x = 0; x < vertWidth; x++) {
+    const idx = (y * vertWidth + x) * 4;
+    vertPixelData[idx] = color;
+    vertPixelData[idx + 1] = color;
+    vertPixelData[idx + 2] = color;
+    vertPixelData[idx + 3] = 255;
+  }
+}
+
+const vertDecoded = decode1DBarcodeFromImageData({ width: vertWidth, height: vertHeight, data: vertPixelData });
+assert.equal(vertDecoded, '4006381333931', 'Successfully decoded vertically rotated EAN-13 barcode');
+
 console.log('Barcode tests passed.');

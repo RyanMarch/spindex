@@ -233,6 +233,49 @@ export function decode1DBarcodeFromImageData(imageData) {
     if (code) return code;
   }
 
+  // Also sample vertical scanlines for rotated barcodes or portrait mobile images
+  const sampleXs = [0.5, 0.45, 0.55, 0.38, 0.62, 0.3, 0.7].map((p) => Math.floor(width * p));
+
+  for (const x of sampleXs) {
+    const luminances = new Uint8Array(height);
+    let minL = 255;
+    let maxL = 0;
+
+    for (let y = 0; y < height; y++) {
+      const idx = (y * width + x) * 4;
+      const lum = (data[idx] * 77 + data[idx + 1] * 150 + data[idx + 2] * 29) >> 8;
+      luminances[y] = lum;
+      if (lum < minL) minL = lum;
+      if (lum > maxL) maxL = lum;
+    }
+
+    if (maxL - minL < 35) continue;
+
+    const threshold = (minL + maxL) / 2;
+    const bits = new Uint8Array(height);
+    for (let y = 0; y < height; y++) {
+      bits[y] = luminances[y] < threshold ? 1 : 0;
+    }
+
+    // Build runs
+    const runs = [];
+    let currentBit = bits[0];
+    let currentLen = 1;
+    for (let y = 1; y < height; y++) {
+      if (bits[y] === currentBit) {
+        currentLen++;
+      } else {
+        runs.push({ bit: currentBit, length: currentLen });
+        currentBit = bits[y];
+        currentLen = 1;
+      }
+    }
+    runs.push({ bit: currentBit, length: currentLen });
+
+    const code = decodeEANFromRuns(runs) || decodeEANFromRuns(runs.slice().reverse());
+    if (code) return code;
+  }
+
   return null;
 }
 
@@ -240,8 +283,15 @@ export function decode1DBarcodeFromImageData(imageData) {
 export async function detectBarcode(source) {
   if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
     try {
-      const formats = ['ean_13', 'upc_a', 'upc_e', 'ean_8', 'code_128', 'code_39'];
-      const detector = new window.BarcodeDetector({ formats });
+      let detector;
+      if (typeof window.BarcodeDetector.getSupportedFormats === 'function') {
+        const supported = await window.BarcodeDetector.getSupportedFormats();
+        const desired = ['ean_13', 'upc_a', 'upc_e', 'ean_8', 'code_128', 'code_39'];
+        const formats = desired.filter((f) => supported.includes(f));
+        detector = formats.length > 0 ? new window.BarcodeDetector({ formats }) : new window.BarcodeDetector();
+      } else {
+        detector = new window.BarcodeDetector();
+      }
       const barcodes = await detector.detect(source);
       if (barcodes && barcodes.length > 0) {
         return cleanBarcode(barcodes[0].rawValue);
@@ -287,6 +337,9 @@ export async function searchDiscogsBarcode(barcode) {
   const res = await discogsFetch(`/database/search?barcode=${encodeURIComponent(cleaned)}&type=release`);
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
+    if (res.status === 429) {
+      throw new Error(errorBody.message || 'Discogs rate limit reached (429)');
+    }
     throw new Error(errorBody.message || `Discogs search error (${res.status})`);
   }
   const data = await res.json();
