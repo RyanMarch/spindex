@@ -172,6 +172,8 @@ class App {
     this.settingsDrawer = document.getElementById('settings-drawer');
     this.settingsToggleBtn = document.getElementById('settings-toggle-btn');
     this.settingsCloseBtn = document.getElementById('settings-close-btn');
+    const settingsYear = document.getElementById('settings-year');
+    if (settingsYear) settingsYear.textContent = String(new Date().getFullYear());
 
     this.scannerDrawer = new ScannerDrawer({
       onRecordAdded: async (item) => {
@@ -278,7 +280,10 @@ class App {
       onJump: (id) => this.jumpToRecord(id),
       getPosition: () => ({ index: this.crate.currentIndex, total: this.filteredRecords.length }),
       onRoute: (record, mode) => this.syncUrl(record, mode),
-      onArtworkChange: () => this.refreshInPlace(),
+      onArtworkChange: () => {
+        this.refreshInPlace();
+        if (this.shareInfo) this.publishShareNow({ quiet: true });
+      },
       onArtworkRetry: () => this.fillMissingArt(),
     });
   }
@@ -485,7 +490,7 @@ class App {
     }
 
     if (this.discogsConnectedText && connected) {
-        this.discogsConnectedText.innerHTML =  /*html*/ `<span class="tag-kicker">${mode === 'oauth' ? 'Connected to Discogs as' : 'Using a personal access token for'}</span><strong class="tag-name">${this.escapeHTML(username)}</strong>`;
+      this.discogsConnectedText.innerHTML =  /*html*/ `<span class="tag-kicker">${mode === 'oauth' ? 'Connected to Discogs as' : 'Using a personal access token for'}</span><strong class="tag-name">${this.escapeHTML(username)}</strong>`;
     }
     if (this.usernameInput && mode === 'token') this.usernameInput.value = username;
   }
@@ -640,6 +645,7 @@ class App {
     }
 
     await this.loadAllRecords();
+    this.hydrateFromUserShare();
     this.openFromLocation(true);
     window.addEventListener('popstate', () => this.openFromLocation());
     this.handleDiscogsReturn();
@@ -820,8 +826,8 @@ class App {
       </dl>
       <p class="stat-note">Sources this session</p>
       ${sources.length
-    ? `<dl class="health-rows">${sources.map((s) => row(s.name, `${s.ok} ok${s.failed ? `, ${s.failed} failed (${s.last})` : ''}`)).join('')}</dl>`
-    : '<p class="stat-note">Nothing asked yet.</p>'}`;
+        ? `<dl class="health-rows">${sources.map((s) => row(s.name, `${s.ok} ok${s.failed ? `, ${s.failed} failed (${s.last})` : ''}`)).join('')}</dl>`
+        : '<p class="stat-note">Nothing asked yet.</p>'}`;
   }
 
   // A small pill that says what the background Discogs work is doing, so a slow first load reads as intentional
@@ -1394,6 +1400,7 @@ class App {
     $('share-create-btn')?.addEventListener('click', () => this.publishShareNow({ first: true }));
     $('share-update-btn')?.addEventListener('click', () => this.publishShareNow({}));
     $('share-copy-btn')?.addEventListener('click', async () => {
+      const btn = $('share-copy-btn');
       const input = $('share-link');
       try {
         await navigator.clipboard.writeText(input.value);
@@ -1401,10 +1408,19 @@ class App {
         input.select();
         document.execCommand?.('copy');
       }
+      if (btn) {
+        btn.textContent = 'Copied!';
+        btn.classList.add('is-copied');
+        clearTimeout(this._copyTimer);
+        this._copyTimer = setTimeout(() => {
+          btn.textContent = 'Copy';
+          btn.classList.remove('is-copied');
+        }, 2000);
+      }
       this.toast('Link copied');
     });
     $('share-stop-btn')?.addEventListener('click', async () => {
-      if (!window.confirm('Stop sharing? The link will stop working for everyone who has it.')) return;
+      if (!window.confirm('Do you want to stop sharing your crate? The link will stop working for anyone who has it.')) return;
       try {
         await stopSharing();
         this.shareInfo = null;
@@ -1461,7 +1477,65 @@ class App {
     }
   }
 
+  async hydrateFromUserShare() {
+    if (this.shareId) return;
+    if (discogsState().mode !== 'oauth') return;
+    try {
+      const status = await fetchShareStatus();
+      if (!status?.available || !status?.signedIn || !status?.shared?.id) return;
+      this.shareInfo = status.shared;
+      const snapshot = await loadShare(status.shared.id);
+      if (!snapshot?.records?.length) return;
+
+      const sharedMap = new Map();
+      for (const rec of snapshot.records) {
+        if (rec?.id && rec?.artwork?.highRes) {
+          sharedMap.set(rec.id, rec.artwork);
+        }
+      }
+      if (!sharedMap.size) return;
+
+      let changed = false;
+      const updates = [];
+      for (const local of this.allRecords) {
+        const sharedArt = sharedMap.get(local.id);
+        if (!sharedArt) continue;
+
+        // If local record lacks artwork or local artwork differs from the user's curated share
+        const localSource = local.artwork?.source;
+        const localLocked = Boolean(local.artworkLocked);
+        const sharedIsCleaner = ['deezer', 'itunes'].includes(sharedArt.source);
+        const shouldApply = (sharedArt.locked && !localLocked)
+          || (sharedIsCleaner && localSource === 'discogs' && !localLocked)
+          || (sharedArt.locked && local.artwork?.highRes !== sharedArt.highRes);
+
+        if (shouldApply) {
+          local.artwork = {
+            highRes: sharedArt.highRes,
+            thumbnail: sharedArt.thumbnail || sharedArt.highRes,
+            source: sharedArt.source || 'discogs',
+          };
+          if (sharedArt.locked) {
+            local.artworkLocked = true;
+          }
+          updates.push(local);
+          changed = true;
+        }
+      }
+
+      if (changed && updates.length > 0) {
+        await upsertRecords(updates);
+        this.renderVibeTabs();
+        this.applyFiltersAndSort();
+        this.refreshInPlace();
+      }
+    } catch {
+      // Offline or network error: continue with local IndexedDB records
+    }
+  }
+
   // ---- Screensaver: the wall of covers ---------------------------------------------------------------------------
+
 
   initWall() {
     const root = document.getElementById('wall');
@@ -2024,6 +2098,7 @@ class App {
       } else {
         await this.loadAllRecords();
       }
+      await this.hydrateFromUserShare();
       // One request per release supplies its details and tracklist; durations still missing are filled from the master after
       this.fillMissingArt();
       this.fillMissingYears().then(() => this.fillMissingDetails()).then(() => this.fillMissingTracklists());

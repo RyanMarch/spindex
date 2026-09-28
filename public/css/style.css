@@ -355,6 +355,7 @@ summary {
 }
 
 .sleeve.out-of-range {
+  display: none !important;
   opacity: 0 !important;
   pointer-events: none !important;
 }
@@ -537,7 +538,7 @@ summary {
 }
 
 /* The caption follows the stack: --scrub is 1 at rest and falls to 0 while albums fly past (set in app.js) */
-.station-metadata-col.station-metadata-col > * {
+.station-metadata-col.station-metadata-col>* {
   opacity: var(--scrub, 1);
   transition: none;
 }
@@ -945,7 +946,6 @@ summary {
 }
 
 .sync-status {
-  margin-top: 0.75rem;
   font-size: 0.8rem;
   min-height: 1.2rem;
   color: var(--text-muted);
@@ -1293,7 +1293,7 @@ body.sleeve-open .app-header>* {
 
 .drawer-top {
   align-items: flex-start;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 
 .drawer-eyebrow {
@@ -1370,7 +1370,7 @@ body.sleeve-open .app-header>* {
   border: none;
   border-bottom: 1px solid var(--border-strong);
   border-radius: 0;
-  padding: 0.55rem 0;
+  padding: 0.55rem;
   font-size: 1rem;
   transition: border-color 0.15s ease;
 }
@@ -1944,7 +1944,9 @@ body.sleeve-open .station-container {
   border-color: rgba(229, 169, 59, 0.35);
 }
 
-@media (max-width: 960px), (hover: none), (pointer: coarse) {
+@media (max-width: 960px),
+(hover: none),
+(pointer: coarse) {
   .gf-lyrics {
     opacity: 0.85;
     background: rgba(255, 255, 255, 0.05);
@@ -2793,13 +2795,37 @@ a.btn {
   font-weight: 700;
 }
 
-/* Discogs attribution: their terms ask for a notice with the sign-in and credit next to their data */
-.discogs-notice {
-  margin-top: 1.1rem;
+.settings-footer {
+  margin-top: 1.25rem;
+  padding-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-footer-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
   font-size: 0.72rem;
-  line-height: 1.55;
   color: var(--text-muted);
-  opacity: 0.8;
+  line-height: 1.4;
+}
+
+.settings-footer-meta a {
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease;
+}
+
+.settings-footer-meta a:hover {
+  color: var(--color-accent);
+}
+
+.settings-footer-dot {
+  opacity: 0.45;
+  font-size: 0.6rem;
 }
 
 .gf-attribution {
@@ -5224,12 +5250,6 @@ body.is-empty .floating-nav-pill #crate-counter {
   }
 }
 
-#settings-drawer .discogs-notice {
-  margin-top: 2rem;
-  font-size: 0.78rem;
-  line-height: 1.5;
-  color: var(--text-muted);
-}
 
 .toast {
   max-width: 100%;
@@ -5273,8 +5293,22 @@ body.is-empty .floating-nav-pill #crate-counter {
   color: var(--text-main);
   font: inherit;
   font-size: 0.85rem;
-  user-select: text;
-  -webkit-user-select: text;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+#share-copy-btn {
+  min-width: 5rem;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+#share-copy-btn.is-copied {
+  background-color: #10b981;
+  color: #fff;
 }
 
 #share-meta {
@@ -5480,6 +5514,7 @@ body.share-mode #fill-status {
     transition-duration: 0.01ms;
   }
 }
+
 /* One stack for the toast and the pills. It is bottom centre, never takes a tap except on a pill that offers one, and
    on phones it sits above the bottom bar (which is not there while an album is open). */
 .status-stack {
@@ -5487,7 +5522,7 @@ body.share-mode #fill-status {
   left: 50%;
   transform: translateX(-50%);
   bottom: calc(var(--sab, 0px) + 12px);
-  z-index: 300;
+  z-index: 700;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -5497,7 +5532,7 @@ body.share-mode #fill-status {
   pointer-events: none;
 }
 
-.status-stack > button {
+.status-stack>button {
   pointer-events: auto;
 }
 
@@ -5848,8 +5883,13 @@ body:has(.scanner-drawer.open) .status-stack .reorder-pill {
 }
 
 @keyframes lyrics-pulse {
-  from { opacity: 0.4; }
-  to { opacity: 0.85; }
+  from {
+    opacity: 0.4;
+  }
+
+  to {
+    opacity: 0.85;
+  }
 }
 
 .lyrics-footer {
@@ -5933,7 +5973,8 @@ body:has(.scanner-drawer.open) .status-stack .reorder-pill {
 }
 
 /* Bigger tap area on touch screens without enlarging the ♪ button itself */
-@media (hover: none), (pointer: coarse) {
+@media (hover: none),
+(pointer: coarse) {
   .gf-lyrics {
     position: relative;
   }
@@ -5974,6 +6015,7 @@ body:has(.scanner-drawer.open) .status-stack .reorder-pill {
 /* Phones and tablets: the sheet only fades. Nothing travels, so it can never be caught part-way and inset, and the
    backdrop always fills the screen. */
 @media (max-width: 960px) {
+
   .gatefold-workspace,
   .gatefold-workspace.open {
     transform: none;
@@ -6039,7 +6081,15 @@ body:has(.scanner-drawer.open) .status-stack .reorder-pill {
 /* Touch screens: the grid and list scroll under a bottom bar and a jump rail, and every tile used to be a 3D layer with
    a blurred shadow. None of that is visible on a phone (there is no hover tilt), so it is switched off there and
    scrolling stays smooth. */
-@media (hover: none), (pointer: coarse) {
+@media (hover: none),
+(pointer: coarse) {
+
+  .sleeve,
+  .sleeve-lift,
+  .sleeve-sheen-front {
+    will-change: auto;
+  }
+
   .browse-view {
     will-change: auto;
   }
@@ -6320,6 +6370,7 @@ body:has(.scanner-drawer.open) .status-stack .reorder-pill {
 }
 
 @media (hover: none) {
+
   .gatefold-tracks li:hover .gf-lyrics,
   .gf-lyrics:hover {
     color: rgba(244, 244, 247, 0.62);
@@ -6385,6 +6436,7 @@ body:has(.scanner-drawer.open) .status-stack .reorder-pill {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overflow-x: hidden;
 }
 
 #stats-drawer .stats-content,
@@ -6392,6 +6444,7 @@ body:has(.scanner-drawer.open) .status-stack .reorder-pill {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
 }
 
@@ -6559,6 +6612,7 @@ body:has(.scanner-drawer.open) .status-stack .reorder-pill {
     top: 8%;
     opacity: 0.5;
   }
+
   100% {
     top: 92%;
     opacity: 0.95;
@@ -6669,6 +6723,7 @@ body:has(.scanner-drawer.open) .status-stack .reorder-pill {
     flex-direction: column;
     align-items: stretch;
   }
+
   .scanner-upload-btn {
     justify-content: center;
   }

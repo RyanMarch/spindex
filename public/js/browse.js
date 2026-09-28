@@ -446,7 +446,7 @@ export class BrowseView {
       const img = item.querySelector('img');
       const url = smallArtUrl(records[i], size);
       if (img && img.getAttribute('src') !== url) img.src = url;
-      // Details arrive over time: tags and the coloured record appear in place, without moving anything
+      // Details arrive over time: tags and the colowred record appear in place, without moving anything
       const tags = item.querySelector('.bv-tags');
       if (tags) tags.replaceWith(this.tagsEl(records[i]));
       const disc = item.querySelector('.bv-disc');

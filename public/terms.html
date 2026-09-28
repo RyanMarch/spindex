@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0c0c10">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Spindex">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <title>Terms &amp; Privacy | Spindex</title>
+  <meta name="description"
+    content="Terms of Service and Privacy Policy for Spindex, your personal vinyl record collection.">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%23121214%22 stroke=%22%23e4e4e7%22 stroke-width=%224%22/><circle cx=%2250%22 cy=%2250%22 r=%2220%22 fill=%22%23e11d48%22/><circle cx=%2250%22 cy=%224%22 fill=%22%23fff%22/></svg>">
+  <style>
+    :root {
+      --bg-main: #0c0c10;
+      --bg-surface: #141419;
+      --bg-card: #1c1c23;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.18);
+      --text-main: #f4f4f7f1;
+      --text-muted: #f4f4f7c4;
+      --color-accent: #f43f5e;
+      --color-accent-hover: #e11d48;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-pill: 9999px;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color-scheme: dark;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.65;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Site Navigation Header */
+    .site-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(12, 12, 16, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0.85rem 1.5rem;
+    }
+
+    .site-nav-inner {
+      max-width: 820px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .brand-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+      text-decoration: none;
+      color: var(--text-main);
+    }
+
+    .brand-disc {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+
+    .brand-name {
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 0.4rem 0.8rem;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-pill);
+      transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .nav-back-link:hover {
+      color: var(--text-main);
+      border-color: var(--border-strong);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    /* Content Container */
+    .content-wrapper {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 2.75rem 1.5rem 5rem;
+    }
+
+    /* Document Header */
+    .doc-header {
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .doc-tag {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-accent);
+      margin-bottom: 0.5rem;
+    }
+
+    .doc-title {
+      font-size: clamp(1.85rem, 4vw, 2.5rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      margin-bottom: 0.65rem;
+    }
+
+    .doc-meta {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    /* Table of Contents List */
+    .toc-nav {
+      margin-bottom: 2.5rem;
+      padding-bottom: 1.75rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .toc-heading {
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .toc-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+    }
+
+    .toc-link {
+      display: inline-block;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      transition: color 0.15s ease;
+    }
+
+    .toc-link:hover {
+      color: var(--color-accent);
+    }
+
+    /* Article Sections */
+    .legal-section {
+      margin-bottom: 2.75rem;
+    }
+
+    .legal-section h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+      color: var(--text-main);
+      padding-top: 0.75rem;
+    }
+
+    .legal-section h3 {
+      font-size: 1.02rem;
+      font-weight: 600;
+      margin-top: 1.25rem;
+      margin-bottom: 0.45rem;
+      color: var(--text-main);
+    }
+
+    .legal-section p {
+      font-size: 0.92rem;
+      color: var(--text-muted);
+      margin-bottom: 0.9rem;
+    }
+
+    .legal-section p:last-child {
+      margin-bottom: 0;
+    }
+
+    .legal-section ul {
+      margin: 0.6rem 0 1rem 1.4rem;
+      color: var(--text-muted);
+      font-size: 0.92rem;
+    }
+
+    .legal-section li {
+      margin-bottom: 0.4rem;
+    }
+
+    a.legal-link {
+      color: var(--text-main);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      transition: color 0.15s ease;
+    }
+
+    a.legal-link:hover {
+      color: var(--color-accent);
+    }
+
+    /* Page Footer */
+    .page-footer {
+      margin-top: 3.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .footer-links {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      list-style: none;
+    }
+
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      transition: color 0.15s ease;
+    }
+
+    .footer-links a:hover {
+      color: var(--text-main);
+    }
+
+    .footer-dot {
+      opacity: 0.4;
+      font-size: 0.65rem;
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="site-nav" aria-label="Main Navigation">
+    <div class="site-nav-inner">
+      <a href="/" class="brand-link" aria-label="Spindex Home">
+        <svg class="brand-disc" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="48" fill="#121214" stroke="#e4e4e7" stroke-width="4" />
+          <circle cx="50" cy="50" r="20" fill="#e11d48" />
+          <circle cx="50" cy="50" r="4" fill="#fff" />
+        </svg>
+        <span class="brand-name">Spindex</span>
+      </a>
+      <a href="/" class="nav-back-link">
+        <span aria-hidden="true">&larr;</span>
+        <span>Back to Crate</span>
+      </a>
+    </div>
+  </nav>
+
+  <main class="content-wrapper">
+    <header class="doc-header">
+      <span class="doc-tag">Legal &amp; Privacy</span>
+      <h1 class="doc-title">Terms of Service &amp; Privacy Policy</h1>
+      <p class="doc-meta">Last Updated: September 2026</p>
+    </header>
+
+    <nav class="toc-nav" aria-label="Table of contents">
+      <div class="toc-heading">Contents</div>
+      <ul class="toc-list">
+        <li><a href="#terms-of-service" class="toc-link">1. Terms of Service</a></li>
+        <li><a href="#privacy-policy" class="toc-link">2. Privacy &amp; Data Storage</a></li>
+        <li><a href="#third-party-services" class="toc-link">3. Third-Party Services &amp; Attribution</a></li>
+        <li><a href="#disclaimers" class="toc-link">4. Disclaimers &amp; Limitation of Liability</a></li>
+        <li><a href="#contact" class="toc-link">5. Contact &amp; Maintainer</a></li>
+      </ul>
+    </nav>
+
+    <article>
+      <section class="legal-section" id="terms-of-service">
+        <h2>1. Terms of Service</h2>
+        <h3>Acceptance of Terms</h3>
+        <p>
+          By visiting, browsing, or using Spindex, you agree to these Terms of Service. If you do not accept these
+          terms, you must discontinue use of the application.
+        </p>
+
+        <h3>Permitted Use</h3>
+        <p>
+          Spindex is a personal record catalog companion and browsing interface for physical vinyl record
+          collections. You may use Spindex to explore your library, review album information, scan barcodes, view
+          collection statistics, and share read-only collection views.
+        </p>
+
+        <h3>User Conduct</h3>
+        <p>
+          You agree not to use Spindex to violate applicable laws or abuse third-party APIs, including Discogs, LRCLIB,
+          MusicBrainz, Wikipedia, or Wikidata.
+        </p>
+      </section>
+
+      <section class="legal-section" id="privacy-policy">
+        <h2>2. Privacy &amp; Data Storage</h2>
+        <h3>Local Storage on Your Device</h3>
+        <p>
+          Spindex saves your library data, personal cover choices, tracklists, and display preferences locally in your
+          browser on your device. We do not share, sell, or monetize your collection.
+        </p>
+
+        <h3>Discogs Account Connection</h3>
+        <p>
+          When you connect your Discogs account, authentication uses an encrypted, secure session cookie solely to
+          request your collection and release details from the Discogs API. Spindex does not receive or store your
+          Discogs password.
+        </p>
+
+        <h3>Shared Crate Storage</h3>
+        <p>
+          If you choose to use the "Share your crate" feature, a read-only snapshot of your collection metadata is sent
+          to and stored on Cloudflare edge storage so that others with the link can view your crate. This snapshot
+          does not include any personal information.
+
+          Outside of this voluntary sharing feature, your collection data remains local to your browser.
+        </p>
+
+        <h3>No Advertising or Behavioral Trackers</h3>
+        <p>
+          Spindex does not run advertising scripts, tracker pixels, or third-party behavioral analytics.
+        </p>
+      </section>
+
+      <section class="legal-section" id="third-party-services">
+        <h2>3. Third-Party Services &amp; Attribution</h2>
+        <h3>Discogs API Attribution</h3>
+        <p>
+          This application uses Discogs' API but is not affiliated with, sponsored, or endorsed by Discogs.
+          "Discogs" is a trademark of Zink Media, LLC. Data fetched from Discogs is subject to the
+          <a href="https://www.discogs.com/help/terms-of-service" target="_blank" rel="noopener"
+            class="legal-link">Discogs API Terms of Use</a>
+          and <a href="https://www.discogs.com/help/privacy-policy" target="_blank" rel="noopener"
+            class="legal-link">Privacy Policy</a>.
+        </p>
+
+        <h3>External Metadata &amp; Providers</h3>
+        <p>
+          Spindex connects to select external services to provide album context:
+        </p>
+        <ul>
+          <li><strong><a href="https://lrclib.net" target="_blank" rel="noopener"
+                class="legal-link">LRCLIB</a>:</strong> Synchronized and plain song lyrics (<a
+              href="https://lrclib.net/docs" target="_blank" rel="noopener" class="legal-link">LRCLIB docs</a>).</li>
+          <li><strong><a href="https://musicbrainz.org" target="_blank" rel="noopener"
+                class="legal-link">MusicBrainz</a>:</strong> Release metadata and album matching (<a
+              href="https://metabrainz.org/privacy" target="_blank" rel="noopener" class="legal-link">MetaBrainz privacy
+              policy</a>).</li>
+          <li><strong><a href="https://coverartarchive.org" target="_blank" rel="noopener" class="legal-link">Cover Art
+                Archive</a>:</strong> Community music album covers repository (<a
+              href="https://archive.org/about/terms.php" target="_blank" rel="noopener" class="legal-link">Internet
+              Archive terms</a>).</li>
+          <li><strong><a href="https://www.wikipedia.org" target="_blank" rel="noopener"
+                class="legal-link">Wikipedia</a>, <a href="https://www.wikidata.org" target="_blank" rel="noopener"
+                class="legal-link">Wikidata</a>, &amp; <a href="https://commons.wikimedia.org" target="_blank"
+                rel="noopener" class="legal-link">Wikimedia Commons</a>:</strong> Artist biographies, release dates, and
+            photography (<a href="https://foundation.wikimedia.org/wiki/Policy:Privacy_policy" target="_blank"
+              rel="noopener" class="legal-link">Wikimedia privacy policy</a>).</li>
+          <li><strong><a href="https://www.apple.com/apple-music/" target="_blank" rel="noopener"
+                class="legal-link">Apple Music &amp; iTunes Search</a>:</strong> Track durations, release years, and
+            fallback cover artwork (<a href="https://www.apple.com/legal/privacy/" target="_blank" rel="noopener"
+              class="legal-link">Apple privacy policy</a>).</li>
+          <li><strong><a href="https://www.deezer.com" target="_blank" rel="noopener"
+                class="legal-link">Deezer</a>:</strong> Alternative album artwork (<a
+              href="https://www.deezer.com/legal/cgu" target="_blank" rel="noopener" class="legal-link">Deezer
+              terms</a>).</li>
+        </ul>
+        <p>
+          Each provider operates independently under its own terms and privacy policies. Providers may change or update
+          their policies at any time without warning. Access to data via Spindex is not a guarantee of continued access.
+        </p>
+      </section>
+
+      <section class="legal-section" id="disclaimers">
+        <h2>4. Disclaimers &amp; Limitation of Liability</h2>
+        <h3>Disclaimer of Warranties</h3>
+        <p>
+          Spindex is provided on an "as is" and "as available" basis without warranties of any kind, whether express or
+          implied, including but not limited to fitness for a particular purpose or non-infringement.
+        </p>
+
+        <h3>Limitation of Liability</h3>
+        <p>
+          Under no circumstances will Ryan March or project contributors be liable for any direct, indirect,
+          incidental, or consequential damages resulting from the use or inability to use this software.
+        </p>
+      </section>
+
+      <section class="legal-section" id="contact">
+        <h2>6. Contact &amp; Maintainer</h2>
+        <p>
+          Spindex is created and maintained by Ryan March. You can learn more about this and other projects at
+          <a href="https://ryanmarch.me/" target="_blank" rel="noopener" class="legal-link">ryanmarch.me</a>.
+        </p>
+      </section>
+    </article>
+
+    <footer class="page-footer">
+      <div>
+        &copy; <span id="page-year">2026</span> <a href="https://ryanmarch.me/" target="_blank" rel="noopener"
+          class="legal-link">Ryan March</a>. All rights reserved.
+      </div>
+      <!-- <ul class="footer-links">
+        <li><a href="/">Crate</a></li>
+        <li class="footer-dot" aria-hidden="true">&bull;</li>
+        <li><a href="https://ryanmarch.me/" target="_blank" rel="noopener">Ryan March</a></li>
+        <li class="footer-dot" aria-hidden="true">&bull;</li>
+        <li><a href="#top">Top</a></li>
+      </ul> -->
+    </footer>
+  </main>
+
+  <script>
+    const yearEl = document.getElementById('page-year');
+    if (yearEl) yearEl.textContent = String(new Date().getFullYear());
+  </script>
+</body>
+
+</html>

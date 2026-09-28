@@ -1,8 +1,8 @@
 // share.js - the read-only link, from the page's side: the address form, what is sent, and the calls to the server.
 
-// /s/<20 letters and digits> and anything beneath it (an album inside that crate)
+// /s/<slug> and anything beneath it (an album inside that crate)
 export function shareIdFromPath(pathname) {
-  const m = String(pathname || '').match(/^\/s\/([a-z0-9]{20})(?:\/|$)/);
+  const m = String(pathname || '').match(/^\/s\/([a-z0-9]{20}|[a-z0-9]+(?:-[a-z0-9]+){2,4})(?:\/|$)/);
   return m ? m[1] : null;
 }
 
@@ -17,7 +17,12 @@ export function buildSnapshot(records) {
         year: r.year, masterYear: r.masterYear, originalYear: r.originalYear, pressingYear: r.pressingYear,
         primaryGenre: r.primaryGenre, genres: r.genres, styles: r.styles, dateAdded: r.dateAdded,
         discogsId: r.discogsId, masterId: r.masterId,
-        artwork: r.artwork ? { highRes: r.artwork.highRes, thumbnail: r.artwork.thumbnail, source: r.artwork.source } : {},
+        artwork: r.artwork ? {
+          highRes: r.artwork.highRes,
+          thumbnail: r.artwork.thumbnail,
+          source: r.artwork.source,
+          ...(r.artworkLocked ? { locked: true } : {}),
+        } : {},
         tracklist: (r.tracklist || []).map((t) => ({ position: t.position, title: t.title, duration: t.duration })),
       };
       if (r.details?.formats) out.details = { status: r.details.status, formats: r.details.formats };

@@ -803,7 +803,7 @@ const picture96 = (fn) => {
   return px;
 };
 const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
-// a cover: a heart on a coloured ground with a text bar, so it has real structure
+// a cover: a heart on a colored ground with a text bar, so it has real structure
 const cover = (x, y) => {
   const heart = Math.hypot(x - 48, y - 46) < 22;
   const bar = y > 74 && y < 84 && x > 20 && x < 76;

@@ -2,14 +2,38 @@
 // random, unguessable address; anyone with the address can open it, and only its owner can replace or remove it.
 // Notes, conditions and everything else personal are never part of the snapshot.
 
-export const SHARE_ID = /^[a-z0-9]{20}$/;
+export const SHARE_ID = /^(?:[a-z0-9]{20}|[a-z0-9]+(?:-[a-z0-9]+){2,4})$/;
 export const MAX_BODY_BYTES = 8_000_000;
 export const MAX_RECORDS = 5000;
 
+const ADJECTIVES = [
+  'analog', 'vintage', 'deep', 'dusty', 'golden', 'heavy', 'mellow', 'mono',
+  'pristine', 'rare', 'sonic', 'spinning', 'stereo', 'warm', 'velvet', 'grooved',
+  'classic', 'electric', 'acoustic', 'smooth', 'sweet', 'crisp', 'pure', 'fancy', 'fun',
+  'spinning', 'jamming', 'electric', 'acoustic', 'soulful', 'funky', 'groovy',
+  'chill', 'fresh', 'hot', 'cool', 'loud', 'rockin', 'fun', 'zesty', 'rad', 'secret',
+  'rare', 'magic', 'lost', 'hidden',
+
+];
+
+const NOUNS = [
+  'crate', 'groove', 'needle', 'pressing', 'record', 'sleeve', 'spindle', 'stylus',
+  'turntable', 'vinyl', 'wax', 'jacket', 'platter', 'tonearm', 'matrix', 'runout',
+  'label', 'track', 'album', 'party', 'collection', 'mix', 'session', 'single',
+  'set', 'jam', 'dance', 'grooves', 'hits', 'stacks', 'crate', 'tracks', 'tracklist',
+  'vibes', 'beats', 'bass', 'sleeve', 'guitar', 'bassline', 'kick', 'drum', 'snare',
+  'strings', 'keys', 'synth', 'sampler', 'mixer', 'fader', 'reverb', 'delay', 'echo',
+  'loop', 'headphones', 'speakers', 'amps', 'deck', 'remix',
+];
+
 export function newShareId() {
-  const bytes = crypto.getRandomValues(new Uint8Array(20));
-  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  return [...bytes].map((b) => alphabet[b % alphabet.length]).join('');
+  const randByte = (max) => crypto.getRandomValues(new Uint8Array(1))[0] % max;
+  const adj = ADJECTIVES[randByte(ADJECTIVES.length)];
+  const noun = NOUNS[randByte(NOUNS.length)];
+  const code = [...crypto.getRandomValues(new Uint8Array(2))]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `${adj}-${noun}-${code}`;
 }
 
 const str = (value, max) => (typeof value === 'string' ? value.slice(0, max) : '');
@@ -44,6 +68,7 @@ export function cleanRecord(raw) {
   const art = raw.artwork || {};
   out.artwork = { highRes: httpsUrl(art.highRes), thumbnail: httpsUrl(art.thumbnail) };
   if (art.source) out.artwork.source = str(art.source, 20);
+  if (art.locked) out.artwork.locked = true;
 
   out.tracklist = (Array.isArray(raw.tracklist) ? raw.tracklist.slice(0, 150) : []).map((t) => ({
     position: str(t?.position, 12),
