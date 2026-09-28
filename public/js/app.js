@@ -1143,16 +1143,18 @@ class App {
     if (!this.searchSheet) return;
     const input = document.getElementById('search-sheet-input');
     input.value = this.searchQuery || '';
-    this.searchSheet.hidden = false;
+    this.searchSheet.classList.add('open');
     this.searchSheet.setAttribute('aria-hidden', 'false');
     document.body.classList.add('search-sheet-open');
     this.renderSearchResults();
-    input.focus();
+    // Deferred a frame: focusing synchronously forces a layout flush (for
+    // the keyboard) that collapses the slide-in transition into one frame
+    requestAnimationFrame(() => input.focus());
   }
 
   closeSearchSheet() {
     if (!this.searchSheet) return;
-    this.searchSheet.hidden = true;
+    this.searchSheet.classList.remove('open');
     this.searchSheet.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('search-sheet-open');
     document.getElementById('search-sheet-input').blur();
@@ -1172,7 +1174,7 @@ class App {
     const apply = document.getElementById('search-sheet-apply');
     const words = searchWords(document.getElementById('search-sheet-input').value);
     if (!words.length) {
-      results.innerHTML =  /*html*/ `<p class="search-sheet-hint">Search ${this.allRecords.length.toLocaleString('en-US')} records by title, artist or song.</p>`;
+      results.innerHTML =  /*html*/ `<p class="search-sheet-hint">Search ${this.allRecords.length.toLocaleString('en-US')} records by title, artist, or song.</p>`;
       apply.hidden = true;
       return;
     }
