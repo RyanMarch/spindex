@@ -23,8 +23,14 @@ export function stripMarketplace(text) {
 
 // upstreamPath: the "/path?query" the proxy already vetted. Returns the cache key path, or null if it isn't cacheable.
 export function cacheablePath(upstreamPath) {
-  const path = String(upstreamPath).split('?')[0];
-  return /^\/(releases|masters|artists)\/\d+$/.test(path) ? path : null;
+  const [path, query] = String(upstreamPath).split('?');
+  if (/^\/(releases|masters|artists)\/\d+$/.test(path)) return path;
+  if (path === '/database/search' && query) {
+    const params = new URLSearchParams(query);
+    const barcode = params.get('barcode');
+    if (barcode) return `/database/search?barcode=${encodeURIComponent(barcode)}`;
+  }
+  return null;
 }
 
 // A made-up URL, so the key never depends on the person's cookies or headers
