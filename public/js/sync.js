@@ -1056,6 +1056,7 @@ export function getRecordTags(record) {
 const TAG_LABELS = {
   'Funk / Soul': 'Soul & Funk',
   'Folk, World, & Country': 'Folk & World',
+  'Stage & Screen': 'Soundtrack',
 };
 
 export function tagLabel(tag) {

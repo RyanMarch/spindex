@@ -1,15 +1,23 @@
 :root {
-  --bg-main: #0c0c10;
+  --bg-main: #1b1b22;
   --bg-surface: #141419;
   --bg-card: #1c1c23;
-  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.30);
   --border-strong: rgba(255, 255, 255, 0.18);
   --text-main: #f4f4f7f1;
-  --text-muted: #f4f4f7c4;
+  --text-muted: #f5f5f7d9;
   --color-accent: #f43f5e;
   --color-accent-hover: #e11d48;
   --sleeve-size: min(42vw, 420px);
   --radius-sm: 6px;
+  /* Shared header pill metrics, so the search-open width math below always
+     matches the view switch / action pill sizing exactly */
+  --hdr-btn-w: 2rem;
+  --hdr-btn-h: 1.8rem;
+  --hdr-pill-pad: 0.15rem;
+  --hdr-pill-gap: 0.1rem;
+  --hdr-pill-border: 1px;
+  --hdr-pill-3: calc(var(--hdr-pill-pad) * 2 + var(--hdr-pill-border) * 2 + var(--hdr-btn-w) * 3 + var(--hdr-pill-gap) * 2);
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
@@ -115,8 +123,8 @@ summary {
   min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 2rem;
+  justify-content: flex-start;
+  gap: 1.8rem;
 }
 
 .browse-sheet-head,
@@ -129,6 +137,8 @@ summary {
   display: flex;
   align-items: flex-end;
   gap: 0.35rem;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -180,11 +190,14 @@ summary {
 
 .sort-selector-wrap {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.5rem;
   flex: 0 0 auto;
-  padding-left: 1.5rem;
-  border-left: 1px solid var(--border-subtle);
+  margin-left: 1rem;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  background: rgba(40, 29, 29, 0.53);
 }
 
 .sort-label {
@@ -193,7 +206,7 @@ summary {
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--text-muted);
-  opacity: 0.6;
+  opacity: 0.75;
 }
 
 .sort-select {
@@ -232,6 +245,88 @@ summary {
   gap: 0.25rem;
   flex: 0 0 auto;
   margin-left: auto;
+}
+
+/* Groups related icon buttons in the same pill language as the view switch,
+   so the header reads as a few control clusters instead of one flat row */
+.action-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.15rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  background: rgba(40, 29, 29, 0.53);
+  margin-right: 0.5rem;
+}
+
+.action-pill:last-child {
+  margin-right: 0;
+}
+
+/* Match the view switch's button scale so every pill in the header is the
+   same height instead of the taller default .icon-btn size */
+.action-pill .icon-btn {
+  width: 2rem;
+  height: 1.8rem;
+}
+
+.action-pill .icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Search takes over this whole region (view switch + tools pill) without
+   ever changing ITS total width: the view switch shrinks to exactly the
+   width the tools pill grows by, so browse-controls' own footprint — and
+   everything to its left and right — never has to move. Both numbers come
+   from the same --hdr-pill-3 var, so they can't drift out of sync. */
+.browse-controls {
+  display: flex;
+  align-items: center;
+  margin-right: 0.5rem;
+}
+
+@media (min-width: 641px) {
+  .browse-controls .view-switch {
+    width: var(--hdr-pill-3);
+    overflow: hidden;
+    transition: width 0.25s ease, opacity 0.2s ease, margin 0.25s ease,
+      padding 0.25s ease, border-width 0.25s ease;
+  }
+
+  #crate-tools-pill {
+    width: var(--hdr-pill-3);
+    overflow: hidden;
+    transition: width 0.25s ease;
+  }
+
+  #crate-tools-pill #surprise-btn,
+  #crate-tools-pill #filter-toggle-btn {
+    overflow: hidden;
+    transition: width 0.25s ease, opacity 0.2s ease, color 0.15s ease,
+      background 0.15s ease;
+  }
+
+  body.search-open .browse-controls .view-switch {
+    width: 0;
+    opacity: 0;
+    margin-right: 0;
+    padding: 0;
+    border-width: 0;
+    pointer-events: none;
+  }
+
+  body.search-open #crate-tools-pill {
+    width: calc(var(--hdr-pill-3) * 2 + 0.5rem);
+  }
+
+  body.search-open #crate-tools-pill #surprise-btn,
+  body.search-open #crate-tools-pill #filter-toggle-btn {
+    width: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
 }
 
 .icon-btn {
@@ -1086,26 +1181,25 @@ summary {
     padding: 0.6rem 0.75rem 1.75rem 1rem;
   }
 
-  .brand {
-    display: none;
-  }
-
   .browse-toggle-btn {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.4rem;
     max-width: 190px;
-    background: rgba(255, 255, 255, 0.08);
+    min-height: calc(var(--hdr-pill-pad) * 2 + var(--hdr-pill-border) * 2 + var(--hdr-btn-h));
+    background: rgba(40, 29, 29, 0.53);
     border: 1px solid var(--border-subtle);
     color: var(--text-main);
     border-radius: 9999px;
-    padding: 0.4rem 0.75rem;
+    padding: 0.35rem 0.9rem;
     font-family: inherit;
     font-size: 0.68rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     cursor: pointer;
+    margin-right: 0.5rem;
   }
 
   .browse-toggle-btn span {
@@ -1212,8 +1306,11 @@ summary {
   .sort-selector-wrap {
     justify-content: space-between;
     align-items: center;
+    margin-left: 0;
     padding: 1.1rem 0 0;
-    border-left: none;
+    border: none;
+    border-radius: 0;
+    background: none;
   }
 
   .sort-select {
@@ -2870,6 +2967,7 @@ a.btn {
 /* Search: an icon that opens into a field. "/" focuses it. */
 .crate-search {
   display: flex;
+  flex-direction: row-reverse;
   align-items: center;
   margin: 0;
 }
@@ -2905,7 +3003,8 @@ a.btn {
 }
 
 body.search-open .search-input {
-  width: 11rem;
+  flex: 1 1 auto;
+  width: auto;
   padding: 0.3rem 0.4rem;
   opacity: 1;
   border-bottom-color: var(--border-subtle);
@@ -2918,17 +3017,29 @@ body.search-open .search-input:focus {
 @media (max-width: 960px) {
 
   body.search-open .browse-toggle-btn,
-  body.search-open #settings-toggle-btn {
+  body.search-open #header-utility-pill {
     display: none;
   }
+}
+
+/* Below this, the view switch is already hidden (see .view-switch display:none
+   further down), so .browse-controls has no second region to protect and can
+   grow like a normal mobile search bar instead of using the overlay trick */
+@media (max-width: 640px) {
 
   body.search-open .header-actions,
+  body.search-open .browse-controls,
+  body.search-open #crate-tools-pill,
   body.search-open .crate-search {
     flex: 1 1 auto;
   }
 
+  body.search-open #crate-tools-pill #surprise-btn,
+  body.search-open #crate-tools-pill #filter-toggle-btn {
+    display: none;
+  }
+
   body.search-open .search-input {
-    width: 100%;
     font-size: 1rem;
     /* 16px: keeps iOS from zooming the page on focus */
   }
@@ -3644,7 +3755,7 @@ html {
   padding: 0.15rem;
   border: 1px solid var(--border-subtle);
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(40, 29, 29, 0.53);
 }
 
 .view-btn {
@@ -4447,11 +4558,18 @@ body.jump-open[data-view="stack"] .browse-rail:not([hidden]) {
     margin-left: 0.15rem;
   }
 
+  /* Counter sits ahead of the view/search icons so the magnifier stays the
+     rightmost, thumb-reachable thing in the pill */
+  .pill-mobile {
+    order: 1;
+  }
+
   .floating-nav-pill #crate-counter {
-    margin-left: 0.25rem;
-    padding: 0 0.35rem 0 0.7rem;
+    order: 0;
+    margin-right: 0.25rem;
+    padding: 0 0.7rem 0 0.35rem;
     height: 2rem;
-    border-left: 1px solid var(--border-subtle);
+    border-right: 1px solid var(--border-subtle);
   }
 
   /* The bottom pill keeps the same width in every view: the stack shows the position, the others show how many records */
@@ -6183,6 +6301,22 @@ body:has(.scanner-drawer.open) .status-stack .reorder-pill {
     opacity: 1;
   }
 
+  /* The header itself is already one pill at this width, so the inner
+     action groups drop their own chrome instead of nesting pill-in-pill */
+  .header-actions .action-pill {
+    padding: 0;
+    border: none;
+    background: none;
+    margin-right: 0;
+  }
+
+  /* Keep the same button proportions as desktop instead of the wider,
+     flatter oval the general .header-actions .icon-btn width bump makes */
+  .header-actions .action-pill .icon-btn {
+    width: 2rem;
+    height: 1.8rem;
+  }
+
   .station-container {
     padding-top: 2.4rem;
   }
@@ -6245,10 +6379,23 @@ body:has(.scanner-drawer.open) .status-stack .reorder-pill {
   flex-direction: column;
   background: #0c0c10;
   padding-top: var(--sat, 0px);
+  opacity: 0;
+  transform: translateY(14px) scale(0.99);
+  pointer-events: none;
+  transition: opacity 200ms ease, transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.search-sheet[hidden] {
-  display: none;
+.search-sheet.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-sheet {
+    transform: none;
+    transition: opacity 150ms ease;
+  }
 }
 
 .search-sheet-bar {
