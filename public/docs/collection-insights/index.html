@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../../assets/brand/spindex-mark.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../assets/apple-touch-icon.png">
+    <link rel="manifest" href="../../manifest.webmanifest">
+    <meta name="apple-mobile-web-app-title" content="Spindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="google" content="notranslate">
+    <script src="../docs-theme-loader.js"></script>
+
+    <title>Collection Statistics | Spindex Docs</title>
+    <meta name="description" content="Explore insights about your vinyl collection including release decades, top genres, formats, and speeds.">
+    <meta name="category" content="Features">
+    <meta name="doc-id" content="collection-insights">
+    <link rel="canonical" href="https://spindex.ryanmarch.me/docs/collection-insights/">
+
+
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Collection Statistics | Spindex Docs">
+    <meta property="og:description" content="Explore insights about your vinyl collection including release decades, top genres, formats, and speeds.">
+    <meta property="og:url" content="https://spindex.ryanmarch.me/docs/collection-insights/">
+    <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Docs Style Sheet -->
+    <link rel="stylesheet" href="../style.css">
+    <script src="../docs-components.js" type="module"></script>
+</head>
+
+<body class="user-docs-page">
+    <div class="app-container">
+        <!-- Mobile Navigation Overlay -->
+        <div id="mobile-overlay" class="mobile-overlay"></div>
+
+        <main class="page-container-sidebar user-docs">
+            <!-- Sidebar Navigation -->
+            <docs-sidebar></docs-sidebar>
+
+            <!-- Right-side Content & Header Wrapper -->
+            <div class="page-content-wrapper">
+                <docs-header></docs-header>
+
+                <!-- Content Area -->
+                <docs-anchor-helper>
+                    <section class="page-content" aria-label="Collection Statistics Content">
+
+                        <!-- Overview -->
+                        <article id="overview" class="doc-section">
+                            <h1>Collection Statistics: By the Numbers</h1>
+                            <p class="lead">
+                                Understand the makeup of your music library with instant, visual collection statistics.
+                            </p>
+                            <p>
+                                The "By the numbers" panel analyzes your synced records locally to break down your collection across release eras, primary genres, vinyl sizes, and playback speeds.
+                            </p>
+                        </article>
+
+                        <!-- Table of Contents -->
+                        <docs-table-of-contents></docs-table-of-contents>
+
+                        <hr class="section-divider">
+
+                        <!-- Opening Stats -->
+                        <article id="opening-stats" class="doc-section">
+                            <h2>Viewing Your Statistics</h2>
+                            <p>
+                                You can open the collection analytics panel at any time:
+                            </p>
+                            <ul>
+                                <li>Click the bar chart icon in the top header utility pill.</li>
+                                <li>Or open <strong>Settings</strong> and click the <strong>Collection stats</strong> row.</li>
+                            </ul>
+                            <p>
+                                The drawer slides in from the side without disrupting your current position in the crate.
+                            </p>
+                            <figure class="doc-screenshot-figure">
+                                <img src="images/stats.png" alt="By the numbers panel showing record and artist counts, a bar chart of records by decade, and fun facts like most tracks on one record">
+                                <figcaption>The stats panel for a 12-record demo crate.</figcaption>
+                            </figure>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Decades and Eras -->
+                        <article id="decades-eras" class="doc-section">
+                            <h2>Decades and Release Eras</h2>
+                            <p>
+                                Spindex groups releases into distinct ten-year spans, displaying a visual bar chart that reveals which eras dominate your shelves.
+                            </p>
+                            <p>
+                                Whether your collection peaks in the golden era of 1970s rock, 1990s hip hop, or 2020s modern reissues, the decade chart highlights your personal musical listening habits at a glance.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Top Genres & Formats -->
+                        <article id="genres-formats" class="doc-section">
+                            <h2>Genres, Formats, and Speeds</h2>
+                            <p>
+                                The statistics drawer also calculates breakdowns for:
+                            </p>
+                            <ul>
+                                <li><strong>Top Genres:</strong> Ranked list of musical categories showing both total record counts and percentage shares of your library.</li>
+                                <li><strong>Vinyl Sizes:</strong> The balance between full-length 12" albums, 7" 45-RPM singles, and 10" EPs.</li>
+                                <li><strong>Rotation Speeds:</strong> Proportions of standard 33 ⅓ RPM records compared to audiophile 45 RPM pressings.</li>
+                            </ul>
+                            <p>
+                                All calculations occur in real time inside your browser database without uploading your data to external servers.
+                            </p>
+                        </article>
+
+                    </section>
+                </docs-anchor-helper>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <docs-footer></docs-footer>
+
+        <!-- Lightbox Modal -->
+        <div id="lightbox-modal" class="lightbox-modal" aria-hidden="true" role="dialog" aria-label="Image Viewer">
+            <button class="lightbox-close" aria-label="Close image viewer">&times;</button>
+            <img class="lightbox-content" id="lightbox-img" alt="">
+            <div class="lightbox-caption" id="lightbox-caption"></div>
+        </div>
+    </div>
+</body>
+
+</html>

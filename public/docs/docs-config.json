@@ -1,0 +1,42 @@
+{
+  "projectName": "Spindex",
+  "componentPrefix": "docs",
+  "baseUrl": "https://spindex.ryanmarch.me",
+  "faviconDir": "../assets/brand",
+  "googleFontsUrl": false,
+  "sidebarCta": {
+    "title": "Open Spindex",
+    "description": "Browse your Discogs record collection like flipping through a crate.",
+    "buttonText": "Launch Spindex",
+    "buttonUrl": "/"
+  },
+  "navLinks": [
+    {
+      "title": "Crate",
+      "href": "/",
+      "id": "crate"
+    },
+    {
+      "title": "Guides",
+      "href": "./",
+      "id": "guides"
+    }
+  ],
+  "footerLinks": [
+    {
+      "title": "Crate",
+      "href": "/",
+      "id": "crate"
+    },
+    {
+      "title": "Terms",
+      "href": "/terms",
+      "id": "terms"
+    },
+    {
+      "title": "Privacy",
+      "href": "/terms#privacy",
+      "id": "privacy"
+    }
+  ]
+}

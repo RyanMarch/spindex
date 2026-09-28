@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../../assets/brand/spindex-mark.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../assets/apple-touch-icon.png">
+    <link rel="manifest" href="../../manifest.webmanifest">
+    <meta name="apple-mobile-web-app-title" content="Spindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="google" content="notranslate">
+    <script src="../docs-theme-loader.js"></script>
+
+    <title>Sharing Your Crate | Spindex Docs</title>
+    <meta name="description" content="Create private read-only share links for friends to browse your vinyl collection while keeping personal data secure.">
+    <meta name="category" content="Features">
+    <meta name="doc-id" content="sharing-your-crate">
+    <link rel="canonical" href="https://spindex.ryanmarch.me/docs/sharing-your-crate/">
+
+
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Sharing Your Crate | Spindex Docs">
+    <meta property="og:description" content="Create private read-only share links for friends to browse your vinyl collection while keeping personal data secure.">
+    <meta property="og:url" content="https://spindex.ryanmarch.me/docs/sharing-your-crate/">
+    <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Docs Style Sheet -->
+    <link rel="stylesheet" href="../style.css">
+    <script src="../docs-components.js" type="module"></script>
+</head>
+
+<body class="user-docs-page">
+    <div class="app-container">
+        <!-- Mobile Navigation Overlay -->
+        <div id="mobile-overlay" class="mobile-overlay"></div>
+
+        <main class="page-container-sidebar user-docs">
+            <!-- Sidebar Navigation -->
+            <docs-sidebar></docs-sidebar>
+
+            <!-- Right-side Content & Header Wrapper -->
+            <div class="page-content-wrapper">
+                <docs-header></docs-header>
+
+                <!-- Content Area -->
+                <docs-anchor-helper>
+                    <section class="page-content" aria-label="Sharing Your Crate Content">
+
+                        <!-- Overview -->
+                        <article id="overview" class="doc-section">
+                            <h1>Sharing Your Crate</h1>
+                            <p class="lead">
+                                Share a trimmed, beautiful snapshot of your record collection with friends, family, or fellow collectors.
+                            </p>
+                            <p>
+                                Spindex creates an unlisted, read-only link that anyone can open on their computer or mobile phone. Visitors can flip through your crate and open album gatefolds without needing to create an account or install any software.
+                            </p>
+                        </article>
+
+                        <!-- Table of Contents -->
+                        <docs-table-of-contents></docs-table-of-contents>
+
+                        <hr class="section-divider">
+
+                        <!-- Creating a Share Link -->
+                        <article id="creating-link" class="doc-section">
+                            <h2>Generating a Read-Only Link</h2>
+                            <p>
+                                Once your Discogs account is connected, generating a link takes one click:
+                            </p>
+                            <ol>
+                                <li>Open <strong>Settings</strong> from the top navigation.</li>
+                                <li>Expand the <strong>Share your crate</strong> section.</li>
+                                <li>Click <strong>Create a link</strong>.</li>
+                                <li>Copy your unique web address (formatted as <code>https://spindex.ryanmarch.me/s/...</code>).</li>
+                            </ol>
+                            <p>
+                                The link is unlisted and accessible only to people who have the exact address.
+                            </p>
+                            <figure class="doc-screenshot-figure is-md">
+                                <img src="images/share.png" alt="Settings panel with sharing turned on, showing the generated link, record count, last-updated time, and Update now / Stop sharing actions">
+                                <figcaption>Once shared, the link and its status live right in Settings.</figcaption>
+                            </figure>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Privacy Safeguards -->
+                        <article id="privacy-safeguards" class="doc-section">
+                            <h2>Privacy and Security Safeguards</h2>
+                            <p>
+                                Spindex strictly protects your personal information when building a shared snapshot.
+                            </p>
+                            <p>
+                                <strong>What visitors can see:</strong>
+                            </p>
+                            <ul>
+                                <li>Album titles, artist names, and release years</li>
+                                <li>High-resolution album cover artwork</li>
+                                <li>Tracklists and song titles</li>
+                                <li>Pressing formats and vinyl disc colors</li>
+                                <li>Genre tags and liner notes</li>
+                            </ul>
+                            <p>
+                                <strong>What is permanently excluded:</strong>
+                            </p>
+                            <ul>
+                                <li>Personal collector notes</li>
+                                <li>Media and sleeve condition ratings</li>
+                                <li>Purchase dates and acquisition prices</li>
+                                <li>Account credentials, access tokens, and email addresses</li>
+                            </ul>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Visitor Experience -->
+                        <article id="visitor-experience" class="doc-section">
+                            <h2>The Visitor Experience</h2>
+                            <p>
+                                When someone opens your share link:
+                            </p>
+                            <ul>
+                                <li>A banner indicates they are browsing your curated crate.</li>
+                                <li>They can use the 3D flipping stack, grid view, list view, search, and gatefold inspector.</li>
+                                <li>The shared crate opens in an isolated browser database. If the visitor also uses Spindex for their own collection, their personal crate is never modified or overwritten.</li>
+                            </ul>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Updating or Revoking -->
+                        <article id="updating-revoking" class="doc-section">
+                            <h2>Updating or Revoking Access</h2>
+                            <p>
+                                You retain full control over your shared crate:
+                            </p>
+                            <ul>
+                                <li><strong>Update Now:</strong> When you add new records to your collection, click <strong>Update now</strong> in Settings to publish the latest records to your existing link. Your share link URL remains unchanged.</li>
+                                <li><strong>Stop Sharing:</strong> Click <strong>Stop sharing</strong> at any time to immediately delete the snapshot from the server. The link will cease working for all visitors.</li>
+                            </ul>
+                        </article>
+
+                    </section>
+                </docs-anchor-helper>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <docs-footer></docs-footer>
+
+        <!-- Lightbox Modal -->
+        <div id="lightbox-modal" class="lightbox-modal" aria-hidden="true" role="dialog" aria-label="Image Viewer">
+            <button class="lightbox-close" aria-label="Close image viewer">&times;</button>
+            <img class="lightbox-content" id="lightbox-img" alt="">
+            <div class="lightbox-caption" id="lightbox-caption"></div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -98,6 +98,16 @@ graph TD
 │   ├── manifest.webmanifest        PWA manifest
 │   ├── sw.js                       Service Worker (network-first caching strategy)
 │   ├── _redirects                  Cloudflare Pages redirect rules
+│   ├── docs/                       Self-contained documentation center (Help Center)
+│   │   ├── docs-components.js      Web components (sidebar, header, search, grid, table of contents)
+│   │   ├── docs-theme-loader.js    Light/dark mode theme loader
+│   │   ├── docs-list.js            Search results and category listing controller
+│   │   ├── docs-config.json        Documentation center configuration
+│   │   ├── search-index.json       Static search index generated from guide metadata
+│   │   ├── style.css               Documentation stylesheet tailored to Spindex theme
+│   │   ├── index.html              Generated help center home page
+│   │   ├── list.html               Generated category and search results page
+│   │   └── <guide-slug>/           Individual user guide directories
 │   ├── assets/
 │   │   ├── apple-touch-icon.png    iOS icon asset
 │   │   └── brand/spindex-mark.svg  Application brand icon
@@ -137,6 +147,11 @@ graph TD
 │       └── share/                  Collection snapshot sharing
 │           ├── index.js            Create or remove shared collection snapshots
 │           └── [id].js             Fetch published collection snapshot from KV
+├── scripts/                        Documentation generator scripts
+│   ├── init-docs.js                Compiles docs/index.html and docs/list.html from templates
+│   ├── add-new-doc.js              CLI tool to scaffold new user guide articles
+│   ├── generate-docs-index.js      Extracts metadata, syncs OG tags, and outputs search-index.json
+│   └── templates/                  HTML shell templates for index.html and list.html
 ├── tests/                          Automated test suite
 │   ├── syntax-test.mjs             Node.js syntax check across all source files
 │   ├── basic-test.js               Core integration tests and route verification

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../../assets/brand/spindex-mark.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../assets/apple-touch-icon.png">
+    <link rel="manifest" href="../../manifest.webmanifest">
+    <meta name="apple-mobile-web-app-title" content="Spindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="google" content="notranslate">
+    <script src="../docs-theme-loader.js"></script>
+
+    <title>Screensaver and Ambient Display | Spindex Docs</title>
+    <meta name="description" content="Turn an iPad or desktop monitor into a slowly drifting vinyl cover wall that keeps your display awake.">
+    <meta name="category" content="Features">
+    <meta name="doc-id" content="screensaver-mode">
+    <link rel="canonical" href="https://spindex.ryanmarch.me/docs/screensaver-mode/">
+
+
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Screensaver and Ambient Display | Spindex Docs">
+    <meta property="og:description" content="Turn an iPad or desktop monitor into a slowly drifting vinyl cover wall that keeps your display awake.">
+    <meta property="og:url" content="https://spindex.ryanmarch.me/docs/screensaver-mode/">
+    <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Docs Style Sheet -->
+    <link rel="stylesheet" href="../style.css">
+    <script src="../docs-components.js" type="module"></script>
+</head>
+
+<body class="user-docs-page">
+    <div class="app-container">
+        <!-- Mobile Navigation Overlay -->
+        <div id="mobile-overlay" class="mobile-overlay"></div>
+
+        <main class="page-container-sidebar user-docs">
+            <!-- Sidebar Navigation -->
+            <docs-sidebar></docs-sidebar>
+
+            <!-- Right-side Content & Header Wrapper -->
+            <div class="page-content-wrapper">
+                <docs-header></docs-header>
+
+                <!-- Content Area -->
+                <docs-anchor-helper>
+                    <section class="page-content" aria-label="Screensaver Content">
+
+                        <!-- Overview -->
+                        <article id="overview" class="doc-section">
+                            <h1>Screensaver and Ambient Display</h1>
+                            <p class="lead">
+                                Transform your tablet or secondary display into an ambient wall of vinyl artwork.
+                            </p>
+                            <p>
+                                Perfect for setting an iPad on a stand beside your turntable or bookshelf speakers, Screensaver mode renders an endless grid of album covers drifting slowly across the room while highlighting random titles from your collection.
+                            </p>
+                        </article>
+
+                        <!-- Table of Contents -->
+                        <docs-table-of-contents></docs-table-of-contents>
+
+                        <hr class="section-divider">
+
+                        <!-- How It Works -->
+                        <article id="how-it-works" class="doc-section">
+                            <h2>The Ambient Cover Wall</h2>
+                            <p>
+                                The screensaver constructs a continuous canvas of covers drawn from your library:
+                            </p>
+                            <ul>
+                                <li><strong>Drifting Trajectory:</strong> The entire wall slowly drifts in a circular motion, completing a full 360-degree rotation roughly every twelve minutes.</li>
+                                <li><strong>Lifting Highlights:</strong> Every few seconds, an album gently lifts out of the wall, presenting its cover artwork, title, and artist name.</li>
+                                <li><strong>Interactive Inspection:</strong> Clicking or tapping any lifted album immediately exits the screensaver and opens that record's gatefold sleeve in the crate.</li>
+                            </ul>
+                            <figure class="doc-screenshot-figure">
+                                <img src="images/wall.png" alt="Screensaver mode showing a drifting wall of album covers filling the whole screen">
+                                <figcaption>The ambient cover wall, built from the covers already in your crate.</figcaption>
+                            </figure>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Starting the Screensaver -->
+                        <article id="launching-screensaver" class="doc-section">
+                            <h2>Launching Screensaver Mode</h2>
+                            <p>
+                                You can activate the wall in several convenient ways on tablets and computers:
+                            </p>
+                            <ul>
+                                <li><strong>Keyboard Shortcut:</strong> Press <kbd>4</kbd> on your keyboard from anywhere in the app.</li>
+                                <li><strong>Settings Menu:</strong> Open <strong>Settings</strong> and click the <strong>Screensaver</strong> row.</li>
+                                <li><strong>Direct URL:</strong> Navigate directly to <code>https://spindex.ryanmarch.me/?wall</code> to boot straight into ambient display mode. This is especially handy for home automation bookmarks or dedicated tablet stands.</li>
+                            </ul>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Screen Wake Lock -->
+                        <article id="screen-wake-lock" class="doc-section">
+                            <h2>Screen Wake Lock and Fullscreen</h2>
+                            <p>
+                                When the screensaver starts:
+                            </p>
+                            <ul>
+                                <li>The application attempts to engage full-screen mode to remove browser toolbars and chrome.</li>
+                                <li>It automatically requests a browser Screen Wake Lock where supported, preventing your device from dimming or sleeping during playback.</li>
+                                <li>Pressing any key, tapping the screen, or pressing <kbd>Esc</kbd> smoothly returns you to the standard crate view.</li>
+                            </ul>
+                        </article>
+
+                    </section>
+                </docs-anchor-helper>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <docs-footer></docs-footer>
+
+        <!-- Lightbox Modal -->
+        <div id="lightbox-modal" class="lightbox-modal" aria-hidden="true" role="dialog" aria-label="Image Viewer">
+            <button class="lightbox-close" aria-label="Close image viewer">&times;</button>
+            <img class="lightbox-content" id="lightbox-img" alt="">
+            <div class="lightbox-caption" id="lightbox-caption"></div>
+        </div>
+    </div>
+</body>
+
+</html>

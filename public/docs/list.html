@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../assets/brand/spindex-mark.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png">
+    <link rel="manifest" href="../manifest.webmanifest">
+    <meta name="apple-mobile-web-app-title" content="Spindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="google" content="notranslate">
+    <script src="docs-theme-loader.js"></script>
+
+    
+
+    <title>Search and Categories | Spindex Docs</title>
+    <meta name="description" content="Browse articles and search results in the Spindex help center.">
+
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Search and Categories | Spindex Docs">
+    <meta property="og:description" content="Browse articles and search results in the Spindex help center.">
+    <meta property="og:url" content="https://spindex.ryanmarch.me/docs/list.html">
+    <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Docs Style Sheet -->
+    <link rel="stylesheet" href="style.css">
+    <script src="docs-components.js" type="module"></script>
+</head>
+
+<body class="user-docs-page docs-list-page">
+    <div class="docs-app-viewport">
+        <!-- Mobile Navigation Overlay -->
+        <div id="mobile-overlay" class="mobile-overlay"></div>
+
+        <main class="docs-layout-container">
+            <div class="docs-content-column">
+                <docs-header></docs-header>
+
+                <!-- List Content Area -->
+                <div class="list-container">
+                    <header class="list-header">
+                        <span class="list-category-badge" id="list-badge">Category</span>
+                        <h1 id="list-title">Search Results</h1>
+                        <p class="list-subtitle" id="list-subtitle">Showing articles matching your query.</p>
+
+                        <!-- Search Box & Suggestions -->
+                        <div class="list-search-wrapper">
+                            <div class="list-search-box">
+                                <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                </svg>
+                                <input type="search" id="list-search-input" placeholder="Search guides..."
+                                    aria-label="Search guides" autocomplete="off" />
+                            </div>
+                            <div class="suggestion-pills">
+                                <span class="suggestion-pill-label">Suggestions:</span>
+                                <button class="suggestion-pill" data-type="query" data-value="Getting Started">Getting
+                                    Started</button>
+                                <button class="suggestion-pill" data-type="recent">Recently Updated</button>
+                                <button class="suggestion-pill" data-type="category" data-value="Guides">Guides</button>
+                            </div>
+                        </div>
+                    </header>
+
+                    <div id="list-results" class="results-list">
+                        <div class="list-loading">Loading articles...</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <docs-footer></docs-footer>
+    </div>
+
+    <script src="docs-list.js"></script>
+</body>
+
+</html>
