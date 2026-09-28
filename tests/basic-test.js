@@ -31,6 +31,8 @@ const requiredFiles = [
   'public/js/stats.js',
   'public/js/statsview.js',
   'public/js/mock-data.js',
+  'public/js/barcode.js',
+  'public/js/scanner-drawer.js',
   'wrangler.toml',
   '.gitignore',
 ];

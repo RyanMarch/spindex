@@ -17,10 +17,11 @@ import { computeStats } from './stats.js';
 import { computeHealth, describeStorage, healthSummary } from './health.js';
 import { watchForUpdates, shouldAutoReload } from './updates.js';
 import { trackSummary, pressingNotes } from './vinyl.js';
-import { timeAgo, readSyncMeta } from './syncplan.js';
+import { timeAgo, readSyncMeta, needsAutoSync } from './syncplan.js';
 import { sourceSnapshot } from './sourcestats.js';
 import { statsHTML, valueHTML } from './statsview.js';
 import { initDiscogs, discogsFetch, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
+import { ScannerDrawer } from './scanner-drawer.js';
 
 const DEFAULT_TITLE = 'Spindex | Your record collection';
 
@@ -171,6 +172,44 @@ class App {
     this.settingsDrawer = document.getElementById('settings-drawer');
     this.settingsToggleBtn = document.getElementById('settings-toggle-btn');
     this.settingsCloseBtn = document.getElementById('settings-close-btn');
+
+    this.scannerDrawer = new ScannerDrawer({
+      onRecordAdded: async (item) => {
+        this.toast(`Added "${item.title}" to your Discogs collection! Updating crate...`);
+        const state = discogsState();
+        if (state.username) {
+          await this.handleSync({ full: false, auto: false });
+        }
+      },
+      onViewInCrate: async (releaseId) => {
+        const targetId = `discogs_${releaseId}`;
+        let rec = this.allRecords.find((r) => r.id === targetId || r.discogsId === releaseId);
+        if (!rec) {
+          await this.handleSync({ full: false, auto: false });
+          rec = this.allRecords.find((r) => r.id === targetId || r.discogsId === releaseId);
+        }
+        if (rec) {
+          if (this.activeVibe !== 'all') {
+            this.activeVibe = 'all';
+            this.syncVibeTabs();
+          }
+          if (this.searchInput?.value) {
+            this.searchInput.value = '';
+            this.applySearch('');
+          }
+          this.applyFiltersAndSort();
+          const idx = this.filteredRecords.findIndex((r) => r.id === rec.id);
+          if (idx !== -1) {
+            this.crate.setIndex(idx);
+          }
+          this.openRecordDetail(rec);
+        }
+      },
+      onOpenSettings: () => {
+        this.scannerDrawer?.close();
+        this.openSettings();
+      },
+    });
 
     this.usernameInput = document.getElementById('discogs-username');
     this.tokenInput = document.getElementById('discogs-token');
@@ -337,6 +376,12 @@ class App {
       if (e.key === 'Escape' && this.statsDrawer?.classList.contains('open')) this.closeStats();
     });
 
+    // Barcode scanner (opened from Settings drawer)
+    document.getElementById('settings-scan-btn')?.addEventListener('click', () => {
+      this.closeSettings();
+      this.openScanner();
+    });
+
     // Settings drawer toggling
     if (this.settingsToggleBtn) {
       this.settingsToggleBtn.addEventListener('click', () => {
@@ -417,7 +462,11 @@ class App {
         return;
       }
       updates?.check();
+      this.autoSyncIfDue();
     });
+
+    // Check periodically in the background (every 30 mins) if 6 hours elapsed
+    setInterval(() => this.autoSyncIfDue(), 30 * 60 * 1000);
   }
 
   // Show the right Discogs controls for how this browser is connected
@@ -442,6 +491,7 @@ class App {
   }
 
   openStats() {
+    this.closeScanner();
     const content = document.getElementById('stats-content');
     if (!content || !this.statsDrawer) return;
     content.innerHTML =  /*html*/ statsHTML(computeStats(this.allRecords));
@@ -469,6 +519,7 @@ class App {
   }
 
   openSettings() {
+    this.closeScanner();
     this.refreshShare();
     this.renderDiscogsSettings();
     this.renderFreshness();
@@ -534,6 +585,20 @@ class App {
       this.settingsDrawer.classList.remove('open');
       this.settingsDrawer.setAttribute('aria-hidden', 'true');
     }
+  }
+
+  openScanner() {
+    if (this.shareId) {
+      this.toast('Adding albums is not supported in shared crates.');
+      return;
+    }
+    this.closeSettings();
+    this.closeStats();
+    this.scannerDrawer?.open();
+  }
+
+  closeScanner() {
+    this.scannerDrawer?.close();
   }
 
   async bootstrap() {
@@ -1607,6 +1672,11 @@ class App {
     if (!this.reorderPill) return;
     const next = this.computeList();
     const same = next.length === this.filteredRecords.length && next.every((r, i) => r.id === this.filteredRecords[i].id);
+    if (!same && this.reorderPill.hidden) {
+      this.reorderPill.textContent = (next.length !== this.filteredRecords.length)
+        ? 'Tap to update your collection'
+        : 'Crate updated. Tap to refresh';
+    }
     this.reorderPill.hidden = same;
   }
 
@@ -1849,13 +1919,17 @@ class App {
     }
   }
 
-  // New records are only looked for when asked (Settings > Check now). The exception is a crate with nothing real in it,
-  // such as after the browser cleared its saved data, which fills itself again.
+  // Checks for new records on open or return when it has been a while (every 6 hours).
+  // A crate with nothing real in it fills itself right away.
   async autoSyncIfDue({ force = false } = {}) {
     if (this.syncing || !isDiscogsConnected()) return;
     const hasRealRecords = this.allRecords.some((r) => !String(r.id).startsWith('discogs_mock_'));
-    if (hasRealRecords && !force) return;
     if (hasRealRecords && !this.crateBelongsToCurrentUser()) return; // someone else's crate: that is for a person to decide
+    if (hasRealRecords && !force) {
+      const { username } = discogsState();
+      const meta = username ? readSyncMeta(username) : null;
+      if (!meta || !needsAutoSync(meta)) return;
+    }
     await this.handleSync({ auto: true });
   }
 
@@ -1939,7 +2013,14 @@ class App {
         // Someone may be browsing: don't rebuild the stack under them. A small pill offers the update instead.
         this.allRecords = await getAllRecords();
         this.renderDemoNote();
-        this.checkPendingOrder();
+        if (result.added > 0 || result.removed > 0) {
+          if (this.reorderPill) {
+            this.reorderPill.textContent = 'Tap to update your collection';
+            this.reorderPill.hidden = false;
+          }
+        } else {
+          this.checkPendingOrder();
+        }
       } else {
         await this.loadAllRecords();
       }
