@@ -1,6 +1,6 @@
 // scanner-drawer.js - Barcode scanner slide-over drawer and camera controller
 import { cleanBarcode, isValidBarcode, detectBarcode, searchDiscogsBarcode, addReleaseToCollection } from './barcode.js';
-import { isDiscogsConnected, discogsState } from './discogs.js';
+import { isDiscogsConnected, discogsState, onDiscogsQueue } from './discogs.js';
 
 export class ScannerDrawer {
   constructor({ onRecordAdded, onViewInCrate, onOpenSettings } = {}) {
@@ -33,6 +33,7 @@ export class ScannerDrawer {
     this.isScanning = false;
     this.lastScannedCode = null;
     this.audioCtx = null;
+    this.searchSessionId = 0;
 
     this.bindEvents();
   }
@@ -120,12 +121,14 @@ export class ScannerDrawer {
   close() {
     if (!this.drawerEl) return;
 
+    this.searchSessionId++;
     this.stopCamera();
     this.drawerEl.classList.remove('open');
     this.drawerEl.setAttribute('aria-hidden', 'true');
   }
 
   resetScannerView() {
+    this.searchSessionId++;
     this.lastScannedCode = null;
     if (this.manualInput) this.manualInput.value = '';
     if (this.resultsEl) this.resultsEl.hidden = true;
@@ -394,37 +397,98 @@ export class ScannerDrawer {
     this.pauseScanning();
     this.playSuccessChime();
 
+    this.searchSessionId++;
+    const sessionId = this.searchSessionId;
+
     if (this.manualInput) this.manualInput.value = code;
     if (this.hintEl) this.hintEl.textContent = `Barcode: ${code}`;
     if (this.viewfinderWrap) this.viewfinderWrap.hidden = true;
     if (this.resultsEl) this.resultsEl.hidden = false;
 
-    if (this.resultsStatusEl) {
-      this.resultsStatusEl.innerHTML =  /*html*/ `
-        <div class="scanner-loading-row">
-          <span class="scanner-spinner"></span>
-          <span>Searching Discogs for <strong>${code}</strong>...</span>
-        </div>
-      `;
-    }
+    let countdownTimer = null;
+    let unsubscribeQueue = null;
+    let currentPausedUntil = 0;
+
+    const updateStatus = (pausedUntil = 0) => {
+      if (!this.resultsStatusEl || sessionId !== this.searchSessionId) return;
+      const waitRemainingMs = pausedUntil - Date.now();
+      if (waitRemainingMs > 0) {
+        const secs = Math.max(1, Math.ceil(waitRemainingMs / 1000));
+        this.resultsStatusEl.innerHTML =  /*html*/ `
+          <div class="scanner-loading-row">
+            <span class="scanner-spinner"></span>
+            <span>Discogs rate limit reached (60/min). Retrying in <strong>${secs}s</strong>...</span>
+          </div>
+        `;
+      } else {
+        this.resultsStatusEl.innerHTML =  /*html*/ `
+          <div class="scanner-loading-row">
+            <span class="scanner-spinner"></span>
+            <span>Searching Discogs for <strong>${this.escapeHTML(code)}</strong>...</span>
+          </div>
+        `;
+      }
+    };
+
+    updateStatus(0);
     if (this.resultsListEl) this.resultsListEl.innerHTML =  /*html*/ '';
+
+    unsubscribeQueue = onDiscogsQueue((stats) => {
+      if (sessionId !== this.searchSessionId) return;
+      if (stats.pausedUntil && stats.pausedUntil > Date.now()) {
+        currentPausedUntil = stats.pausedUntil;
+        updateStatus(currentPausedUntil);
+        if (!countdownTimer) {
+          countdownTimer = setInterval(() => {
+            if (sessionId !== this.searchSessionId) {
+              clearInterval(countdownTimer);
+              countdownTimer = null;
+              return;
+            }
+            if (currentPausedUntil > Date.now()) {
+              updateStatus(currentPausedUntil);
+            } else {
+              clearInterval(countdownTimer);
+              countdownTimer = null;
+              updateStatus(0);
+            }
+          }, 1000);
+        }
+      } else if (!stats.pausedUntil || stats.pausedUntil <= Date.now()) {
+        if (countdownTimer) {
+          clearInterval(countdownTimer);
+          countdownTimer = null;
+        }
+        currentPausedUntil = 0;
+        updateStatus(0);
+      }
+    });
 
     const connected = isDiscogsConnected();
     const state = discogsState();
 
     try {
       const results = await searchDiscogsBarcode(code);
+      if (sessionId !== this.searchSessionId) return;
       this.renderResults(results, code, connected, state.username);
     } catch (err) {
+      if (sessionId !== this.searchSessionId) return;
       console.error(err);
       if (this.resultsStatusEl) {
+        const is429 = /429|too many requests|rate limit/i.test(err.message || '');
+        const errorMsg = is429
+          ? 'Discogs rate limit reached (60 requests per minute). Please wait a moment and try again.'
+          : `Failed to query Discogs: ${this.escapeHTML(err.message || 'Unknown error')}`;
         this.resultsStatusEl.innerHTML =  /*html*/ `
           <div class="scanner-error-card">
-            <p class="scanner-error-text">Failed to query Discogs: ${err.message}</p>
+            <p class="scanner-error-text">${errorMsg}</p>
             <button type="button" class="btn btn-secondary btn-sm scanner-rescan-btn">Try again</button>
           </div>
         `;
       }
+    } finally {
+      if (countdownTimer) clearInterval(countdownTimer);
+      if (unsubscribeQueue) unsubscribeQueue();
     }
   }
 

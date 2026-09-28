@@ -8,6 +8,8 @@ import { onRequestGet as proxy } from '../functions/api/discogs/[[path]].js';
 assert.equal(cacheablePath('/releases/123'), '/releases/123');
 assert.equal(cacheablePath('/masters/9?page=2'), '/masters/9');
 assert.equal(cacheablePath('/artists/55'), '/artists/55');
+assert.equal(cacheablePath('/database/search?barcode=0769152437408&type=release'), '/database/search?barcode=0769152437408');
+assert.equal(cacheablePath('/database/search?type=release'), null);
 assert.equal(cacheablePath('/users/bob/collection/folders/0/releases?page=1'), null, 'a collection is private');
 assert.equal(cacheablePath('/oauth/identity'), null);
 assert.equal(cacheablePath('/releases/abc'), null);
