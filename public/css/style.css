@@ -611,6 +611,113 @@ summary {
   color: rgba(255, 255, 255, 0.3);
 }
 
+/* ==========================================================================
+   The Pour: Cocktail Pairing Badge / Pill
+   ========================================================================== */
+.meta-pour:empty,
+.gf-pour:empty {
+  display: none;
+}
+
+.meta-pour {
+  margin-top: 0.65rem;
+  margin-bottom: 0.2rem;
+}
+
+.gf-pour {
+  margin-top: 1.1rem;
+}
+
+.the-pour-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(230, 160, 60, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+  border: 1px solid rgba(230, 160, 60, 0.22);
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  max-width: 440px;
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  position: relative;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.the-pour-pill:hover,
+.the-pour-pill:focus-visible {
+  background: linear-gradient(135deg, rgba(230, 160, 60, 0.15) 0%, rgba(255, 255, 255, 0.06) 100%);
+  border-color: rgba(230, 160, 60, 0.48);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 12px rgba(230, 160, 60, 0.12);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.the-pour-pill:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-accent), 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.pour-top-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.pour-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 4px;
+  padding: 0.18rem 0.45rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.pour-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pour-external-icon {
+  margin-left: auto;
+  color: rgba(245, 158, 11, 0.65);
+  flex-shrink: 0;
+  transition: transform 160ms ease, color 160ms ease;
+}
+
+.the-pour-pill:hover .pour-external-icon,
+.the-pour-pill:focus-visible .pour-external-icon {
+  transform: translate(2px, -2px);
+  color: #f59e0b;
+}
+
+.pour-rationale {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--text-muted);
+  opacity: 0.9;
+  font-weight: 400;
+  margin: 0;
+  letter-spacing: 0;
+}
+
 /* Inspect button */
 .meta-actions {
   margin-top: 0.5rem;
@@ -1019,6 +1126,7 @@ summary {
 
   .meta-details-row,
   .meta-genres,
+  .meta-pour,
   .meta-actions {
     display: none;
   }
@@ -4609,6 +4717,7 @@ body.sleeve-open .browse-rail {
 
   .meta-details-row,
   .meta-genres,
+  .meta-pour,
   .meta-actions {
     display: flex;
   }

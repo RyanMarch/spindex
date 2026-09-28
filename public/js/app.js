@@ -21,6 +21,7 @@ import { timeAgo, readSyncMeta } from './syncplan.js';
 import { sourceSnapshot } from './sourcestats.js';
 import { statsHTML, valueHTML } from './statsview.js';
 import { initDiscogs, discogsFetch, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
+import { getAlbumCocktailPairing } from '/src/utils/pairing.js';
 
 const DEFAULT_TITLE = 'Spindex | Your record collection';
 
@@ -165,6 +166,7 @@ class App {
     this.metaYear = document.getElementById('meta-year');
     this.metaDuration = document.getElementById('meta-duration');
     this.metaGenres = document.getElementById('meta-genres');
+    this.metaPour = document.getElementById('meta-pour');
     this.metaTrackSummary = document.getElementById('meta-track-summary');
     this.metaInspectBtn = document.getElementById('meta-inspect-btn');
 
@@ -1678,6 +1680,7 @@ class App {
       if (this.metaYear) this.metaYear.textContent = '';
       if (this.metaDuration) this.metaDuration.textContent = '';
       if (this.metaGenres) this.metaGenres.innerHTML =  /*html*/ '';
+      if (this.metaPour) this.metaPour.innerHTML =  /*html*/ '';
       if (this.metaTrackSummary) this.metaTrackSummary.textContent = '';
       return;
     }
@@ -1706,6 +1709,23 @@ class App {
       this.metaGenres.innerHTML =  /*html*/ tags
         .map((t) => `<span class="meta-genre-tag">${this.escapeHTML(t)}</span>`)
         .join('');
+    }
+
+    if (this.metaPour) {
+      const pairing = getAlbumCocktailPairing(record);
+      const { cocktail, reason, emoji, url } = pairing;
+      this.metaPour.innerHTML =  /*html*/ `
+        <a href="${this.escapeHTML(url)}" target="_blank" rel="noopener noreferrer" class="the-pour-pill" title="View ${this.escapeHTML(cocktail.name)} recipe on Speakeasy">
+          <div class="pour-top-row">
+            <span class="pour-tag">The Pour</span>
+            <span class="pour-name">${emoji} ${this.escapeHTML(cocktail.name)}</span>
+            <svg class="pour-external-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M7 17L17 7M7 7h10v10"></path>
+            </svg>
+          </div>
+          <p class="pour-rationale">${this.escapeHTML(reason)}</p>
+        </a>
+      `;
     }
 
     if (this.metaTrackSummary) {

@@ -31,6 +31,9 @@ const requiredFiles = [
   'public/js/stats.js',
   'public/js/statsview.js',
   'public/js/mock-data.js',
+  'src/data/speakeasy-catalog.json',
+  'src/utils/pairing.js',
+  'public/js/pairing.js',
   'wrangler.toml',
   '.gitignore',
 ];
@@ -38,6 +41,11 @@ const requiredFiles = [
 for (const file of requiredFiles) {
   assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist`);
 }
+
+// Verify index.html contains pour badges
+const indexHtmlContent = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
+assert.ok(indexHtmlContent.includes('id="meta-pour"'), 'index.html must contain #meta-pour');
+assert.ok(indexHtmlContent.includes('id="gf-pour"'), 'index.html must contain #gf-pour');
 
 // 2. Test parseSortArtist from sync.js
 const { parseSortArtist, groupTracksBySide } = await import('../public/js/sync.js');

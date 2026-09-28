@@ -20,6 +20,7 @@ import { isDiscogsConnected } from './discogs.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
 import { crateArtUrl } from './crate.js';
 import { getLyricsDrawer } from './lyrics-drawer.js';
+import { getAlbumCocktailPairing } from '/src/utils/pairing.js';
 
 // How long opening an album waits for its Discogs details before showing what it has
 const SETTLE_MS = 160;
@@ -63,6 +64,7 @@ export class GatefoldController {
     this.artistEl = $('gatefold-artist');
     this.specsEl = $('gf-specs');
     this.tagsEl = $('gf-tags');
+    this.pourEl = $('gf-pour');
     this.tracklistEl = $('gatefold-tracklist');
     this.creditsSection = $('gf-credits-section');
     this.creditsEl = $('gf-credits');
@@ -290,6 +292,7 @@ export class GatefoldController {
     this.activeRecord = updatedRecord;
     this.renderTracklist(updatedRecord);
     this.renderSpecs(updatedRecord);
+    this.renderPour(updatedRecord);
   }
 
   resetView() {
@@ -424,7 +427,7 @@ export class GatefoldController {
   // Each section renders on its own: if one fails on an odd record, the rest of the page still appears
   renderAll(record) {
     const steps = [
-      'renderFront', 'renderSpecs', 'renderTracklist', 'renderCredits', 'renderStory', 'renderVideos', 'renderListen',
+      'renderFront', 'renderSpecs', 'renderPour', 'renderTracklist', 'renderCredits', 'renderStory', 'renderVideos', 'renderListen',
       'renderCopy', 'renderBand', 'renderAttribution', 'renderFlip', 'renderArtFix', 'renderConnections', 'renderNav',
     ];
     for (const step of steps) {
@@ -523,6 +526,28 @@ export class GatefoldController {
       const tags = getRecordTags(record).slice(0, 5);
       this.tagsEl.innerHTML =  /*html*/ tags.map((t) => `<span class="gf-tag">${this.escapeHTML(tagLabel(t))}</span>`).join('');
     }
+  }
+
+  renderPour(record) {
+    if (!this.pourEl) return;
+    if (!record) {
+      this.pourEl.innerHTML =  /*html*/ '';
+      return;
+    }
+    const pairing = getAlbumCocktailPairing(record);
+    const { cocktail, reason, emoji, url } = pairing;
+    this.pourEl.innerHTML =  /*html*/ `
+      <a href="${this.escapeHTML(url)}" target="_blank" rel="noopener noreferrer" class="the-pour-pill" title="View ${this.escapeHTML(cocktail.name)} recipe on Speakeasy">
+        <div class="pour-top-row">
+          <span class="pour-tag">The Pour</span>
+          <span class="pour-name">${emoji} ${this.escapeHTML(cocktail.name)}</span>
+          <svg class="pour-external-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 17L17 7M7 7h10v10"></path>
+          </svg>
+        </div>
+        <p class="pour-rationale">${this.escapeHTML(reason)}</p>
+      </a>
+    `;
   }
 
   lyricsUrl(record, track) {
