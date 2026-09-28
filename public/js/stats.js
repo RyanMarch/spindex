@@ -25,7 +25,7 @@ export function colorGroup(vinyl) {
   switch (vinyl.kind) {
     case 'black': return 'Black';
     case 'translucent': return 'Clear';
-    case 'solid': return 'Coloured';
+    case 'solid': return 'Color';
     case 'marble': return 'Marbled';
     case 'splatter': return 'Splatter';
     case 'swirl': return 'Swirl';

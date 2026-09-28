@@ -498,8 +498,8 @@ export function buildCollectionRecord(item, existing, fieldNames) {
     source: 'discogs',
   };
 
-  // Keep validated high-res artwork if already enriched, otherwise use Discogs artwork
-  const existingArtwork = (['itunes', 'deezer'].includes(existing?.artwork?.source) && existing?.artwork?.highRes)
+  // Keep chosen or enriched artwork if already present, otherwise use Discogs artwork
+  const existingArtwork = (existing?.artworkLocked || (['itunes', 'deezer'].includes(existing?.artwork?.source) && existing?.artwork?.highRes))
     ? existing.artwork
     : discogsArtwork;
 

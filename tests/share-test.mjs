@@ -45,13 +45,15 @@ const rec = (n, extra = {}) => ({
   assert.equal(cleanRecord({ id: 'discogs_5', title: '', artist: 'X' }), null, 'no title, no entry');
   assert.equal(cleanRecord(null), null);
   assert.equal(cleanRecord(rec(2, { artwork: { highRes: 'javascript:alert(1)', thumbnail: 'http://insecure/x.jpg' } })).artwork.highRes, '', 'only https pictures');
+  assert.equal(cleanRecord(rec(2, { artwork: { highRes: 'https://i.discogs.com/a.jpg', thumbnail: 'https://i.discogs.com/b.jpg', source: 'deezer', locked: true } })).artwork.locked, true, 'artwork locked flag preserved');
   assert.equal(cleanRecord(rec(3, { title: 'x'.repeat(500) })).title.length, 200, 'long text is cut');
   assert.equal(cleanRecord(rec(4, { year: 'soon' })).year, undefined, 'a bad year is dropped');
   assert.equal(cleanRecord(rec(5, { genres: Array.from({ length: 40 }, (_, i) => `g${i}`) })).genres.length, 12);
   assert.equal(cleanRecords(Array.from({ length: MAX_RECORDS + 50 }, (_, i) => rec(i + 1))).length, MAX_RECORDS, 'a ceiling on size');
   assert.deepEqual(cleanRecords('nope'), []);
   const id = newShareId();
-  assert.ok(SHARE_ID.test(id), 'an unguessable 20-character address');
+  assert.ok(SHARE_ID.test(id), 'a readable music-themed address');
+  assert.ok(SHARE_ID.test('a'.repeat(20)), 'supports legacy 20-char IDs');
   assert.notEqual(newShareId(), id);
 }
 
@@ -113,9 +115,11 @@ const rec = (n, extra = {}) => ({
 // ---- the page's side: addresses and what it sends -----------------------------------------------------------------
 {
   const id = 'abcdefghij0123456789';
+  const slug = 'warm-vinyl-a1b2';
   assert.equal(shareIdFromPath(`/s/${id}`), id);
-  assert.equal(shareIdFromPath(`/s/${id}/`), id);
-  assert.equal(shareIdFromPath(`/s/${id}/album/afi/black-sails/`), id, 'an album inside a shared crate');
+  assert.equal(shareIdFromPath(`/s/${slug}`), slug);
+  assert.equal(shareIdFromPath(`/s/${slug}/`), slug);
+  assert.equal(shareIdFromPath(`/s/${slug}/album/afi/black-sails/`), slug, 'an album inside a shared crate with slug');
   assert.equal(shareIdFromPath('/s/short'), null);
   assert.equal(shareIdFromPath(`/s/${id.toUpperCase()}`), null, 'lowercase only');
   assert.equal(shareIdFromPath(`/x/s/${id}`), null);

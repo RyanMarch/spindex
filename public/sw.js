@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spindex-cache-v47';
+const CACHE_NAME = 'spindex-cache-v49';
 // Covers and photos live in their own cache: it outlives app updates, so browsing offline (and reopening the app) doesn't
 // fetch every sleeve again. Bounded, so it can't grow without limit.
 const IMAGE_CACHE = 'spindex-images-v1';
@@ -40,6 +40,7 @@ const ASSETS = [
   '/js/mock-data.js',
   '/js/barcode.js',
   '/js/scanner-drawer.js',
+  '/terms.html',
   '/manifest.webmanifest'
 ];
 

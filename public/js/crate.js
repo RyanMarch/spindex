@@ -124,7 +124,8 @@ export class CrateController {
 
       // Cover artwork image
       const img = document.createElement('img');
-      img.src = crateArtUrl(record);
+      const inRangeInitial = i <= 35;
+      if (inRangeInitial) img.src = crateArtUrl(record);
       img.alt = `${record.artist} - ${record.title}`;
       img.loading = i <= 3 ? 'eager' : 'lazy';
       img.decoding = 'async'; // decoding a cover never holds up a frame of the stack
@@ -239,9 +240,9 @@ export class CrateController {
     this.size = this.container.offsetWidth || this.size;
     // Each row below the active album takes about 42px, so only as many rows as fit the screen (plus a few) are drawn
     const screenHeight = typeof window !== 'undefined' ? window.innerHeight : 1000;
-    this.visibleBelow = Math.min(45, Math.ceil(screenHeight / 40) + 3);
-    // On a phone the sliver of every album above only adds noise behind the controls
     const phone = typeof window !== 'undefined' && window.innerWidth <= 640;
+    this.visibleBelow = Math.min(phone ? 24 : 45, Math.ceil(screenHeight / 40) + 3);
+    // On a phone the sliver of every album above only adds noise behind the controls
     this.visibleAbove = phone ? 5 : 12;
     // On a phone the albums stacked above the front one thin out with distance, like objects fading into the haze,
     // and are gone before the header. It is continuous in the album's position, so nothing ever pops in or out.
@@ -350,6 +351,10 @@ export class CrateController {
       }
 
       if (out) continue;
+
+      if (!item.img.getAttribute('src')) {
+        item.img.src = crateArtUrl(item.record);
+      }
 
       const p = this.pose(offset);
       item.el.style.transform = `perspective(1200px) translate3d(0, ${p.y.toFixed(2)}px, ${p.z.toFixed(2)}px) rotateX(${p.rx.toFixed(3)}deg) scale(${p.s.toFixed(4)})`;
