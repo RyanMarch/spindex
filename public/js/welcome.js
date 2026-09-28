@@ -1,8 +1,8 @@
 // welcome.js - the words for the first-run screen and for the first time a collection is brought in. Pure, for testing.
 
 export const WELCOME = {
-  title: 'Your record collection, as a crate',
-  body: 'Spindex turns your Discogs collection into a crate you can flip through. Sign in with Discogs to bring yours in.',
+  title: 'Explore your albums in new ways',
+  body: 'Spindex turns your record collection into a crate you can flip through. Connect with Discogs to get started.',
 };
 
 // "23 of 51 records", or while the total is unknown, how many so far

@@ -23,7 +23,7 @@
   <div id="status-stack" class="status-stack">
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
     <button id="update-pill" class="update-pill" type="button" hidden>Updated. Tap to refresh</button>
-    <button id="reorder-pill" class="reorder-pill" type="button" hidden>Crate updated. Tap to refresh</button>
+    <button id="reorder-pill" class="reorder-pill" type="button" hidden>Tap to update your collection</button>
     <div id="fill-status" class="fill-status" role="status" aria-live="polite" hidden></div>
   </div>
 
@@ -563,6 +563,87 @@
     </div>
   </aside>
 
+  <!-- Barcode Scanner Drawer -->
+  <aside id="scanner-drawer" class="settings-drawer scanner-drawer" aria-hidden="true" role="dialog" aria-labelledby="scanner-title">
+    <div class="drawer-card scanner-card">
+      <div class="drawer-top">
+        <div>
+          <span class="drawer-eyebrow">Add to Crate</span>
+          <h3 id="scanner-title">Scan Barcode</h3>
+        </div>
+        <button id="scanner-close-btn" class="modal-close" aria-label="Close scanner">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
+            stroke-linecap="round" aria-hidden="true">
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="scanner-content">
+        <!-- Live Camera Viewfinder -->
+        <div class="scanner-viewfinder-wrap" id="scanner-viewfinder-wrap">
+          <video id="scanner-video" class="scanner-video" playsinline muted autoplay></video>
+          <canvas id="scanner-canvas" class="scanner-canvas" hidden></canvas>
+          <div class="scanner-overlay" id="scanner-overlay">
+            <div class="scanner-reticle">
+              <span class="reticle-corner top-left"></span>
+              <span class="reticle-corner top-right"></span>
+              <span class="reticle-corner bottom-left"></span>
+              <span class="reticle-corner bottom-right"></span>
+              <div class="scanner-laser"></div>
+            </div>
+            <p class="scanner-hint" id="scanner-hint">Align barcode inside the frame</p>
+          </div>
+          <div class="scanner-cam-controls">
+            <button type="button" id="scanner-torch-btn" class="scanner-pill-btn" hidden aria-label="Toggle flashlight" title="Flashlight">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+            </button>
+            <button type="button" id="scanner-flip-btn" class="scanner-pill-btn" hidden aria-label="Switch camera" title="Switch camera">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 16v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"></path>
+                <path d="M4 8V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4"></path>
+                <polyline points="16 12 20 8 16 4"></polyline>
+                <polyline points="8 12 4 16 8 20"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Camera status / fallback -->
+        <div id="scanner-cam-fallback" class="scanner-cam-fallback" hidden>
+          <p id="scanner-cam-msg">Camera access unavailable.</p>
+        </div>
+
+        <!-- Alternative options: File upload or Manual Entry -->
+        <div class="scanner-alt-bar">
+          <label for="scanner-file-input" class="btn btn-secondary scanner-upload-btn" title="Scan from an image">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+            <span>Photo</span>
+            <input type="file" id="scanner-file-input" accept="image/*" class="sr-only" />
+          </label>
+
+          <form id="scanner-manual-form" class="scanner-manual-form" autocomplete="off">
+            <input type="text" id="scanner-manual-input" class="scanner-input" placeholder="Or enter barcode..." inputmode="numeric" />
+            <button type="submit" class="btn btn-primary" id="scanner-manual-btn">Search</button>
+          </form>
+        </div>
+
+        <!-- Results section -->
+        <div id="scanner-results" class="scanner-results" hidden>
+          <div id="scanner-results-status" class="scanner-results-status"></div>
+          <div id="scanner-results-list" class="scanner-results-list"></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
   <!-- Slide-out Settings & Sync Drawer -->
   <aside id="settings-drawer" class="settings-drawer" aria-hidden="true">
     <div class="drawer-card">
@@ -639,6 +720,7 @@
             </div>
             <p class="settings-hint" id="share-error" hidden></p>
           </details>
+          <button id="settings-scan-btn" class="settings-row" type="button">Scan barcode to add album</button>
           <button id="settings-stats-btn" class="settings-row" type="button">Collection stats</button>
           <button id="settings-wall-btn" class="settings-row" type="button" hidden>Screensaver</button>
           <button id="settings-help-btn" class="settings-row settings-row-keys" type="button">Keyboard

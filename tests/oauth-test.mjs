@@ -9,7 +9,7 @@ import { onRequestGet as login } from '../functions/api/discogs/login.js';
 import { onRequestGet as callback } from '../functions/api/discogs/callback.js';
 import { onRequestGet as sessionInfo } from '../functions/api/discogs/session.js';
 import { onRequestPost as logout } from '../functions/api/discogs/logout.js';
-import { onRequestGet as proxy } from '../functions/api/discogs/[[path]].js';
+import { onRequestGet as proxy, onRequestPost as proxyPost } from '../functions/api/discogs/[[path]].js';
 
 const CONSUMER_KEY = 'test-consumer-key';
 const CONSUMER_SECRET = 'test-consumer-secret';
@@ -43,6 +43,8 @@ function startMock(strict) {
     if (url.pathname === '/oauth/identity') return send(200, { id: 7, username: 'TestUser' });
     if (url.pathname === '/releases/123') return send(200, { id: 123, title: 'Mock Release' }, { 'X-Discogs-Ratelimit-Remaining': '55', 'X-Discogs-Ratelimit': '60' });
     if (url.pathname.toLowerCase() === '/users/testuser/collection/folders/0/releases') return send(200, { pagination: { pages: 1 }, releases: [], query: url.search });
+    if (url.pathname === '/database/search') return send(200, { pagination: { items: 1 }, results: [{ id: 456, title: 'Barcode Album', barcode: ['075596086113'] }] });
+    if (req.method === 'POST' && url.pathname.toLowerCase() === '/users/testuser/collection/folders/1/releases/456') return send(201, { instance_id: 888, resource_url: 'https://api.discogs.com/users/TestUser/collection/folders/1/releases/456/instances/888' });
     return send(404, { message: 'not found' });
   });
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, log, base: `http://127.0.0.1:${server.address().port}` })));
@@ -101,9 +103,21 @@ async function fullFlow(strict) {
     assert.equal(col.status, 200);
     assert.equal((await col.json()).query, '?page=2&per_page=100');
 
+    // barcode search works through the proxy
+    const searchRes = await proxy({ request: new Request(`${ORIGIN}/api/discogs/database/search?barcode=075596086113&type=release`, { headers: { Cookie: sessionCookie } }), env, params: { path: ['database', 'search'] } });
+    assert.equal(searchRes.status, 200);
+    assert.equal((await searchRes.json()).results[0].title, 'Barcode Album');
+
+    // adding a release to collection folder 1 works through proxy POST
+    const addRes = await proxyPost({ request: new Request(`${ORIGIN}/api/discogs/users/TestUser/collection/folders/1/releases/456`, { method: 'POST', headers: { Cookie: sessionCookie } }), env, params: { path: ['users', 'TestUser', 'collection', 'folders', '1', 'releases', '456'] } });
+    assert.equal(addRes.status, 201);
+    assert.equal((await addRes.json()).instance_id, 888);
+
     // 5. the proxy refuses what it shouldn't
     const otherUser = await proxy({ request: new Request(`${ORIGIN}/x`, { headers: { Cookie: sessionCookie } }), env, params: { path: ['users', 'someoneelse', 'collection', 'folders', '0', 'releases'] } });
     assert.equal(otherUser.status, 403, "another user's collection is off limits");
+    const otherUserPost = await proxyPost({ request: new Request(`${ORIGIN}/x`, { method: 'POST', headers: { Cookie: sessionCookie } }), env, params: { path: ['users', 'someoneelse', 'collection', 'folders', '1', 'releases', '456'] } });
+    assert.equal(otherUserPost.status, 403);
     const marketplace = await proxy({ request: new Request(`${ORIGIN}/x`, { headers: { Cookie: sessionCookie } }), env, params: { path: ['marketplace', 'orders'] } });
     assert.equal(marketplace.status, 403);
     const anonymous = await proxy({ request: new Request(`${ORIGIN}/x`), env, params: { path: ['releases', '123'] } });
@@ -194,6 +208,10 @@ for (const bad of ['//evil.com', 'https://evil.com', '/\\evil.com', undefined, n
   assert.equal(ok('oauth/identity'), '/oauth/identity');
   assert.equal(ok('users/ryan/collection/fields'), '/users/Ryan/collection/fields', "uses the signed-in user's own spelling");
   assert.equal(ok('users/ryan/collection/folders/0/releases', 'page=3&per_page=100&token=steal'), '/users/Ryan/collection/folders/0/releases?page=3&per_page=100');
+  assert.equal(ok('database/search', 'barcode=075596086113&type=release'), '/database/search?barcode=075596086113&type=release');
+  assert.equal(allowedUpstream('users/ryan/collection/folders/1/releases/456', new URLSearchParams(), session, 'POST'), '/users/Ryan/collection/folders/1/releases/456');
+  assert.equal(allowedUpstream('users/someoneelse/collection/folders/1/releases/456', new URLSearchParams(), session, 'POST'), null);
+  assert.equal(allowedUpstream('users/ryan/collection/folders/0/releases/456', new URLSearchParams(), session, 'POST'), null, 'cannot POST to folder 0');
   for (const path of ['users/other/collection/fields', 'marketplace/listings/1', 'releases/abc', 'releases/1/../../oauth/access_token', 'database/search', '', 'users/ryan/collection/folders/1/releases', 'users/ryan/wants']) {
     assert.equal(ok(path), null, `should refuse: ${path}`);
   }

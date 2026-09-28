@@ -73,12 +73,16 @@ export async function accessToken(env, { token, secret, verifier }) {
 }
 
 // Signed request to any Discogs API path on the user's behalf
-export function apiRequest(env, session, pathAndQuery) {
+export function apiRequest(env, session, pathAndQuery, init = {}) {
+  const isPost = (init.method || 'GET').toUpperCase() === 'POST';
   return fetch(`${apiBase(env)}${pathAndQuery}`, {
+    ...init,
     headers: {
       Authorization: oauthHeader(env, { token: session.t, tokenSecret: session.s }),
       'User-Agent': USER_AGENT,
       Accept: 'application/vnd.discogs.v2.discogs+json',
+      ...(isPost ? { 'Content-Type': 'application/json', 'Content-Length': '0' } : {}),
+      ...(init.headers || {}),
     },
   });
 }
