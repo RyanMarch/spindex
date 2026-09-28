@@ -128,6 +128,7 @@ assert.equal(normalizeItunesGenre(''), null);
 assert.deepEqual(getGenreTags({ primaryGenre: 'Pop', genres: ['Electronic', 'pop'] }), ['Pop', 'Electronic'], 'primary genre first, no duplicates');
 assert.deepEqual(getRecordTags({ genres: ['Rock'], styles: ['Goth Rock', 'Rock'] }), ['Rock', 'Goth Rock']);
 assert.equal(tagLabel('Funk / Soul'), 'Soul & Funk');
+assert.equal(tagLabel('Stage & Screen'), 'Soundtrack');
 assert.equal(tagLabel('Jazz'), 'Jazz');
 
 // ---- durations ------------------------------------------------------------------------------------------------

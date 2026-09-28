@@ -3,6 +3,6 @@
   <circle cx="62" cy="86" r="38" fill="none" stroke="#0c0c10" stroke-width="2" opacity="0.16"/>
   <circle cx="62" cy="86" r="10" fill="#0c0c10"/>
   <rect x="120" y="48" width="46" height="20" rx="10" fill="#f43f5e"/>
-  <rect x="120" y="76" width="46" height="20" rx="10" fill="#f43f5e" opacity="0.75"/>
-  <rect x="120" y="104" width="28" height="20" rx="10" fill="#f43f5e" opacity="0.45"/>
+  <rect x="120" y="76" width="46" height="20" rx="10" fill="#fb7185"/>
+  <rect x="120" y="104" width="28" height="20" rx="10" fill="#fda4af"/>
 </svg>
