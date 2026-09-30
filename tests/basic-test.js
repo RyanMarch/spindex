@@ -194,5 +194,21 @@ assert.equal(testCrate.records[testCrate.currentIndex].artist, 'Hayley Williams'
 testCrate.jumpToLetter('B');
 assert.equal(testCrate.currentIndex, 0);
 
+// 7. The demo crate's numbers feed the stats panel and the home page, so its tracklists must be whole records
+const seconds = (duration) => duration.split(':').reduce((total, part) => total * 60 + Number(part), 0);
+const runtime = (title) => {
+  const record = MOCK_RECORDS.find((r) => r.title === title);
+  return { tracks: record.tracklist.length, minutes: record.tracklist.reduce((sum, t) => sum + seconds(t.duration), 0) / 60 };
+};
+assert.equal(runtime('London Calling').tracks, 19, 'London Calling is a 19-track double album');
+assert.ok(runtime('London Calling').minutes > 63 && runtime('London Calling').minutes < 67, 'London Calling runs about 65 minutes');
+assert.equal(runtime('Hounds of Love').tracks, 12, 'Hounds of Love has 12 tracks');
+assert.equal(runtime('Diamond Life').tracks, 9, 'Diamond Life has 9 tracks');
+assert.equal(runtime('Dummy').tracks, 11, 'Dummy has 11 tracks');
+for (const record of MOCK_RECORDS) {
+  assert.ok(record.tracklist.every((t) => /^\d+:\d{2}$/.test(t.duration)), `Every demo track needs a m:ss length: ${record.title}`);
+  assert.ok(runtime(record.title).minutes >= 30, `A full-length record should run at least 30 minutes: ${record.title}`);
+}
+
 console.log('All basic and integration tests passed successfully.');
 
