@@ -12,7 +12,7 @@
     <script src="../docs-theme-loader.js"></script>
 
     <title>Collection Stats: By the Numbers | Spindex Docs</title>
-    <meta name="description" content="View collection statistics including release decades, top genres, vinyl sizes, and playback speeds.">
+    <meta name="description" content="See your collection by the numbers: how long it plays, a shelf of spines by decade, fun facts like its estimated weight and your cataloging habit, and what it is worth.">
     <meta name="category" content="Features">
     <meta name="doc-id" content="collection-insights">
     <link rel="canonical" href="https://spindex.ryanmarch.me/docs/collection-insights/">
@@ -24,7 +24,7 @@
 
     <meta property="og:type" content="article">
     <meta property="og:title" content="Collection Stats: By the Numbers | Spindex Docs">
-    <meta property="og:description" content="View collection statistics including release decades, top genres, vinyl sizes, and playback speeds.">
+    <meta property="og:description" content="See your collection by the numbers: how long it plays, a shelf of spines by decade, fun facts like its estimated weight and your cataloging habit, and what it is worth.">
     <meta property="og:url" content="https://spindex.ryanmarch.me/docs/collection-insights/">
     <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
     <meta property="og:image:width" content="1200">
@@ -56,10 +56,12 @@
                         <article id="overview" class="doc-section">
                             <h1>Collection Stats: By the Numbers</h1>
                             <p class="lead">
-                                The statistics panel summarizes your collection by era, genre, size, and speed.
+                                The stats panel shows what your collection adds up to: how much music it holds, how it
+                                spreads across the decades, and a few facts you would never have counted yourself.
                             </p>
                             <p>
-                                Statistics are calculated locally from your synced records.
+                                Nearly everything is worked out on your device from the records you have synced. The
+                                one exception is the market value, which comes from Discogs.
                             </p>
                         </article>
 
@@ -72,46 +74,141 @@
                         <article id="opening-stats" class="doc-section">
                             <h2>Viewing Your Statistics</h2>
                             <p>
-                                You can open the collection analytics panel at any time:
+                                You can open the stats panel at any time:
                             </p>
                             <ul>
                                 <li>Click the bar chart icon in the top header utility pill.</li>
                                 <li>Or open <strong>Settings</strong> and click the <strong>Collection stats</strong> row.</li>
                             </ul>
                             <p>
-                                The drawer slides in from the side without disrupting your current position in the crate.
+                                The panel slides in from the side without disrupting your current position in the crate.
+                                It is not shown while you are browsing someone else's shared crate.
                             </p>
-                            <figure class="doc-screenshot-figure">
-                                <img src="images/stats.png" alt="By the numbers panel showing record and artist counts, a bar chart of records by decade, and fun facts like most tracks on one record">
-                                <figcaption>The stats panel for a 12-record demo crate.</figcaption>
+                            <figure class="doc-screenshot-figure is-sm">
+                                <img src="images/stats.png" alt="The By the numbers panel: a one-line summary of the collection, a shelf of spines for each decade, and fun facts such as estimated weight and cataloging habit" loading="lazy">
+                                <figcaption>The stats panel for the 12-record demo crate. The fun facts change each time you open it.</figcaption>
                             </figure>
                         </article>
 
                         <hr class="section-divider">
 
-                        <!-- Decades and Eras -->
-                        <article id="decades-eras" class="doc-section">
-                            <h2>Decades and Release Eras</h2>
+                        <!-- Summary -->
+                        <article id="summary" class="doc-section">
+                            <h2>The Summary</h2>
                             <p>
-                                Releases are grouped into ten-year intervals, showing a bar chart of your collection across decades.
+                                The panel opens with a single sentence: how many records you have, how many artists they
+                                come from, about how long they take to play, and the span of years they were released
+                                across. For the demo crate it reads <em>12 records by 12 artists, about 10 hours of
+                                music, released between 1959 and 2007.</em>
+                            </p>
+                            <ul>
+                                <li><strong>Playing time</strong> adds up the track lengths Discogs lists. A release with no lengths on file counts as zero, and the hours only show once there is at least one.</li>
+                                <li><strong>Artists</strong> are counted by name. Compilations credited to Various Artists are not counted as an artist.</li>
+                            </ul>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Worth -->
+                        <article id="worth" class="doc-section">
+                            <h2>What It Is Worth</h2>
+                            <p>
+                                When you are connected to Discogs and looking at your own collection, a line under the
+                                summary says what your collection is worth right now. It gives a median value and the
+                                range from lowest to highest, with a small marker showing where the median sits between
+                                them.
+                            </p>
+                            <p>
+                                The figure is based on current marketplace listings on Discogs, so it moves as prices
+                                move. Spindex asks for it each time you open the panel and never saves it. You will not
+                                see it in the demo crate, and if Discogs cannot be reached you will get a short note
+                                instead.
                             </p>
                         </article>
 
                         <hr class="section-divider">
 
-                        <!-- Top Genres & Formats -->
-                        <article id="genres-formats" class="doc-section">
-                            <h2>Genres, Formats, and Speeds</h2>
+                        <!-- On the Shelf -->
+                        <article id="shelf" class="doc-section">
+                            <h2>On the Shelf</h2>
                             <p>
-                                The statistics drawer also calculates breakdowns for:
+                                Your records stand on a shelf, one row for each decade and one spine for every record,
+                                with the count at the end of the row. It is a quick way to see whether you are a
+                                1970s person or a 2000s person.
+                            </p>
+                            <p>
+                                Spindex uses the year shown on each record. Records with no year are left off the shelf
+                                and counted in a note underneath. In a very large crate one spine can stand for a few
+                                records, and the note says how many.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Fun Facts -->
+                        <article id="fun-facts" class="doc-section">
+                            <h2>Fun Facts</h2>
+                            <p>
+                                Below the shelf are four facts picked at random from a longer list, so the panel is a
+                                little different each time you open it. The list includes:
                             </p>
                             <ul>
-                                <li><strong>Top Genres:</strong> Ranked list of musical categories showing both total record counts and percentage shares of your library.</li>
-                                <li><strong>Vinyl Sizes:</strong> The balance between full-length 12" albums, 7" 45-RPM singles, and 10" EPs.</li>
-                                <li><strong>Rotation Speeds:</strong> Proportions of 33 ⅓ RPM and 45 RPM pressings.</li>
+                                <li><strong>Estimated weight:</strong> a rough weight for the whole pile, in pounds and kilograms. It assumes about half a pound per record, so double albums and heavyweight pressings make the real thing heavier.</li>
+                                <li><strong>Cataloging habit:</strong> the day of the week you add the most records, and what share of your collection that day accounts for.</li>
+                                <li><strong>Biggest haul:</strong> the single day you added the most records.</li>
+                                <li><strong>First and latest additions,</strong> with the dates you added them to Discogs.</li>
+                                <li><strong>Oldest and newest release</strong> in the crate.</li>
+                                <li><strong>Longest album, quickest spin, most tracks on one record,</strong> and the <strong>longest single track</strong>.</li>
+                                <li><strong>Most collected artist,</strong> shown as a fan of their covers.</li>
+                                <li><strong>Self-titled releases,</strong> <strong>solo discoveries</strong> (artists you have just one record by), and your <strong>favorite release year</strong>.</li>
                             </ul>
                             <p>
-                                All calculations occur locally in IndexedDB without uploading data to external servers.
+                                Some facts only appear once your crate is big enough for them to say something. The
+                                weight estimate and the cataloging habit, for example, need at least ten records.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Filed Under -->
+                        <article id="filed-under" class="doc-section">
+                            <h2>Filed Under</h2>
+                            <p>
+                                A list of genres with a count beside each, like the index at the back of a book. Every
+                                record is filed under its main genre, so the counts add up to your whole collection.
+                                The seven biggest genres get a line of their own and the rest are grouped as
+                                <strong>Everything else</strong>. A record with no genre is filed as <strong>Unfiled</strong>.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Pressings -->
+                        <article id="pressings" class="doc-section">
+                            <h2>Pressings</h2>
+                            <p>
+                                This section tallies your records by how the vinyl looks: black, clear, color,
+                                marbled, splatter, swirl, split, and picture discs, each with a small disc swatch in
+                                that color. Standard black pressings are counted too, and for most collections they are
+                                the biggest line.
+                            </p>
+                            <p>
+                                Color comes from the full Discogs details for each release, which Spindex fills in
+                                gradually after a sync. Until they have all loaded, a note tells you how many records
+                                the tally covers so far.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Added Over Time -->
+                        <article id="added-over-time" class="doc-section">
+                            <h2>Added Over Time</h2>
+                            <p>
+                                A line showing how your collection grew, month by month, from the dates you added each
+                                record to Discogs. Months where you added nothing take up their real share of the
+                                width, and each new year gets a faint marker, so a buying spree shows up as a steep
+                                climb.
                             </p>
                         </article>
 
