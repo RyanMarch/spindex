@@ -3163,7 +3163,7 @@ body.search-open .search-input:focus {
 @media (min-width: 641px) {
   .drawer-card {
     padding-top: calc(1.75rem + var(--sat));
-    padding-bottom: calc(1.75rem + var(--sab));
+    padding-bottom: 0;
     padding-right: calc(1.75rem + var(--sar));
   }
 }
