@@ -1,0 +1,11 @@
+# Spindex: the home page and the guides are for search engines. The rest belongs to whoever is using the app.
+User-agent: *
+Allow: /
+# People's unlisted share links
+Disallow: /s/
+# The Discogs and other API routes
+Disallow: /api/
+# Album addresses open the app on a record in someone's own collection
+Disallow: /album/
+
+Sitemap: https://spindex.ryanmarch.me/sitemap.xml

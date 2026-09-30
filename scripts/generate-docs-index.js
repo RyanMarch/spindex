@@ -7,6 +7,7 @@ const __dirname = path.dirname(__filename);
 
 const DOCS_DIR = path.join(__dirname, '../public/docs');
 const OUTPUT_FILE = path.join(DOCS_DIR, 'search-index.json');
+const SITEMAP_FILE = path.join(DOCS_DIR, '../sitemap.xml');
 
 // Load config to dynamically strip project name suffixes
 const configPath = path.join(DOCS_DIR, 'docs-config.json');
@@ -169,7 +170,21 @@ function generateIndex() {
 
     fs.writeFileSync(OUTPUT_FILE, JSON.stringify(entries, null, 2), 'utf-8');
     console.log(`Successfully generated docs search-index.json at ${OUTPUT_FILE}`);
+    return entries;
 }
 
-generateIndex();
+// Everything worth finding: the home page, the legal page, the guides index, and each guide. Not /about (the same page as
+// the home page), and never a shared crate (/s/...) or an album address (/album/...), which belong to their owners.
+function generateSitemap(entries) {
+    const urls = ['/', '/terms', '/docs/', ...entries.map((entry) => `/docs/${entry.path}`)];
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls.map((url) => `  <url><loc>${baseUrl}${url}</loc></url>`).join('\n')}
+</urlset>
+`;
+    fs.writeFileSync(SITEMAP_FILE, xml, 'utf-8');
+    console.log(`Successfully generated sitemap.xml with ${urls.length} URLs at ${SITEMAP_FILE}`);
+}
+
+generateSitemap(generateIndex());
 syncAllOgTags();

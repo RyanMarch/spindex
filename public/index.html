@@ -5,12 +5,48 @@
   <meta charset="UTF-8">
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="description" content="Browse your Discogs record collection like flipping through a crate">
+  <meta name="description" content="Dig through your Discogs record collection like a real crate. Flip through big covers, tracklists, liner notes and lyrics, scan barcodes, and share a link.">
+  <link rel="canonical" href="https://spindex.ryanmarch.me/">
   <meta name="theme-color" content="#0c0c10">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Spindex">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+
+  <!-- What a link to Spindex looks like when it is pasted into a message or shared. The image is a placeholder (the logo). -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Spindex">
+  <meta property="og:title" content="Spindex: dig through your records like a real crate">
+  <meta property="og:description" content="Turn your Discogs collection into a stack you can flip through. Big covers, full tracklists, liner notes and lyrics, all in your browser.">
+  <meta property="og:url" content="https://spindex.ryanmarch.me/">
+  <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
+  <meta property="og:image:width" content="180">
+  <meta property="og:image:height" content="180">
+  <meta property="og:image:alt" content="The Spindex logo">
+  <meta name="twitter:card" content="summary">
+
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Spindex",
+      "url": "https://spindex.ryanmarch.me/",
+      "description": "Browse your Discogs record collection like a real crate: big covers, full tracklists, liner notes, lyrics, collection stats and a screensaver.",
+      "applicationCategory": "MusicApplication",
+      "operatingSystem": "Any"
+    }
+  </script>
+
+  <!-- Without JavaScript the app can't run, so show the home page (its text is already in this page) instead of nothing -->
+  <noscript>
+    <style>
+      body { overflow: auto !important; height: auto !important; }
+      #landing-page[hidden] { display: block !important; }
+      .app-layout, #status-stack,
+      .landing-station, .landing-view-display, #landing-stats, #landing-gatefold-art, #landing-wall,
+      [data-landing-action], [data-landing-connect] { display: none !important; }
+    </style>
+  </noscript>
   <script>
     // A first-time visit gets the home page, but the app can only decide that once it has loaded. Until it has, keep the
     // app out of sight so there is no flash of the demo crate first. (app.js lifts this; so does a timer, in case it can't.)
@@ -71,6 +107,7 @@
                 data-label-connected="Open my crate">Try the demo</button>
               <a href="/api/discogs/login" class="btn btn-secondary" data-landing-connect>Load my collection</a>
             </div>
+            <noscript><p class="landing-fineprint">Spindex runs in your browser, so it needs JavaScript turned on to open a crate.</p></noscript>
           </div>
         </div>
 
