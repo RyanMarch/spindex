@@ -1,0 +1,122 @@
+[
+  {
+    "id": "getting-started",
+    "title": "Getting Started with Spindex",
+    "path": "getting-started/",
+    "category": "Basics",
+    "headings": [
+      "Overview",
+      "The Demo Crate",
+      "Connecting Your Discogs Account",
+      "Checking for New Records",
+      "Offline Browsing"
+    ],
+    "excerpt": "Connect your Discogs collection, explore the demo crate, and browse your records offline.",
+    "lastUpdated": "2026-09-30"
+  },
+  {
+    "id": "digging-the-crate",
+    "title": "Browsing Records & View Modes",
+    "path": "digging-the-crate/",
+    "category": "Exploring",
+    "headings": [
+      "Overview",
+      "Switching Views: Stack, Grid, and List",
+      "3D Crate Gestures and Controls",
+      "Keyboard Shortcuts",
+      "Using the Jump Rail"
+    ],
+    "excerpt": "Browse records across Stack, Grid, and List views, navigate with keyboard shortcuts, and use gestures.",
+    "lastUpdated": "2026-09-30"
+  },
+  {
+    "id": "finding-and-filtering",
+    "title": "Searching & Filtering",
+    "path": "finding-and-filtering/",
+    "category": "Exploring",
+    "headings": [
+      "Overview",
+      "Genre Divider Tabs",
+      "Instant Search",
+      "Sorting Your Collection",
+      "Advanced Filters Drawer",
+      "Surprise Me (Shuffle)"
+    ],
+    "excerpt": "Filter by genre, search by title or song, sort records, and refine by decade or format.",
+    "lastUpdated": "2026-09-30"
+  },
+  {
+    "id": "gatefold-album-inspector",
+    "title": "Album Details & Gatefold View",
+    "path": "gatefold-album-inspector/",
+    "category": "Features",
+    "headings": [
+      "Overview",
+      "Flipping the Sleeve",
+      "Vinyl Disc Styles",
+      "Tracklists and Synced Lyrics",
+      "Liner Notes, Credits, and Artist Bios",
+      "Your Copy Details"
+    ],
+    "excerpt": "View tracklists, synced lyrics, liner notes, musician credits, and pressing details in the gatefold album view.",
+    "lastUpdated": "2026-09-30"
+  },
+  {
+    "id": "collection-insights",
+    "title": "Collection Stats: By the Numbers",
+    "path": "collection-insights/",
+    "category": "Features",
+    "headings": [
+      "Overview",
+      "Viewing Your Statistics",
+      "Decades and Release Eras",
+      "Genres, Formats, and Speeds"
+    ],
+    "excerpt": "View collection statistics including release decades, top genres, vinyl sizes, and playback speeds.",
+    "lastUpdated": "2026-09-30"
+  },
+  {
+    "id": "barcode-scanner",
+    "title": "Scanning Barcodes",
+    "path": "barcode-scanner/",
+    "category": "Features",
+    "headings": [
+      "Overview",
+      "Opening the Scanner Drawer",
+      "Camera Scanning and Controls",
+      "Photo Upload and Manual Entry",
+      "Selecting the Matching Pressing"
+    ],
+    "excerpt": "Add vinyl records to your crate using live camera scanning, photo uploads, or manual barcode entry.",
+    "lastUpdated": "2026-09-30"
+  },
+  {
+    "id": "screensaver-mode",
+    "title": "Screensaver and Ambient Display",
+    "path": "screensaver-mode/",
+    "category": "Features",
+    "headings": [
+      "Overview",
+      "The Ambient Cover Wall",
+      "Launching Screensaver Mode",
+      "Screen Wake Lock and Fullscreen"
+    ],
+    "excerpt": "Display a rotating grid of album covers that keeps your screen awake.",
+    "lastUpdated": "2026-09-30"
+  },
+  {
+    "id": "sharing-your-crate",
+    "title": "Sharing Your Crate",
+    "path": "sharing-your-crate/",
+    "category": "Features",
+    "headings": [
+      "Overview",
+      "Creating a Share Link",
+      "Privacy and Security Safeguards",
+      "The Visitor Experience",
+      "Updating or Revoking Access"
+    ],
+    "excerpt": "Create unlisted read-only links to share your vinyl collection with private data excluded.",
+    "lastUpdated": "2026-09-30"
+  }
+]

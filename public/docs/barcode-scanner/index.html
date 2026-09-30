@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../../assets/brand/spindex-mark.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../assets/apple-touch-icon.png">
+    <link rel="manifest" href="../../manifest.webmanifest">
+    <meta name="apple-mobile-web-app-title" content="Spindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="google" content="notranslate">
+    <script src="../docs-theme-loader.js"></script>
+
+    <title>Scanning Barcodes | Spindex Docs</title>
+    <meta name="description"
+        content="Add vinyl records to your crate using live camera scanning, photo uploads, or manual barcode entry.">
+    <meta name="category" content="Features">
+    <meta name="doc-id" content="barcode-scanner">
+    <link rel="canonical" href="https://spindex.ryanmarch.me/docs/barcode-scanner/">
+
+
+
+
+
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Scanning Barcodes | Spindex Docs">
+    <meta property="og:description" content="Add vinyl records to your crate using live camera scanning, photo uploads, or manual barcode entry.">
+    <meta property="og:url" content="https://spindex.ryanmarch.me/docs/barcode-scanner/">
+    <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Docs Style Sheet -->
+    <link rel="stylesheet" href="../style.css">
+    <script src="../docs-components.js" type="module"></script>
+</head>
+
+<body class="user-docs-page">
+    <div class="app-container">
+        <!-- Mobile Navigation Overlay -->
+        <div id="mobile-overlay" class="mobile-overlay"></div>
+
+        <main class="page-container-sidebar user-docs">
+            <!-- Sidebar Navigation -->
+            <docs-sidebar></docs-sidebar>
+
+            <!-- Right-side Content & Header Wrapper -->
+            <div class="page-content-wrapper">
+                <docs-header></docs-header>
+
+                <!-- Content Area -->
+                <docs-anchor-helper>
+                    <section class="page-content" aria-label="Barcode Scanner Content">
+
+                        <!-- Overview -->
+                        <article id="overview" class="doc-section">
+                            <h1>Scanning Barcodes</h1>
+                            <p class="lead">
+                                Find records by scanning the barcode on the jacket or hype sticker.
+                            </p>
+                            <p>
+                                The scanner supports live camera detection, flashlight, image uploads, and manual
+                                barcode entry.
+                            </p>
+                        </article>
+
+                        <!-- Table of Contents -->
+                        <docs-table-of-contents></docs-table-of-contents>
+
+                        <hr class="section-divider">
+
+                        <!-- Opening the Scanner -->
+                        <article id="opening-scanner" class="doc-section">
+                            <h2>Opening the Scanner Drawer</h2>
+                            <p>
+                                You can access the barcode scanner at any time:
+                            </p>
+                            <ol>
+                                <li>Open <strong>Settings</strong> from the top navigation.</li>
+                                <li>Click <strong>Scan barcode to add album</strong>.</li>
+                                <li>Allow browser camera permissions when prompted.</li>
+                            </ol>
+                            <p>
+                                The scanner drawer opens with a camera viewfinder and targeting frame.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Live Camera Scanning -->
+                        <article id="camera-controls" class="doc-section">
+                            <h2>Camera Scanning and Controls</h2>
+                            <p>
+                                Point your device camera at the barcode on the back of the album cover or outer sleeve:
+                            </p>
+                            <ul>
+                                <li><strong>Framing:</strong> Align the barcode horizontally within the framing reticle.
+                                </li>
+                                <li><strong>Flashlight:</strong> Tap the flashlight button to turn on the camera light
+                                    in dim environments.</li>
+                                <li><strong>Camera Switcher:</strong> Switch between available cameras on multi-lens
+                                    mobile devices.</li>
+                            </ul>
+                            <p>
+                                When a barcode is detected, the device uses that identifier to search Discogs for
+                                matching releases.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Photo Upload and Manual Entry -->
+                        <article id="alternative-entry" class="doc-section">
+                            <h2>Photo Upload and Manual Entry</h2>
+                            <p>
+                                If camera access is unavailable, you can use photo upload or manual search:
+                            </p>
+                            <ul>
+                                <li><strong>Photo Upload:</strong> Select an image file from your device. Spindex scans
+                                    the image locally to read the barcode.</li>
+                                <li><strong>Manual Search:</strong> Enter the barcode numbers into the input field and
+                                    click <strong>Search</strong>.</li>
+                            </ul>
+                            <figure class="doc-screenshot-figure is-md">
+                                <img src="images/scanner.png"
+                                    alt="Scan Barcode drawer showing a camera permission denied message with Photo upload and manual barcode entry fields below it">
+                                <figcaption>When the camera isn't available, photo upload and manual entry can be used
+                                    instead</figcaption>
+                            </figure>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Matching Releases -->
+                        <article id="matching-releases" class="doc-section">
+                            <h2>Selecting the Matching Pressing</h2>
+                            <p>
+                                When multiple pressings share the same barcode, candidate releases display:
+                            </p>
+                            <ul>
+                                <li>Artist and album title</li>
+                                <li>Release year and country of origin</li>
+                                <li>Format description (such as LP, Album, Repress, Limited Edition, Red Vinyl)</li>
+                                <li>Catalog number and record label</li>
+                            </ul>
+                            <p>
+                                Tap your pressing to view release details or add it straight to your crate.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- See More -->
+                        <article id="see-more" class="doc-section">
+                            <h2>See More</h2>
+                            <ul>
+                                <li><a href="../getting-started/">Getting Started</a></li>
+                                <li><a href="../gatefold-album-inspector/">Album Details &amp; Gatefold View</a></li>
+                                <li><a href="../finding-and-filtering/">Searching &amp; Filtering</a></li>
+                            </ul>
+                        </article>
+
+                    </section>
+                </docs-anchor-helper>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <docs-footer></docs-footer>
+
+        <!-- Lightbox Modal -->
+        <div id="lightbox-modal" class="lightbox-modal" aria-hidden="true" role="dialog" aria-label="Image Viewer">
+            <button class="lightbox-close" aria-label="Close image viewer">&times;</button>
+            <img class="lightbox-content" id="lightbox-img" alt="">
+            <div class="lightbox-caption" id="lightbox-caption"></div>
+        </div>
+    </div>
+</body>
+
+</html>

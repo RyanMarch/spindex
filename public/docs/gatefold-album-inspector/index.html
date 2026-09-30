@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../../assets/brand/spindex-mark.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../assets/apple-touch-icon.png">
+    <link rel="manifest" href="../../manifest.webmanifest">
+    <meta name="apple-mobile-web-app-title" content="Spindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="google" content="notranslate">
+    <script src="../docs-theme-loader.js"></script>
+
+    <title>Album Details &amp; Gatefold View | Spindex Docs</title>
+    <meta name="description"
+        content="View tracklists, synced lyrics, liner notes, musician credits, and pressing details in the gatefold album view.">
+    <meta name="category" content="Features">
+    <meta name="doc-id" content="gatefold-album-inspector">
+    <link rel="canonical" href="https://spindex.ryanmarch.me/docs/gatefold-album-inspector/">
+
+
+
+
+
+
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Album Details &amp; Gatefold View | Spindex Docs">
+    <meta property="og:description" content="View tracklists, synced lyrics, liner notes, musician credits, and pressing details in the gatefold album view.">
+    <meta property="og:url" content="https://spindex.ryanmarch.me/docs/gatefold-album-inspector/">
+    <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Docs Style Sheet -->
+    <link rel="stylesheet" href="../style.css">
+    <script src="../docs-components.js" type="module"></script>
+</head>
+
+<body class="user-docs-page">
+    <div class="app-container">
+        <!-- Mobile Navigation Overlay -->
+        <div id="mobile-overlay" class="mobile-overlay"></div>
+
+        <main class="page-container-sidebar user-docs">
+            <!-- Sidebar Navigation -->
+            <docs-sidebar></docs-sidebar>
+
+            <!-- Right-side Content & Header Wrapper -->
+            <div class="page-content-wrapper">
+                <docs-header></docs-header>
+
+                <!-- Content Area -->
+                <docs-anchor-helper>
+                    <section class="page-content" aria-label="Album Details Content">
+
+                        <!-- Overview -->
+                        <article id="overview" class="doc-section">
+                            <h1>Album Details &amp; Gatefold View</h1>
+                            <p class="lead">
+                                Select any record in your crate to open the gatefold view.
+                            </p>
+                            <p>
+                                This view displays jacket artwork, vinyl disc styling, tracklists, synced song lyrics,
+                                musician credits, liner notes, and your collection details.
+                            </p>
+                            <figure class="doc-screenshot-figure">
+                                <img src="images/front.png"
+                                    alt="Gatefold inspector showing an album jacket and peeking vinyl disc on the left, and title, credits, and a two-column tracklist on the right">
+                                <figcaption>The gatefold inspector for David Bowie's The Rise and Fall of Ziggy
+                                    Stardust.</figcaption>
+                            </figure>
+                        </article>
+
+                        <!-- Table of Contents -->
+                        <docs-table-of-contents></docs-table-of-contents>
+
+                        <hr class="section-divider">
+
+                        <!-- Flipping the Jacket -->
+                        <article id="flipping-jacket" class="doc-section">
+                            <h2>Flipping the Sleeve</h2>
+                            <p>
+                                When rear cover art is available, click the sleeve or the <strong>Flip to back
+                                    cover</strong> button to view the back cover.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Realistic Vinyl Disc Preview -->
+                        <article id="vinyl-disc-preview" class="doc-section">
+                            <h2>Vinyl Disc Styles</h2>
+                            <p>
+                                An interactive vinyl disc peeks from the right edge of the jacket. Spindex parses format
+                                descriptions from your Discogs pressing data to render disc styles:
+                            </p>
+                            <ul>
+                                <li><strong>Color Vinyl:</strong> Solid colors including red, blue, green, yellow,
+                                    white, and orange.</li>
+                                <li><strong>Translucent &amp; Clear:</strong> Semi-transparent discs.</li>
+                                <li><strong>Splatter &amp; Marble:</strong> Swirled and patterned vinyl.</li>
+                                <li><strong>Picture Discs:</strong> Full artwork across the vinyl disc.</li>
+                                <li><strong>Classic Black:</strong> Standard black vinyl.</li>
+                            </ul>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Song Lyrics & Tracklists -->
+                        <article id="lyrics-and-tracklists" class="doc-section">
+                            <h2>Tracklists and Synced Lyrics</h2>
+                            <p>
+                                The tracklist details side and position markers (such as A1, A2, B1) and song durations.
+                            </p>
+                            <p>
+                                Clicking the lyrics icon next to any song opens a slide-over lyric sheet.
+                            </p>
+                            <figure class="doc-screenshot-figure is-md">
+                                <img src="images/lyrics.png"
+                                    alt="Lyrics drawer open over the gatefold, showing full lyrics for the current track with track navigation at the top">
+                                <figcaption>View lyrics for any song on the album.</figcaption>
+                            </figure>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Liner Notes & Credits -->
+                        <article id="liner-notes-credits" class="doc-section">
+                            <h2>Liner Notes, Credits, and Artist Bios</h2>
+                            <p>
+                                Spindex automatically enriches your collection by looking up historical context from
+                                Wikipedia and Wikidata:
+                            </p>
+                            <ul>
+                                <li><strong>Liner Notes:</strong> Read recording stories, critical reception, and the
+                                    cultural background of the album.</li>
+                                <li><strong>Musician Credits:</strong> Detailed breakdowns of producers, mixing
+                                    engineers, vocalists, and session musicians.</li>
+                                <li><strong>Artist Biography:</strong> Portrait imagery, origins, active years, and
+                                    biographical notes for the performing artist.</li>
+                                <li><strong>Elsewhere in Your Crate:</strong> Quick links to other albums in your
+                                    collection that feature the same artist or collaborators.</li>
+                            </ul>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Personal Copy Tracking -->
+                        <article id="personal-copy" class="doc-section">
+                            <h2>Your Copy Details</h2>
+                            <p>
+                                The lower section of the right panel displays your personal collection data:
+                            </p>
+                            <ul>
+                                <li><strong>Condition Grades:</strong> Media and sleeve ratings such as Mint, Near Mint,
+                                    or Very Good Plus.</li>
+                                <li><strong>Date Added:</strong> Date cataloged into your Discogs collection.</li>
+                                <li><strong>Private Notes:</strong> Notes imported from your Discogs account.</li>
+                                <li><strong>Artwork Fixer:</strong> Select alternative cover art if the automatic image
+                                    match is incorrect.</li>
+                            </ul>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- See More -->
+                        <article id="see-more" class="doc-section">
+                            <h2>See More</h2>
+                            <ul>
+                                <li><a href="../digging-the-crate/">Browsing Records &amp; View Modes</a></li>
+                                <li><a href="../finding-and-filtering/">Searching &amp; Filtering</a></li>
+                                <li><a href="../screensaver-mode/">Screensaver and Ambient Display</a></li>
+                            </ul>
+                        </article>
+
+                    </section>
+                </docs-anchor-helper>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <docs-footer></docs-footer>
+
+        <!-- Lightbox Modal -->
+        <div id="lightbox-modal" class="lightbox-modal" aria-hidden="true" role="dialog" aria-label="Image Viewer">
+            <button class="lightbox-close" aria-label="Close image viewer">&times;</button>
+            <img class="lightbox-content" id="lightbox-img" alt="">
+            <div class="lightbox-caption" id="lightbox-caption"></div>
+        </div>
+    </div>
+</body>
+
+</html>

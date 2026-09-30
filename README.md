@@ -1,123 +1,99 @@
-# Spindex
+<p align="center">
+  <img src="public/assets/brand/spindex-mark.svg" width="64" height="64" alt="Spindex logo">
+</p>
 
-Browse your Discogs record collection like flipping through a crate. Local-first: your collection is saved in your
-browser, and works offline once loaded.
+<h1 align="center">Spindex</h1>
+<p align="center"><em>Browse your Discogs record collection like flipping through a crate.</em></p>
 
-## Overview
+Spindex is a companion for music lovers and vinyl collectors. It turns your Discogs collection into a tactile, interactive record crate that you can flip through directly in your browser. It runs on your device, keeps your collection available offline once loaded, and gives you a visual way to dig through your music library.
 
-- **Stack**: Vanilla HTML, CSS custom properties and ES modules. No client-side framework or bundler.
-- **Storage**: Browser IndexedDB (`spindex_db`, `records` store). No hosted database.
-- **Server**: Cloudflare Pages Functions (`functions/`) for Discogs sign-in, a read-only Discogs proxy, and a Deezer lookup.
-- **Data sources**:
-  - Discogs: your collection, release details, tracklists, credits, pressings and condition grades.
-  - iTunes Search: high-resolution cover art, primary genre and Apple Music links.
-  - Wikipedia, Wikidata and Wikimedia Commons: liner notes, artist bios, links and portraits.
-  - MusicBrainz and the Cover Art Archive: back covers.
-  - Deezer: album links.
+---
 
 ## Features
 
-- **3D crate**: a flip-through stack built from CSS 3D transforms. Arrow keys, letter jumps, mouse wheel and touch swipes.
-- **Browse**: genre tabs built from your collection (a record can carry several genre tags), sorting, and search by
-  title or artist (press `/`).
-- **Album page** (`/album/<artist>/<title>/`): tracklist, credits, liner notes, your copy (condition and added date),
-  the artist, videos, listening links, a flippable sleeve with the pressing's real disc colour, and links to other
-  records in your crate. Sections with nothing to show are hidden.
-- **Phones and tablets**: touch-sized controls, safe-area support, and layouts for portrait and landscape.
-- **Demo crate**: a first visit (before Discogs is connected) shows a built-in 12-album collection. It goes away once you connect. Add `?demo` to the address to reload it while testing.
-- **Grid and list views**, filters (decade, size, pressing, discs, speed), a jump rail (A to Z or decades), "surprise me", and a `?` list of keyboard shortcuts.
-- **Screensaver** (tablets and larger): Settings > Screensaver shows an endless wall of covers drifting slowly, its direction gradually turning (a full circle in about twelve minutes); every few seconds one lifts out with its title. Any key or click leaves; clicking the raised cover opens it. It goes fullscreen and keeps the screen awake where the browser allows. `/?wall` starts it directly, for a tablet on a stand.
-- **Read-only link**: Settings > Share your crate publishes a snapshot others can browse at `/s/<id>`. See "Sharing" below.
-- **New records on request**: Settings > Check now looks for new records in Discogs and shows when it last checked. Nothing checks in the background, except that an empty crate fills itself.
+### Flip through records in 3D
+Browse your collection just like digging through a physical record crate. Use your keyboard arrow keys, mouse wheel, or touchscreen swipe gestures to flip album sleeves forward and backward. The ambient background lighting dynamically adapts to reflect the artwork of the active record.
 
-## Local development
+### Browse your way: Stack, Grid, and List
+Switch between three complementary ways to view your collection:
+- **Stack**: The tactile 3D flipping crate experience.
+- **Grid**: A visual gallery of album covers for quickly scanning your collection.
+- **List**: A dense, structured list view showing artist, title, release year, format, and catalog details at a glance.
 
-```bash
-npm install
-npm run dev      # http://localhost:8780
-npm test
-```
+### Find the right spin
+- **Genre tabs**: Filter by genres derived directly from the records in your collection.
+- **Sorting options**: Sort your crate by Artist / Year, Artist (A to Z), Release Year, Recently Added, or Genre.
+- **A to Z and decade jump rail**: Glide down the edge strip to hop directly to any letter or decade.
+- **Quick search**: Tap `/` anywhere to search instantly across album titles, artists, and songs.
+- **Surprise me**: When you cannot decide what to put on, hit the shuffle button to pull a random record from the crate.
+- **Detailed filters**: Refine your crate by decade, vinyl size (12", 7", 10"), pressing type, disc count, or playback speed (33 RPM, 45 RPM).
 
-`npm test` runs syntax checks for every source file, the parsers and matching logic, the demo data, and an end-to-end
-test of the Discogs sign-in against a mock Discogs server.
+### Open the sleeve: Gatefold Album Inspector
+Click any record to pull it from the crate and open the gatefold view:
+- **Flippable jacket**: View full-size front cover art and flip the sleeve to inspect the back cover.
+- **Real vinyl disc preview**: The disc peeks out of the jacket showing the pressing's actual vinyl color and finish, from classic black to colored waxes, splatter, translucent, marble, and picture discs.
+- **Tracklists and song durations**: Review the complete track listing organized by side and position.
+- **Song lyrics**: Open the slide-over lyric sheet to read synced and plain-text lyrics, step between tracks, or look up songs on Genius.
+- **Liner notes and artist history**: Read album backgrounds, recording history, and artist biographies.
+- **Musician and production credits**: See who wrote, performed, produced, and engineered each release.
+- **Elsewhere in your crate**: Discover other albums in your collection that share the same artists, band members, or collaborators.
+- **Listen and watch**: Jump directly to full albums on Apple Music or Deezer, or watch music videos right on the page.
 
-## Directory structure
+### Keep track of your copy
+Your personal copy details appear right in the album view:
+- Media condition and sleeve condition ratings.
+- Date added to your collection.
+- Your personal collector notes.
+- Preferred artwork selection when alternative jacket images are available.
 
-```
-├── public/                    Static site
-│   ├── index.html             Page shell, crate stage, album page, settings
-│   ├── manifest.webmanifest, sw.js, 404.html, _redirects, assets/
-│   ├── css/style.css
-│   └── js/
-│       ├── app.js             Orchestration: browse, search, routing, settings
-│       ├── crate.js           The 3D crate: physics, gestures, keyboard
-│       ├── notes.js           The album page
-│       ├── sync.js            Discogs sync, iTunes enrichment, credits and genre logic
-│       ├── discogs.js         How this browser talks to Discogs (sign-in or token)
-│       ├── wiki.js            Wikipedia, Wikidata, MusicBrainz and cover-art lookups
-│       ├── vinyl.js           Pressing description to disc colour and finish
-│       ├── values.js          Placeholder-value helper
-│       ├── db.js              IndexedDB
-│       └── mock-data.js       Demo crate
-├── functions/                 Cloudflare Pages Functions
-│   ├── _lib/                  Shared: OAuth, sessions, proxy allowlist, Deezer matching
-│   └── api/                   discogs/*, listen/deezer, health
-├── tests/                     syntax, basic, vinyl, logic and OAuth tests
-├── package.json, wrangler.toml
-└── .dev.vars.example          Local secrets template
-```
+### Barcode scanner
+Add records on the fly without typing:
+- Use your phone or computer camera to scan the barcode on any record jacket.
+- Built-in flashlight toggle and camera switching for mobile devices.
+- Support for image photo uploads and manual barcode entry.
 
-## Discogs sign-in
+### Collection stats
+Open the "By the numbers" panel to explore insights about your library:
+- Total records in your collection.
+- Decade breakdowns and release eras.
+- Top genres and musical styles.
+- Formats, speeds, and vinyl sizes.
 
-"Connect Discogs" uses Discogs' OAuth 1.0a flow. The consumer secret never reaches the browser: Pages Functions in
-`functions/api/discogs/` run the login, keep the user's access token in an encrypted HttpOnly cookie, and proxy the
-read-only Discogs requests Spindex needs (`/api/discogs/...`). A personal access token (Settings, "Use a personal access
-token instead") still works as a local fallback.
+### Screensaver mode
+Set your tablet on a stand next to your turntable. Screensaver mode fills your screen with an endless wall of album covers that drifts smoothly and slowly turns in a full circle, lifting random covers into focus every few seconds. It keeps your screen awake and launches directly with `/?wall`.
 
-**Set up (local)**
-1. On discogs.com, Settings, Developers, create an application. Set its callback URL to
-   `http://localhost:8780/api/discogs/callback` (use a separate application for production).
-2. Copy `.dev.vars.example` to `.dev.vars` and fill in `DISCOGS_CONSUMER_KEY`, `DISCOGS_CONSUMER_SECRET` and a long random
-   `SESSION_SECRET` (`openssl rand -base64 32`). `.dev.vars` is git-ignored.
-3. Restart `npm run dev`. Settings now shows **Connect Discogs**.
+### Share your crate privately
+Create a read-only link to share your collection with friends:
+- Visitors can browse your crate in their own browser on any phone, tablet, or laptop without needing an account.
+- Privacy-first: Shares only public album info, cover art, tracklists, and pressing formats. Your personal notes, purchase details, and condition ratings remain completely private.
+- You can refresh or revoke your share link whenever you choose.
 
-**Set up (production, Cloudflare Pages)**
-1. Create a second Discogs application whose callback URL is `https://<your-domain>/api/discogs/callback`.
-2. Add `DISCOGS_CONSUMER_KEY`, `DISCOGS_CONSUMER_SECRET` and `SESSION_SECRET` as encrypted environment variables (Pages
-   project, Settings, Variables and Secrets), or with `wrangler pages secret put <NAME>`.
+### Works offline and syncs on demand
+- **Offline ready**: Once loaded, your collection is saved locally in your browser. You can dig through your crate on a plane, on a train, or anywhere without an internet connection.
+- **Sync on demand**: Tap "Check now" to fetch new additions from your Discogs account. No background syncs drain your battery or consume mobile data.
+- **Try it first**: Explore a built-in 12-album demo crate before connecting your Discogs account.
 
-**Notes**
-- Discogs' API terms are honored in the UI: the trademark notice sits with the sign-in (Settings) and at the bottom of each album page, with a "Data provided by Discogs" link to the release's Discogs page.
-- One crate per browser: connecting a different Discogs account asks before replacing the local crate.
-- The proxy is read-only and allowlisted (your own collection, releases, masters, artists). Nothing is cached server-side.
-- `npm test` includes an end-to-end OAuth test against a mock Discogs server (`tests/oauth-test.mjs`).
+---
 
-## Sharing (the read-only link)
+## Keyboard shortcuts
 
-A signed-in owner can publish a trimmed snapshot of their collection (titles, artists, years, genres, covers, tracklists
-and pressing formats; never notes, conditions or anything gathered from other sources). Anyone with the link,
-`/s/<20 random characters>`, can browse it read-only. It is unlisted, not secret. Republishing keeps the same link,
-and "Stop sharing" makes it stop working.
+| Key | Action |
+|---|---|
+| <kbd>↑</kbd> <kbd>↓</kbd> or <kbd>←</kbd> <kbd>→</kbd> | Flip through crate |
+| <kbd>Enter</kbd> | Open album sleeve |
+| <kbd>A</kbd> to <kbd>Z</kbd> | Jump to letter |
+| <kbd>/</kbd> | Search collection |
+| <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> | Switch between Stack, Grid, and List |
+| <kbd>4</kbd> | Start screensaver wall |
+| <kbd>Esc</kbd> | Close open drawer or sleeve |
+| <kbd>?</kbd> | View shortcut list |
 
-It needs a Cloudflare KV namespace bound as `SHARES`. Without one the feature reports itself unavailable and its
-Settings section stays hidden.
+---
 
-- Local: `npm run dev` already passes `--kv SHARES`.
-- Production: create a KV namespace (Workers & Pages > KV), then bind it to the Pages project as `SHARES`
-  (Settings > Functions > KV namespace bindings, for Production).
+## Technical reference
 
-A shared crate opens in a browser database of its own, so a visitor's own collection is never touched.
+For developer documentation, system architecture, database schemas, local setup instructions, test commands, and deployment guides, see [ARCHITECTURE.md](file:///Users/ryan/Sites/spindex/ARCHITECTURE.md).
 
-## Deploying (Cloudflare Pages)
+---
 
-1. Create a Pages project from this repo: no build command, output directory `public`.
-2. Register a production Discogs application with callback `https://<your-domain>/api/discogs/callback` (for example `https://spindex.ryanmarch.me/api/discogs/callback`).
-3. Set `DISCOGS_CONSUMER_KEY`, `DISCOGS_CONSUMER_SECRET` and `SESSION_SECRET` (a new `openssl rand -base64 32`) as
-   encrypted Production variables.
-4. Add the custom domain (sign-in needs HTTPS).
-   Optional: bind a KV namespace as `SHARES` to turn on the read-only link (see "Sharing").
-5. Check `/api/health`, then connect Discogs from a phone, sync, and open an album from a direct `/album/...` URL.
-
-Pages keeps every deploy, so a bad release can be rolled back from the dashboard. The service worker is network-first;
-bump `CACHE_NAME` in `sw.js` if a change must reach returning visitors immediately.
-
+<p align="center">© 2026 Ryan March · <a href="https://ryanmarch.me">ryanmarch.me</a></p>

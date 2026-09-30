@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../../assets/brand/spindex-mark.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../assets/apple-touch-icon.png">
+    <link rel="manifest" href="../../manifest.webmanifest">
+    <meta name="apple-mobile-web-app-title" content="Spindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="google" content="notranslate">
+    <script src="../docs-theme-loader.js"></script>
+
+    <title>Searching &amp; Filtering | Spindex Docs</title>
+    <meta name="description"
+        content="Filter by genre, search by title or song, sort records, and refine by decade or format.">
+    <meta name="category" content="Exploring">
+    <meta name="doc-id" content="finding-and-filtering">
+    <link rel="canonical" href="https://spindex.ryanmarch.me/docs/finding-and-filtering/">
+
+
+
+
+
+
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Searching &amp; Filtering | Spindex Docs">
+    <meta property="og:description" content="Filter by genre, search by title or song, sort records, and refine by decade or format.">
+    <meta property="og:url" content="https://spindex.ryanmarch.me/docs/finding-and-filtering/">
+    <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Docs Style Sheet -->
+    <link rel="stylesheet" href="../style.css">
+    <script src="../docs-components.js" type="module"></script>
+</head>
+
+<body class="user-docs-page">
+    <div class="app-container">
+        <!-- Mobile Navigation Overlay -->
+        <div id="mobile-overlay" class="mobile-overlay"></div>
+
+        <main class="page-container-sidebar user-docs">
+            <!-- Sidebar Navigation -->
+            <docs-sidebar></docs-sidebar>
+
+            <!-- Right-side Content & Header Wrapper -->
+            <div class="page-content-wrapper">
+                <docs-header></docs-header>
+
+                <!-- Content Area -->
+                <docs-anchor-helper>
+                    <section class="page-content" aria-label="Searching and Filtering Content">
+
+                        <!-- Overview -->
+                        <article id="overview" class="doc-section">
+                            <h1>Searching &amp; Filtering</h1>
+                            <p class="lead">
+                                Search and filter your crate by genre, artist, decade, speed, and format.
+                            </p>
+                            <p>
+                                Use text search to query album titles and tracklists, or use Surprise Me to jump to a
+                                random record.
+                            </p>
+                        </article>
+
+                        <!-- Table of Contents -->
+                        <docs-table-of-contents></docs-table-of-contents>
+
+                        <hr class="section-divider">
+
+                        <!-- Genre Divider Tabs -->
+                        <article id="genre-tabs" class="doc-section">
+                            <h2>Genre Divider Tabs</h2>
+                            <p>
+                                Genre buttons in the navigation bar are generated from the styles and genres in your
+                                collection:
+                            </p>
+                            <ul>
+                                <li>Click any genre pill (such as Rock, Electronic, Jazz, Funk / Soul, Hip Hop) to
+                                    isolate only those records.</li>
+                                <li>Because records frequently span multiple styles, an album tagged with both Funk and
+                                    Soul will appear in both sections.</li>
+                                <li>Select <strong>All</strong> to return to your complete collection.</li>
+                            </ul>
+                            <figure class="doc-screenshot-figure is-md">
+                                <img src="images/genres.png"
+                                    alt="Header showing genre pills (All, Rock, Electronic, Soul & Funk, Jazz, Pop) next to the sort selector and view switch">
+                                <figcaption>Genre pills are generated from what's actually in your crate.</figcaption>
+                            </figure>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Instant Search -->
+                        <article id="instant-search" class="doc-section">
+                            <h2>Instant Search</h2>
+                            <p>
+                                Pressing <kbd>/</kbd> on your keyboard immediately opens the search bar without shifting
+                                other header elements.
+                            </p>
+                            <p>
+                                Search evaluates queries across:
+                            </p>
+                            <ul>
+                                <li>Album titles</li>
+                                <li>Artist and band names</li>
+                                <li>Individual song titles across all tracklists</li>
+                            </ul>
+                            <p>
+                                Results update as you type, and pressing <kbd>Esc</kbd> clears the search and restores
+                                the full crate.
+                            </p>
+                            <figure class="doc-screenshot-figure is-md">
+                                <img src="images/search.png"
+                                    alt="Search field open in the header with the query 'bowie' typed in, narrowing the crate to one matching record">
+                                <figcaption>Searching narrows the crate immediately, no submit needed.</figcaption>
+                            </figure>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Sorting Options -->
+                        <article id="sorting-options" class="doc-section">
+                            <h2>Sorting Your Collection</h2>
+                            <p>
+                                Use the sort selector in the navigation bar to reorder the crate:
+                            </p>
+                            <ul>
+                                <li><strong>Artist / Year (Default):</strong> Groups albums by artist alphabetically,
+                                    sorted chronologically by release year within each artist.</li>
+                                <li><strong>Artist (A to Z):</strong> Pure alphabetical order by artist name.</li>
+                                <li><strong>Release Year:</strong> Chronological timeline from oldest recordings to
+                                    newest.</li>
+                                <li><strong>Recently Added:</strong> Shows your newest acquisitions first, matching your
+                                    recent Discogs activity.</li>
+                                <li><strong>Genre:</strong> Groups albums by primary musical genre.</li>
+                            </ul>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Deep Filter Drawer -->
+                        <article id="filter-drawer" class="doc-section">
+                            <h2>Advanced Filters Drawer</h2>
+                            <p>
+                                Clicking the filter icon opens a dedicated drawer to drill down by physical release
+                                specifications:
+                            </p>
+                            <ul>
+                                <li><strong>Decades:</strong> Narrow by era (1960s, 1970s, 1980s, 1990s, 2000s, 2010s,
+                                    2020s).</li>
+                                <li><strong>Vinyl Size:</strong> Filter by 12" LPs, 7" singles, or 10" EPs.</li>
+                                <li><strong>Pressing Type:</strong> Distinguish original pressings from reissues,
+                                    remasters, club editions, or promo copies.</li>
+                                <li><strong>Disc Count:</strong> Filter single LPs versus double LPs, triple gatefolds,
+                                    or box sets.</li>
+                                <li><strong>Playback Speed:</strong> Separate 33 RPM albums from 45 RPM audiophile
+                                    pressings.</li>
+                            </ul>
+                            <figure class="doc-screenshot-figure is-md">
+                                <img src="images/filters.png"
+                                    alt="Filter drawer open, showing decade pills with counts and a Show 12 records button">
+                                <figcaption>Filters combine, and the drawer tells you how many records match before you
+                                    apply them.</figcaption>
+                            </figure>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Surprise Me -->
+                        <article id="surprise-me" class="doc-section">
+                            <h2>Surprise Me (Shuffle)</h2>
+                            <p>
+                                Click the shuffle icon in the header to jump to a random record in your crate.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- See More -->
+                        <article id="see-more" class="doc-section">
+                            <h2>See More</h2>
+                            <ul>
+                                <li><a href="../digging-the-crate/">Browsing Records &amp; View Modes</a></li>
+                                <li><a href="../collection-insights/">Collection Stats: By the Numbers</a></li>
+                                <li><a href="../barcode-scanner/">Scanning Barcodes</a></li>
+                            </ul>
+                        </article>
+
+                    </section>
+                </docs-anchor-helper>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <docs-footer></docs-footer>
+
+        <!-- Lightbox Modal -->
+        <div id="lightbox-modal" class="lightbox-modal" aria-hidden="true" role="dialog" aria-label="Image Viewer">
+            <button class="lightbox-close" aria-label="Close image viewer">&times;</button>
+            <img class="lightbox-content" id="lightbox-img" alt="">
+            <div class="lightbox-caption" id="lightbox-caption"></div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -7029,3 +7029,59 @@ body:has(.scanner-drawer.open) .status-stack .reorder-pill {
   border-color: #16a34a !important;
   color: #fff !important;
 }
+
+/* Custom toolbar tooltips (tooltip.js). Hover-only by construction: the
+   script never wires up its listeners on a device without a precise
+   hover-capable pointer, so this never has to fight a stray tap on mobile. */
+.app-tooltip {
+  position: fixed;
+  z-index: 900;
+  left: 0;
+  top: 0;
+  background: rgba(20, 20, 24, 0.96);
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.app-tooltip[data-placement="top"] {
+  transform: translateY(-2px);
+}
+
+.app-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.app-tooltip::after {
+  content: "";
+  position: absolute;
+  left: var(--arrow-x, 50%);
+  width: 8px;
+  height: 8px;
+  background: rgba(20, 20, 24, 0.96);
+  border-radius: 1.5px;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.app-tooltip[data-placement="bottom"]::after {
+  top: -5px;
+  border-left: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.app-tooltip[data-placement="top"]::after {
+  bottom: -5px;
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}

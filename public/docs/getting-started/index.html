@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../../assets/brand/spindex-mark.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../assets/apple-touch-icon.png">
+    <link rel="manifest" href="../../manifest.webmanifest">
+    <meta name="apple-mobile-web-app-title" content="Spindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="google" content="notranslate">
+    <script src="../docs-theme-loader.js"></script>
+
+    <title>Getting Started with Spindex | Spindex Docs</title>
+    <meta name="description"
+        content="Connect your Discogs collection, explore the demo crate, and browse your records offline.">
+    <meta name="category" content="Basics">
+    <meta name="doc-id" content="getting-started">
+    <link rel="canonical" href="https://spindex.ryanmarch.me/docs/getting-started/">
+
+
+
+
+
+
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Getting Started with Spindex | Spindex Docs">
+    <meta property="og:description" content="Connect your Discogs collection, explore the demo crate, and browse your records offline.">
+    <meta property="og:url" content="https://spindex.ryanmarch.me/docs/getting-started/">
+    <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Docs Style Sheet -->
+    <link rel="stylesheet" href="../style.css">
+    <script src="../docs-components.js" type="module"></script>
+</head>
+
+<body class="user-docs-page">
+    <div class="app-container">
+        <!-- Mobile Navigation Overlay -->
+        <div id="mobile-overlay" class="mobile-overlay"></div>
+
+        <main class="page-container-sidebar user-docs">
+            <!-- Sidebar Navigation -->
+            <docs-sidebar></docs-sidebar>
+
+            <!-- Right-side Content & Header Wrapper -->
+            <div class="page-content-wrapper">
+                <docs-header></docs-header>
+
+                <!-- Content Area -->
+                <docs-anchor-helper>
+                    <section class="page-content" aria-label="Getting Started Content">
+
+                        <!-- Overview -->
+                        <article id="overview" class="doc-section">
+                            <h1>Getting Started with Spindex</h1>
+                            <p class="lead">
+                                Spindex lets you browse your record collection as a virtual crate. Simply connect via
+                                Discogs to get started.
+                            </p>
+                            <p>
+                                Records save in your browser local storage for offline browsing on desktop, tablet, and
+                                mobile devices.
+                            </p>
+                        </article>
+
+                        <!-- Table of Contents -->
+                        <docs-table-of-contents></docs-table-of-contents>
+
+                        <hr class="section-divider">
+
+                        <!-- First Visit & Demo Crate -->
+                        <article id="demo-crate" class="doc-section">
+                            <h2>The Demo Crate</h2>
+                            <p>
+                                When you first launch Spindex, you can explore a demo collection to get a feel for
+                                how it works. You can flip through records in <a href="../digging-the-crate/">Stack, Grid, or List view</a>,
+                                open <a href="../gatefold-album-inspector/">gatefold sleeves</a> to inspect tracklists, explore credits, and view lyrics.
+                            </p>
+                            <p>
+                                A banner at the top of the crate indicates when demo data is active. Click the banner to
+                                open Settings and connect your collection.
+                            </p>
+                            <figure class="doc-screenshot-figure">
+                                <picture>
+                                    <source type="image/avif" srcset="images/demo-crate-stack.avif">
+                                    <img src="images/demo-crate-stack.png" alt="Stack view of demo crate"
+                                        loading="lazy">
+                                </picture>
+                                <figcaption>The demo crate in stack view.</figcaption>
+                            </figure>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Connecting Your Discogs Account -->
+                        <article id="connecting-discogs" class="doc-section">
+                            <h2>Connecting Your Discogs Account</h2>
+                            <p>
+                                Connect your account to import your collection:
+                            </p>
+                            <ol>
+                                <li>
+                                    Click the gear icon in the top header to open <strong>Settings</strong>.
+                                    <figure class="doc-screenshot-figure is-sm">
+                                        <picture>
+                                            <source type="image/avif" srcset="images/settings-gear.avif">
+                                            <img src="images/settings-gear.png" alt="Gear icon in top header"
+                                                loading="lazy">
+                                        </picture>
+                                        <figcaption>The gear icon in the top header.</figcaption>
+                                    </figure>
+                                </li>
+                                <li>Under the Discogs section, click <strong>Connect Discogs</strong>.</li>
+                                <figure class="doc-screenshot-figure is-sm">
+                                    <picture>
+                                        <source type="image/avif" srcset="images/settings-connect.avif">
+                                        <img src="images/settings-connect.png" alt="Connect Discogs button"
+                                            loading="lazy">
+                                    </picture>
+                                    <figcaption>Start connecting to Discogs.</figcaption>
+                                </figure>
+                                <li>You will be directed to Discogs to authorize read-only access to your collection.
+                                </li>
+                                <figure class="doc-screenshot-figure is-sm">
+                                    <picture>
+                                        <source type="image/avif" srcset="images/discogs-authorize-app.avif">
+                                        <img src="images/discogs-authorize-app.png" alt="Discogs authorize app page"
+                                            loading="lazy">
+                                    </picture>
+                                    <figcaption>Discogs authorize app page.</figcaption>
+                                </figure>
+                                <li>Once you authorize access, your collection will begin importing automatically.</li>
+                            </ol>
+                            <p>
+                                Spindex reads only your collection releases, master details, and artist credits. Your
+                                login credentials remain secure and are never shared.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Syncing New Records -->
+                        <article id="syncing-records" class="doc-section">
+                            <h2>Checking for New Records</h2>
+                            <p>
+                                Spindex syncs on demand rather than running background processes:
+                            </p>
+                            <p>
+                                Whenever you add new vinyl to your Discogs collection or <a href="../barcode-scanner/">scan barcodes</a> to catalog new arrivals:
+                            </p>
+                            <ul>
+                                <li>Open <strong>Settings</strong>.</li>
+                                <li>Click <strong>Check now</strong>.</li>
+                                <li>Spindex looks for releases added since your last check and adds them to your crate.
+                                </li>
+                            </ul>
+                            <p>
+                                The settings panel displays a timestamp indicating the last time your collection was
+                                checked.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Offline Capabilities -->
+                        <article id="offline-browsing" class="doc-section">
+                            <h2>Offline Browsing</h2>
+                            <p>
+                                Once your collection loads, the record details, artwork references, and tracklists
+                                reside in your browser's local database.
+                            </p>
+                            <p>
+                                You can bookmark Spindex, install it to your home screen or dock as a progressive web
+                                application, and flip through your crate on a flight or in locations without an active
+                                internet connection.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- See More -->
+                        <article id="see-more" class="doc-section">
+                            <h2>See More</h2>
+                            <ul>
+                                <li><a href="../digging-the-crate/">Browsing Records &amp; View Modes</a></li>
+                                <li><a href="../barcode-scanner/">Scanning Barcodes</a></li>
+                                <li><a href="../gatefold-album-inspector/">Album Details &amp; Gatefold View</a></li>
+                            </ul>
+                        </article>
+
+                    </section>
+                </docs-anchor-helper>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <docs-footer></docs-footer>
+
+        <!-- Lightbox Modal -->
+        <div id="lightbox-modal" class="lightbox-modal" aria-hidden="true" role="dialog" aria-label="Image Viewer">
+            <button class="lightbox-close" aria-label="Close image viewer">&times;</button>
+            <img class="lightbox-content" id="lightbox-img" alt="">
+            <div class="lightbox-caption" id="lightbox-caption"></div>
+        </div>
+    </div>
+</body>
+
+</html>

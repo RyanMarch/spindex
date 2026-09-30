@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../assets/brand/spindex-mark.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png">
+    <link rel="manifest" href="../manifest.webmanifest">
+    <meta name="apple-mobile-web-app-title" content="Spindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="google" content="notranslate">
+    <script src="docs-theme-loader.js"></script>
+
+    
+
+    <title>User Guides | Spindex</title>
+    <meta name="description" content="Learn how to use Spindex with helpful guides explaining what is available.">
+    <link rel="canonical" href="https://spindex.ryanmarch.me/docs/">
+
+
+
+
+
+
+
+
+
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="User Guides | Spindex">
+    <meta property="og:description" content="Learn how to use Spindex with helpful guides explaining what is available.">
+    <meta property="og:url" content="https://spindex.ryanmarch.me/docs/">
+    <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Docs Style Sheet -->
+    <link rel="stylesheet" href="style.css">
+    <script src="docs-components.js" type="module"></script>
+</head>
+
+<body class="user-docs-page docs-home-page">
+    <div class="app-container">
+        <!-- Mobile Navigation Overlay -->
+        <div id="mobile-overlay" class="mobile-overlay"></div>
+
+        <main class="page-container-fullwidth user-docs">
+            <!-- Sidebar Navigation (visible only on mobile) -->
+            <docs-sidebar></docs-sidebar>
+
+            <!-- Right-side Content & Header Wrapper -->
+            <div class="page-content-wrapper">
+                <docs-header></docs-header>
+
+                <!-- Content Area -->
+                <docs-anchor-helper>
+                    <div class="docs-hero">
+                        <h1>Help Center</h1>
+                        <p class="lead">Search guides, explore features, and learn how to use Spindex.</p>
+                        <docs-search></docs-search>
+                    </div>
+
+                    <h2 class="docs-categories-title">Explore Guides</h2>
+
+                    <docs-grid></docs-grid>
+
+                </docs-anchor-helper>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <docs-footer></docs-footer>
+
+        <!-- Lightbox Modal -->
+        <div id="lightbox-modal" class="lightbox-modal" aria-hidden="true" role="dialog" aria-label="Image Viewer">
+            <button class="lightbox-close" aria-label="Close image viewer">&times;</button>
+            <img class="lightbox-content" id="lightbox-img" alt="">
+            <div class="lightbox-caption" id="lightbox-caption"></div>
+        </div>
+    </div>
+</body>
+
+</html>

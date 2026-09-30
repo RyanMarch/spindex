@@ -1,14 +1,10 @@
 // discogs.js - the one place that knows how this browser talks to Discogs.
 //
-//  'oauth'  the user connected through "Connect Discogs": requests go through our own /api/discogs proxy, which holds
-//           their token in an encrypted cookie and signs the request. Page scripts never see a credential.
-//  'token'  fallback for local use: a personal access token typed into Settings, sent straight to Discogs.
-//  'none'   not connected.
+// Requests go through our /api/discogs proxy, which holds the user's OAuth token
+// in an encrypted cookie and signs the request. Page scripts never see a credential.
 
 import { createLimiter } from './limiter.js';
 import { noteSource } from './sourcestats.js';
-
-const API = 'https://api.discogs.com';
 
 const state = {
   mode: 'none',
@@ -24,13 +20,7 @@ export const discogsState = () => ({ ...state });
 export const isDiscogsConnected = () => state.mode !== 'none';
 export const onDiscogsChange = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 
-function tokenCredentials() {
-  const token = localStorage.getItem('discogs_token');
-  const username = localStorage.getItem('discogs_username');
-  return token && username ? { token, username } : null;
-}
-
-// Work out how we're connected. OAuth wins over a saved personal token.
+// Work out how we're connected via server session.
 export async function initDiscogs() {
   state.mode = 'none';
   state.username = '';
@@ -46,16 +36,9 @@ export async function initDiscogs() {
       }
     }
   } catch {
-    // No server functions here (plain static hosting): personal-token mode still works
+    // Offline or server unavailable
   }
 
-  if (state.mode === 'none') {
-    const saved = tokenCredentials();
-    if (saved) {
-      state.mode = 'token';
-      state.username = saved.username;
-    }
-  }
   notify();
   return discogsState();
 }
@@ -64,23 +47,14 @@ export async function initDiscogs() {
 const limiter = createLimiter({ pace: (res) => (res?.headers?.get('x-spindex-cache') === 'HIT' ? 0 : paceMs()) });
 
 async function send(path, init) {
-  let res;
-
-  if (state.mode === 'oauth') {
-    res = await fetch(`/api/discogs${path}`, { credentials: 'same-origin', ...init });
-    if (res.status === 401) {
-      // The connection is no longer valid (revoked, or the cookie expired): fall back and let the UI say so
-      await initDiscogs();
-    }
-  } else if (state.mode === 'token') {
-    const saved = tokenCredentials();
-    if (!saved) throw new Error('Not connected to Discogs');
-    res = await fetch(`${API}${path}`, {
-      ...init,
-      headers: { ...(init.headers || {}), 'User-Agent': 'Spindex/1.0', Authorization: `Discogs token=${saved.token}` },
-    });
-  } else {
+  if (state.mode !== 'oauth') {
     throw new Error('Not connected to Discogs');
+  }
+
+  const res = await fetch(`/api/discogs${path}`, { credentials: 'same-origin', ...init });
+  if (res.status === 401) {
+    // The connection is no longer valid (revoked, or the cookie expired): fall back and let the UI say so
+    await initDiscogs();
   }
 
   const remaining = res.headers.get('x-discogs-ratelimit-remaining');
@@ -116,17 +90,5 @@ export async function disconnectDiscogs() {
       // Cookie expires on its own eventually
     }
   }
-  return initDiscogs();
-}
-
-export function saveToken(username, token) {
-  localStorage.setItem('discogs_username', username);
-  localStorage.setItem('discogs_token', token);
-  return initDiscogs();
-}
-
-export function forgetToken() {
-  localStorage.removeItem('discogs_username');
-  localStorage.removeItem('discogs_token');
   return initDiscogs();
 }
