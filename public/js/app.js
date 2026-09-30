@@ -23,6 +23,7 @@ import { statsHTML, valueHTML } from './statsview.js';
 import { initDiscogs, discogsFetch, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs } from './discogs.js';
 import { ScannerDrawer } from './scanner-drawer.js';
 import { initTooltips } from './tooltip.js';
+import { LandingPageController } from './landing.js';
 
 const DEFAULT_TITLE = 'Spindex | Your record collection';
 
@@ -221,6 +222,26 @@ class App {
     this.discogsDisconnectBtn = document.getElementById('discogs-disconnect-btn');
     this.syncStatus = document.getElementById('sync-status');
     this.clearCacheBtn = document.getElementById('clear-cache-btn');
+
+    this.landingPage = new LandingPageController({
+      isConnected: () => isDiscogsConnected(),
+      onEnterCrate: () => {
+        if (this.allRecords.length > 0 && this.crate) {
+          this.crate.setIndex(0);
+        }
+      },
+      onOpenRecord: (record) => {
+        const targetId = record.id;
+        const found = this.allRecords.find((r) => r.id === targetId || r.discogsId === record.discogsId);
+        if (found) {
+          const idx = this.filteredRecords.findIndex((r) => r.id === found.id);
+          if (idx !== -1 && this.crate) this.crate.setIndex(idx);
+          this.openRecordDetail(found);
+        } else {
+          this.openRecordDetail(record);
+        }
+      },
+    });
   }
 
   initControllers() {
@@ -373,6 +394,16 @@ class App {
     document.getElementById('settings-scan-btn')?.addEventListener('click', () => {
       this.closeSettings();
       this.openScanner();
+    });
+
+    // About Spindex (opened from Settings drawer)
+    document.getElementById('settings-about-btn')?.addEventListener('click', () => {
+      this.closeSettings();
+      this.landingPage?.show({ route: true });
+    });
+    document.getElementById('settings-about-row-btn')?.addEventListener('click', () => {
+      this.closeSettings();
+      this.landingPage?.show({ route: true });
     });
 
     // Settings drawer toggling
@@ -624,7 +655,12 @@ class App {
     this.openFromLocation(true);
     window.addEventListener('popstate', () => this.openFromLocation());
     this.handleDiscogsReturn();
-    this.maybeShowWelcome();
+    if (location.pathname === '/about' || new URLSearchParams(location.search).has('about')) {
+      this.landingPage?.show();
+    } else {
+      this.maybeShowWelcome();
+    }
+    document.documentElement.classList.remove('landing-pending'); // decided: the home page is up, or the app is
     this.autoSyncIfDue();
     this.fillMissingArt().then(() => this.fillMissingGenres());
     this.refreshCollectionFieldsIfNeeded()
@@ -1545,38 +1581,18 @@ class App {
 
   // ---- Welcome (first visit) and the first sync ----------------------------------------------------------------------
 
-  // Someone who has never connected sees one clear invitation, over the demo crate. Once, and never on a direct album link.
+  // Someone who has never connected sees the home/marketing page over the demo crate. That includes arriving on an album
+  // link for a record they don't have (a friend pasting an address from their own browser): it can't open for them, and
+  // the home page is what that link was really meant to show. A link to a record they do have just opens it.
   maybeShowWelcome() {
-    const welcome = document.getElementById('welcome');
-    if (!welcome || isDiscogsConnected() || location.pathname !== '/' || new URLSearchParams(location.search).has('demo')) return;
+    const path = location.pathname;
+    const home = path === '/' || (path.startsWith('/album/') && !this.recordForPath(path));
+    if (isDiscogsConnected() || !home || ['demo', 'crate', 'wall'].some((k) => new URLSearchParams(location.search).has(k))) return;
     let seen = false;
     try { seen = localStorage.getItem('spindex_welcomed') === '1'; } catch { /* fine */ }
     if (seen || this.allRecords.some((r) => !String(r.id).startsWith('discogs_mock_'))) return;
 
-    const { configured } = discogsState();
-    document.getElementById('welcome-title').textContent = WELCOME.title;
-    document.getElementById('welcome-body').textContent = WELCOME.body;
-    document.getElementById('welcome-progress').hidden = true;
-    document.getElementById('welcome-count').hidden = true;
-    document.getElementById('welcome-covers').replaceChildren();
-    const connect = document.createElement('a');
-    connect.className = 'btn btn-primary';
-    connect.textContent = 'Connect Discogs';
-    connect.href = '/api/discogs/login';
-    const demo = document.createElement('button');
-    demo.type = 'button';
-    demo.className = 'text-btn';
-    demo.textContent = 'Look at a demo first';
-    const dismiss = () => {
-      try { localStorage.setItem('spindex_welcomed', '1'); } catch { /* fine */ }
-      welcome.hidden = true;
-    };
-    connect.addEventListener('click', () => {
-      try { localStorage.setItem('spindex_welcomed', '1'); } catch { /* fine */ }
-    });
-    demo.addEventListener('click', dismiss);
-    document.getElementById('welcome-actions').replaceChildren(connect, demo);
-    welcome.hidden = false;
+    this.landingPage?.show();
   }
 
   // While a collection is brought in for the first time: a count, a line, and the covers as they arrive

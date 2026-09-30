@@ -154,6 +154,7 @@ const jsFiles = [
   'public/js/sync.js',
   'public/js/db.js',
   'public/js/mock-data.js',
+  'public/js/landing.js',
   'public/js/landing-wall.js',
 ];
 
@@ -169,7 +170,7 @@ for (const file of jsFiles) {
 }
 
 // 5. Verify rule: no forbidden word 'premium' in text content
-for (const file of [...jsFiles, 'public/index.html', 'public/css/style.css']) {
+for (const file of [...jsFiles, 'public/index.html', 'public/css/style.css', 'public/css/landing.css']) {
   const content = fs.readFileSync(path.join(root, file), 'utf8');
   assert.ok(!content.toLowerCase().includes('premium'), `File ${file} contains forbidden word "premium"`);
 }
@@ -210,6 +211,11 @@ for (const record of MOCK_RECORDS) {
   assert.ok(record.tracklist.every((t) => /^\d+:\d{2}$/.test(t.duration)), `Every demo track needs a m:ss length: ${record.title}`);
   assert.ok(runtime(record.title).minutes >= 30, `A full-length record should run at least 30 minutes: ${record.title}`);
 }
+
+// 8. Spindex can add a scanned record to the user's Discogs collection, so the home page must not call it read-only
+const indexHtml = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
+const homePage = indexHtml.slice(indexHtml.indexOf('id="landing-page"'), indexHtml.indexOf('id="status-stack"')).replace(/<!--[\s\S]*?-->/g, '');
+assert.ok(!/read-only (sign|access|permission)|reads only|never (write|change)/i.test(homePage), 'The home page must not describe Discogs access as read-only');
 
 console.log('All basic and integration tests passed successfully.');
 
