@@ -253,8 +253,8 @@ Spindex uses Discogs OAuth 1.0a. All cryptographic signing happens server-side.
 - Encryption uses AES-GCM-256 via Web Crypto API with `SESSION_SECRET`.
 - Plaintext credentials and consumer secrets are never exposed to the client.
 
-### Read-Only Discogs Proxy (`/api/discogs/[[path]]`)
-Proxies read-only requests to `api.discogs.com`.
+### Discogs Proxy (`/api/discogs/[[path]]`)
+Proxies allowlisted requests to `api.discogs.com`: reads, plus one write (adding a release to the signed-in user's own collection, used by the barcode scanner).
 - **Allowlisted Routes**:
   - `/api/discogs/oauth/identity`
   - `/api/discogs/users/{username}/collection/folders/{folder}/releases`
@@ -262,8 +262,9 @@ Proxies read-only requests to `api.discogs.com`.
   - `/api/discogs/masters/{id}`
   - `/api/discogs/artists/{id}`
   - `/api/discogs/database/search` (used for barcode lookups)
+  - `POST /api/discogs/users/{username}/collection/folders/{folder}/releases/{id}` (add a release; `{username}` must be the signed-in user and `{folder}` a non-zero folder)
 - Automatically attaches user OAuth credentials or server credentials.
-- Disallows non-GET methods and non-whitelisted paths.
+- Disallows every other method and any non-allowlisted path.
 
 ### External Proxies & Relays
 

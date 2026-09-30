@@ -1,0 +1,1286 @@
+/* landing.css - the Spindex home page.
+   Set like a record-shop magazine, but in the app's own voice: sans for headings and interface, the serif only where
+   the app uses it (words written to be read, and a quiet italic accent), mono only for track positions, the app's own
+   buttons, and the rose as a second ink (numerals, italics, one full page at the end). Wherever the app already has a
+   piece of interface (buttons, the record's details, the pager) the page uses the app's classes rather than a copy. */
+
+:root {
+  --l-bg: #1b1b22;
+  --l-deep: #141419;
+  --l-ink: #15151b;
+  --l-line: rgba(255, 255, 255, 0.14);
+  --l-rule: rgba(244, 244, 247, 0.85);
+  --l-text: #f4f4f7;
+  --l-muted: rgba(244, 244, 247, 0.74);
+  --l-faint: rgba(244, 244, 247, 0.52);
+  --l-accent: #f43f5e;
+  --l-max: 1280px;
+  --l-gutter: clamp(1.25rem, 5vw, 3rem);
+  --l-serif: var(--font-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif);
+  --l-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html:has(body.landing-active) {
+  scroll-behavior: smooth;
+}
+
+/* Set by a script in the page head for likely first visits, until the app has decided whether to show the home page */
+html.landing-pending .app-layout {
+  visibility: hidden;
+}
+
+body.landing-active {
+  overflow-y: auto !important;
+  height: auto !important;
+  min-height: 100dvh;
+  background-color: var(--l-bg);
+}
+
+.landing-page {
+  position: relative;
+  z-index: 50;
+  min-height: 100dvh;
+  background: var(--l-bg);
+  color: var(--l-text);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  -webkit-user-select: text;
+  user-select: text;
+  /* The stack's lower sleeves can reach past the column on phones. clip, unlike hidden, leaves the sticky nav alone. */
+  overflow-x: clip;
+}
+
+.landing-page[hidden] {
+  display: none !important;
+}
+
+.landing-page a {
+  color: inherit;
+}
+
+.landing-page a.btn {
+  text-decoration: none;
+}
+
+.landing-page .btn {
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.landing-page :focus-visible {
+  outline: 2px solid var(--l-text);
+  outline-offset: 3px;
+}
+
+.landing-page section[id] {
+  scroll-margin-top: 3.5rem;
+}
+
+/* The one serif accent: an italic, as in the stats drawer's standout line */
+.landing-page em {
+  font-family: var(--l-serif);
+  font-style: italic;
+  font-weight: 600;
+}
+
+/* ---- Nav ------------------------------------------------------------------------------------------------------ */
+
+.landing-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(27, 27, 34, 0.9);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--l-line);
+}
+
+.landing-nav-inner {
+  max-width: var(--l-max);
+  margin: 0 auto;
+  padding: 0.6rem var(--l-gutter);
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.landing-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.landing-nav-menu {
+  display: flex;
+  gap: 1.6rem;
+  margin-right: auto;
+}
+
+.landing-nav-menu a {
+  text-decoration: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--l-faint);
+  transition: color 0.15s;
+}
+
+.landing-nav-menu a:hover {
+  color: var(--l-text);
+}
+
+.landing-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-left: auto;
+}
+
+/* ---- Links, labels, headings ---------------------------------------------------------------------------------- */
+
+/* A text link in the app's own style (.text-btn): muted, underlined, brighter on hover */
+.landing-link {
+  display: inline-block;
+  font-size: 0.9rem;
+  color: var(--l-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s;
+}
+
+.landing-link::after {
+  content: " \2192";
+}
+
+.landing-link:hover {
+  color: var(--l-text);
+}
+
+/* Section opener: a heavy rule, then a number and a small tracked label, in the same voice as the app's genre tabs */
+.landing-kicker {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 3px solid var(--l-text);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--l-muted);
+}
+
+.landing-kicker span {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--l-accent);
+}
+
+.landing-title,
+.landing-statement,
+.landing-headline,
+.landing-close h2 {
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.landing-title {
+  font-size: clamp(2.6rem, 6.6vw, 5.8rem);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+}
+
+.landing-title em {
+  color: var(--l-accent);
+  letter-spacing: -0.03em;
+}
+
+.landing-statement {
+  max-width: 21em;
+  margin: 1.5rem 0 0;
+  font-size: clamp(2rem, 4.4vw, 3.6rem);
+  line-height: 1.08;
+}
+
+.landing-headline {
+  margin: 0 0 1rem;
+  font-size: clamp(1.9rem, 3.6vw, 2.9rem);
+  line-height: 1.08;
+}
+
+.landing-statement em,
+.landing-headline em {
+  color: var(--l-muted);
+}
+
+.landing-lede {
+  max-width: 30rem;
+  font-size: 1.12rem;
+  color: var(--l-muted);
+  text-wrap: pretty;
+}
+
+.landing-sub {
+  max-width: 34rem;
+  font-size: 1.05rem;
+  color: var(--l-muted);
+  text-wrap: pretty;
+}
+
+.landing-sub-wide {
+  margin-top: 1.25rem;
+}
+
+.landing-fineprint {
+  margin-top: 1rem;
+  font-size: 0.82rem;
+  color: var(--l-faint);
+}
+
+.landing-tag {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--l-faint);
+}
+
+.landing-page kbd,
+.landing-page code {
+  padding: 0.05em 0.45em;
+  border: 1px solid var(--l-faint);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--l-text);
+}
+
+/* ---- Layout --------------------------------------------------------------------------------------------------- */
+
+.landing-hero,
+.landing-section,
+.landing-poster-inner,
+.landing-close-inner,
+.landing-footer-inner,
+.landing-footer-bottom {
+  width: 100%;
+  max-width: var(--l-max);
+  margin: 0 auto;
+  padding-left: var(--l-gutter);
+  padding-right: var(--l-gutter);
+}
+
+.landing-section {
+  padding-top: clamp(3rem, 7vw, 5.5rem);
+  padding-bottom: clamp(3.5rem, 8vw, 6.5rem);
+}
+
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  margin-top: 1.75rem;
+}
+
+.landing-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(2rem, 6vw, 5rem);
+  align-items: start;
+  margin-top: clamp(2rem, 5vw, 3.5rem);
+}
+
+/* Prose is the liner-note voice, so it gets the serif, like the app's liner notes and bios */
+.landing-prose p {
+  margin-bottom: 1.1rem;
+  font-family: var(--l-serif);
+  font-size: 1.15rem;
+  line-height: 1.65;
+  color: var(--l-muted);
+  text-wrap: pretty;
+}
+
+.landing-prose p:first-child::first-letter {
+  float: left;
+  margin: 0.08em 0.1em 0 0;
+  font-family: var(--l-serif);
+  font-size: 4.6em;
+  font-weight: 700;
+  line-height: 0.78;
+  color: var(--l-accent);
+}
+
+.landing-prose-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin-top: 1.5rem;
+  font-family: var(--font-sans);
+}
+
+.landing-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  align-items: center;
+  gap: clamp(2rem, 6vw, 5rem);
+  margin-top: clamp(2rem, 5vw, 3.5rem);
+}
+
+/* ---- Cover (hero) --------------------------------------------------------------------------------------------- */
+
+.landing-hero {
+  padding-top: clamp(1.25rem, 3vw, 2.25rem);
+  padding-bottom: clamp(2rem, 5vw, 4rem);
+}
+
+.landing-deck {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 1.5rem 3rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 3px solid var(--l-text);
+}
+
+.landing-deck .landing-actions {
+  margin-top: 0;
+}
+
+.landing-deck-actions .landing-fineprint {
+  margin-top: 0.75rem;
+}
+
+/* The app's station: the vertical stack on the left, the record's details on the right */
+.landing-station {
+  --size: clamp(200px, 25vw, 320px);
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  margin-top: clamp(0.5rem, 2vw, 1.5rem);
+}
+
+.landing-stack-col {
+  position: relative;
+  min-width: 0;
+  height: calc(var(--size) * 1.95);
+}
+
+/* The stack fades out at the bottom, as it runs off the bottom of the screen in the app. The mask sits here, and
+   not on the column, so it doesn't clip the glow behind it. */
+.landing-stack-clip {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  -webkit-mask-image: linear-gradient(180deg, #000 72%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 72%, transparent 100%);
+}
+
+.landing-crate-glow {
+  position: absolute;
+  left: 50%;
+  top: 28%;
+  width: 90%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.38;
+  background-color: rgba(244, 63, 94, 0.5);
+  transition: background-color 0.9s ease;
+  pointer-events: none;
+}
+
+.landing-crate-floor {
+  position: absolute;
+  top: calc(var(--size) * 1.08);
+  left: 50%;
+  width: calc(var(--size) * 0.96);
+  height: 40px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.35) 45%, transparent 75%);
+  filter: blur(14px);
+  pointer-events: none;
+}
+
+.landing-stack {
+  position: relative;
+  width: var(--size);
+  height: var(--size);
+  margin-top: calc(var(--size) * 0.3);
+  touch-action: pan-y;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.landing-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 0;
+  container-type: inline-size;
+}
+
+.landing-pager {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 0.25rem;
+  margin-top: 1.5rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.3));
+  border-radius: 9999px;
+  background: rgba(18, 18, 24, 0.85);
+}
+
+/* One jacket in the vertical flow; its pose (from crate.js's own maths) is set inline by landing.js */
+.mini-sleeve {
+  position: absolute;
+  inset: 0;
+  transform-origin: center center;
+  transition: transform 0.6s var(--l-ease), opacity 0.5s ease;
+  will-change: transform;
+  cursor: pointer;
+}
+
+.mini-cover {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 4px;
+  background-color: #15151b;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.7), 0 8px 18px -4px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.mini-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.mini-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 55%);
+}
+
+/* Lifts the front cover off the stack, as the app does */
+.mini-lift {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: -1;
+  box-shadow: 0 10px 20px -4px rgba(0, 0, 0, 0.5), 0 30px 50px -14px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.mini-sleeve.is-front .mini-lift {
+  opacity: 1;
+}
+
+.mini-dim {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  pointer-events: none;
+  background: #000;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.mini-sleeve:focus-visible {
+  outline-offset: 6px;
+}
+
+/* Poses applied without gliding: the first showing and resizes */
+.landing-stack.no-glide .mini-sleeve,
+.landing-stack.no-glide .mini-lift,
+.landing-stack.no-glide .mini-dim {
+  transition: none;
+}
+
+/* ---- Views preview -------------------------------------------------------------------------------------------- */
+
+.landing-seg {
+  display: flex;
+  gap: 1.75rem;
+  border-bottom: 1px solid var(--l-line);
+}
+
+.landing-seg-btn {
+  margin-bottom: -1px;
+  padding: 0.3rem 0 0.7rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--l-faint);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.landing-seg-btn:hover {
+  color: var(--l-text);
+}
+
+.landing-seg-btn.active {
+  color: var(--l-text);
+  border-bottom-color: var(--l-accent);
+}
+
+.landing-view-display {
+  min-height: 19rem;
+  display: flex;
+  align-items: center;
+  padding-top: 1.75rem;
+}
+
+.landing-view-display > * {
+  width: 100%;
+  animation: landing-fade 0.35s ease both;
+}
+
+@keyframes landing-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.lv-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 3rem);
+}
+
+.lv-stack-art img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 4px;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.55);
+}
+
+.lv-stack-art img.lv-edge {
+  height: 1.6rem;
+  aspect-ratio: auto;
+  margin-top: 0.3rem;
+  object-position: center 18%;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+}
+
+.lv-stack-art img.lv-edge:nth-of-type(2) {
+  width: 94%;
+  margin-left: 3%;
+  opacity: 0.85;
+}
+
+.lv-stack-art img.lv-edge:nth-of-type(3) {
+  width: 88%;
+  margin-left: 6%;
+  opacity: 0.65;
+}
+
+.lv-stack-art img.lv-edge:nth-of-type(4) {
+  width: 82%;
+  margin-left: 9%;
+  opacity: 0.45;
+}
+
+.lv-stack-meta h4 {
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  line-height: 1.12;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.lv-stack-meta p {
+  margin-top: 0.3rem;
+  color: var(--l-muted);
+}
+
+.lv-stack-meta .landing-tag {
+  display: block;
+  margin-top: 1rem;
+}
+
+.lv-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(0.5rem, 1.4vw, 0.85rem);
+}
+
+.lv-grid figure {
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
+}
+
+.lv-grid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  transition: transform 0.4s var(--l-ease);
+}
+
+.lv-grid figure:hover img {
+  transform: scale(1.05);
+}
+
+.lv-grid figcaption {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 1.4rem 0.6rem 0.5rem;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.lv-grid figure:hover figcaption {
+  opacity: 1;
+}
+
+.lv-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.lv-row {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) 3rem 6rem 2.5rem;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0.25rem;
+  border-bottom: 1px solid var(--l-line);
+  font-size: 0.9rem;
+}
+
+.lv-row:last-child {
+  border-bottom: 0;
+}
+
+.lv-row img {
+  width: 2.75rem;
+  height: 2.75rem;
+  object-fit: cover;
+  border-radius: 3px;
+}
+
+.lv-row strong {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.lv-row small {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--l-muted);
+  font-size: 0.82rem;
+}
+
+.lv-row span {
+  color: var(--l-faint);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Gatefold ------------------------------------------------------------------------------------------------- */
+
+.landing-rule {
+  padding-top: clamp(3rem, 7vw, 5.5rem);
+}
+
+.landing-gatefold-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 1rem 3rem 1rem 0;
+}
+
+.gf-mock {
+  position: relative;
+  width: min(100%, 27rem);
+  aspect-ratio: 1;
+}
+
+.gf-mock-jacket {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+  box-shadow: 0 30px 60px -10px rgba(0, 0, 0, 0.75);
+}
+
+.gf-mock-disc {
+  position: absolute;
+  z-index: 1;
+  top: 3%;
+  left: 3%;
+  width: 94%;
+  height: 94%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 0 33%, rgba(255, 255, 255, 0.08) 33.4% 33.8%, transparent 34.2% 48%, rgba(255, 255, 255, 0.06) 48.4% 48.8%, transparent 49.2% 63%, rgba(255, 255, 255, 0.06) 63.4% 63.8%, transparent 64.2% 78%, rgba(255, 255, 255, 0.05) 78.4% 78.8%, transparent 79.2%),
+    conic-gradient(from 30deg, rgba(190, 18, 60, 0.92), rgba(251, 113, 133, 0.75) 14%, rgba(159, 18, 57, 0.95) 30%, rgba(159, 18, 57, 0.95) 50%, rgba(251, 113, 133, 0.75) 64%, rgba(190, 18, 60, 0.92) 82%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  transition: transform 1.1s var(--l-ease) 0.25s;
+}
+
+.gf-mock-disc::after {
+  content: "";
+  position: absolute;
+  inset: 34%;
+  border-radius: 50%;
+  background: var(--label-art, #222) center / cover;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+.gf-mock-disc::before {
+  content: "";
+  position: absolute;
+  inset: 48.5%;
+  z-index: 1;
+  border-radius: 50%;
+  background: var(--l-bg);
+}
+
+.gf-mock.is-open .gf-mock-disc {
+  transform: translateX(32%) rotate(200deg);
+}
+
+/* Liner-note credits: a small tracked label, then the words in the serif the app uses for credits */
+.landing-credits {
+  margin: 2rem 0 1.75rem;
+}
+
+.landing-credits > div {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  gap: 1rem;
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--l-line);
+}
+
+.landing-credits > div:last-child {
+  border-bottom: 1px solid var(--l-line);
+}
+
+.landing-credits dt {
+  padding-top: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--l-accent);
+}
+
+.landing-credits dd {
+  font-family: var(--l-serif);
+  font-size: 1.05rem;
+  color: var(--l-muted);
+  text-wrap: pretty;
+}
+
+/* ---- Screensaver poster --------------------------------------------------------------------------------------- */
+
+.landing-poster {
+  position: relative;
+  display: grid;
+  align-items: center;
+  min-height: clamp(34rem, 62vw, 44rem);
+  overflow: hidden;
+  background: var(--l-deep);
+}
+
+/* The screensaver in a box. These are the app's own wall styles (style.css: .wall-grid, .wall-tile, .wall-spot,
+   .wall-caption), positioned inside the poster instead of over the whole screen. */
+.landing-wall {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #050507;
+}
+
+.lw-grid {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  will-change: transform, opacity;
+  transition: opacity 1s ease;
+}
+
+.landing-wall.is-spot .lw-grid {
+  opacity: 0.3;
+}
+
+.lw-tile {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--tile);
+  height: var(--tile);
+  padding: 3px;
+}
+
+.lw-tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 2px;
+  opacity: var(--o, 0.6);
+  background: #14141a;
+}
+
+.lw-spot {
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+  cursor: pointer;
+  will-change: transform;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.75), 0 8px 24px rgba(0, 0, 0, 0.5);
+  border-radius: 18px;
+}
+
+.lw-spot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.lw-caption {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 1rem;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+  pointer-events: none;
+}
+
+.lw-caption.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+.lw-caption strong {
+  max-width: 24ch;
+  font-size: clamp(1.3rem, 2.6vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.lw-caption span {
+  font-family: var(--l-serif);
+  font-size: clamp(1rem, 1.6vw, 1.3rem);
+  color: rgba(244, 244, 247, 0.75);
+}
+
+.lw-caption em {
+  font-family: inherit;
+  font-style: normal;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(244, 244, 247, 0.45);
+}
+
+.landing-poster-inner {
+  position: relative;
+  z-index: 1;
+  padding-top: 3rem;
+  padding-bottom: 3rem;
+}
+
+.landing-poster-panel {
+  max-width: 31rem;
+  padding: clamp(1.5rem, 3.5vw, 2.5rem);
+  border-radius: 6px;
+  background: var(--l-bg);
+  box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.8);
+}
+
+.landing-poster-panel .landing-headline {
+  margin-top: 1.25rem;
+}
+
+.landing-ticks {
+  list-style: none;
+  margin-top: 1.5rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.landing-ticks li {
+  position: relative;
+  padding-left: 1.5rem;
+  color: var(--l-muted);
+}
+
+.landing-ticks li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--l-accent);
+}
+
+/* ---- Fine print, as a tracklist ------------------------------------------------------------------------------- */
+
+.landing-tracks {
+  list-style: none;
+  margin-top: clamp(2rem, 5vw, 3.5rem);
+}
+
+.landing-side {
+  margin-top: 2.25rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 3px solid var(--l-text);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--l-faint);
+}
+
+.landing-side:first-child {
+  margin-top: 0;
+}
+
+.landing-track {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 1.4rem 0;
+  border-bottom: 1px solid var(--l-line);
+}
+
+/* The app sets track positions in mono (gf-tpos), so this is the one place the page does too */
+.landing-track-pos {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--l-accent);
+}
+
+.landing-track h3 {
+  font-size: clamp(1.25rem, 2.3vw, 1.6rem);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.landing-track p {
+  max-width: 38rem;
+  margin-top: 0.4rem;
+  color: var(--l-muted);
+  text-wrap: pretty;
+}
+
+/* ---- Stats ---------------------------------------------------------------------------------------------------- */
+
+.landing-stats-split {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: clamp(2rem, 6vw, 5rem);
+  align-items: start;
+  margin-top: clamp(2rem, 5vw, 3.5rem);
+}
+
+/* The copy is much shorter than the panel, so it stays in view (below the nav) while the panel scrolls past it */
+.landing-stats-copy {
+  position: sticky;
+  top: 5.5rem;
+}
+
+/* The questions the panel answers, set like the fine print's tracklist */
+.landing-questions {
+  list-style: none;
+  margin: 1.75rem 0 1.5rem;
+}
+
+.landing-questions li {
+  padding: 0.95rem 0;
+  border-top: 1px solid var(--l-line);
+  font-size: clamp(1.15rem, 2vw, 1.4rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.landing-questions li:last-child {
+  border-bottom: 1px solid var(--l-line);
+}
+
+/* The app's stats panel (its own .st-* styles do the inside), on a card like its drawer */
+.landing-stats {
+  padding: 1.75rem 1.75rem 2rem;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.3));
+  border-radius: 10px;
+  background: #141419;
+  box-shadow: 0 30px 60px -24px rgba(0, 0, 0, 0.7);
+}
+
+.landing-stats .st-section:first-of-type {
+  margin-top: 1.6rem;
+}
+
+/* ---- Closing page, in spot color ------------------------------------------------------------------------------ */
+
+.landing-close {
+  background: var(--l-accent);
+  color: var(--l-ink);
+}
+
+.landing-close-inner {
+  padding-top: clamp(4rem, 10vw, 8rem);
+  padding-bottom: clamp(4rem, 10vw, 8rem);
+}
+
+.landing-close h2 {
+  font-size: clamp(3.2rem, 11vw, 9rem);
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+}
+
+.landing-close p {
+  max-width: 30rem;
+  margin-top: 1.5rem;
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+.landing-close .text-btn {
+  color: var(--l-ink);
+}
+
+.landing-close .text-btn:hover {
+  color: #000;
+}
+
+/* ---- Footer --------------------------------------------------------------------------------------------------- */
+
+.landing-footer {
+  background: var(--l-deep);
+}
+
+.landing-footer-inner {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  gap: 2rem;
+  padding-top: 3rem;
+  padding-bottom: 2.5rem;
+}
+
+.landing-footer-brand p {
+  max-width: 18rem;
+  margin-top: 0.9rem;
+  font-family: var(--l-serif);
+  font-size: 1rem;
+  font-style: italic;
+  color: var(--l-muted);
+}
+
+.landing-footer h4 {
+  margin-bottom: 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--l-faint);
+}
+
+.landing-footer ul {
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.landing-footer ul a {
+  font-size: 0.92rem;
+  text-decoration: none;
+  color: var(--l-muted);
+}
+
+.landing-footer ul a:hover {
+  color: var(--l-text);
+}
+
+.landing-footer-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 2rem;
+  padding-top: 1.25rem;
+  padding-bottom: 2rem;
+  border-top: 1px solid var(--l-line);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--l-faint);
+}
+
+.landing-footer-bottom span:last-child {
+  max-width: 34rem;
+}
+
+/* ---- Small screens -------------------------------------------------------------------------------------------- */
+
+@media (max-width: 960px) {
+  .landing-nav-menu {
+    display: none;
+  }
+
+  .landing-columns,
+  .landing-split,
+  .landing-stats-split {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-stats-copy {
+    position: static;
+  }
+
+  .landing-deck {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-station {
+    --size: min(62vw, 300px);
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .landing-stack-col {
+    height: calc(var(--size) * 1.7);
+  }
+
+  .landing-gatefold-art {
+    padding: 0 3rem 0 0;
+  }
+
+
+  .landing-footer-inner {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-nav-connect {
+    display: none;
+  }
+
+  .lv-stack {
+    grid-template-columns: 1fr;
+    max-width: 14rem;
+  }
+
+  .lv-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .lv-row {
+    grid-template-columns: 2.75rem minmax(0, 1fr) 3rem;
+  }
+
+  .lv-row span:nth-of-type(n + 2) {
+    display: none;
+  }
+
+
+  .landing-credits > div {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+
+  .landing-track {
+    grid-template-columns: 3rem minmax(0, 1fr);
+  }
+
+  .landing-track .landing-link {
+    grid-column: 2;
+  }
+
+
+
+
+  .landing-footer-inner {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-actions .btn {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(body.landing-active) {
+    scroll-behavior: auto;
+  }
+
+  .mini-sleeve,
+  .mini-lift,
+  .mini-dim,
+  .gf-mock-disc,
+  .lw-grid,
+  .lw-caption,
+  .landing-crate-glow {
+    transition: none;
+  }
+
+  .landing-view-display > * {
+    animation: none;
+  }
+
+}
