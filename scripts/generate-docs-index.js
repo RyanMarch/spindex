@@ -140,7 +140,7 @@ function generateIndex() {
         while ((match = headingRegex.exec(html)) !== null) {
             const rawHeadingText = match[2];
             const cleanHeading = cleanText(rawHeadingText.replace(/<a[^>]*>[\s\S]*?<\/a>/gi, ''));
-            if (cleanHeading && cleanHeading !== 'Table of Contents' && !headings.includes(cleanHeading)) {
+            if (cleanHeading && cleanHeading !== 'Table of Contents' && cleanHeading !== 'See Also' && cleanHeading !== 'See More' && !headings.includes(cleanHeading)) {
                 headings.push(cleanHeading);
             }
         }

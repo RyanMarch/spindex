@@ -11,16 +11,21 @@
     <meta name="google" content="notranslate">
     <script src="../docs-theme-loader.js"></script>
 
-    <title>Digging the Crate | Spindex Docs</title>
-    <meta name="description" content="Master crate gestures, navigate with keyboard shortcuts, and switch between Stack, Grid, and List views.">
+    <title>Browsing Records &amp; View Modes | Spindex Docs</title>
+    <meta name="description"
+        content="Browse records across Stack, Grid, and List views, navigate with keyboard shortcuts, and use gestures.">
     <meta name="category" content="Exploring">
     <meta name="doc-id" content="digging-the-crate">
     <link rel="canonical" href="https://spindex.ryanmarch.me/docs/digging-the-crate/">
 
 
+
+
+
+
     <meta property="og:type" content="article">
-    <meta property="og:title" content="Digging the Crate | Spindex Docs">
-    <meta property="og:description" content="Master crate gestures, navigate with keyboard shortcuts, and switch between Stack, Grid, and List views.">
+    <meta property="og:title" content="Browsing Records &amp; View Modes | Spindex Docs">
+    <meta property="og:description" content="Browse records across Stack, Grid, and List views, navigate with keyboard shortcuts, and use gestures.">
     <meta property="og:url" content="https://spindex.ryanmarch.me/docs/digging-the-crate/">
     <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
     <meta property="og:image:width" content="1200">
@@ -46,16 +51,16 @@
 
                 <!-- Content Area -->
                 <docs-anchor-helper>
-                    <section class="page-content" aria-label="Digging the Crate Content">
+                    <section class="page-content" aria-label="Browsing Records Content">
 
                         <!-- Overview -->
                         <article id="overview" class="doc-section">
-                            <h1>Digging the Crate</h1>
+                            <h1>Browsing Records &amp; View Modes</h1>
                             <p class="lead">
-                                Spindex recreates the tactile satisfaction of thumbing through physical vinyl sleeves at a record shop.
+                                Browse your collection using Stack, Grid, or List view.
                             </p>
                             <p>
-                                Whether you prefer flipping through album art in three dimensions, scanning rows in a grid, or reviewing a dense catalog list, Spindex provides three dedicated views to fit your browsing mood.
+                                Navigate records using touch gestures, mouse wheel scrolling, or keyboard shortcuts.
                             </p>
                         </article>
 
@@ -64,36 +69,19 @@
 
                         <hr class="section-divider">
 
-                        <!-- 3D Crate Gestures -->
-                        <article id="crate-gestures" class="doc-section">
-                            <h2>3D Crate Gestures and Controls</h2>
-                            <p>
-                                The default <strong>Stack</strong> view renders your collection inside a virtual wooden crate with realistic 3D perspective and depth:
-                            </p>
-                            <ul>
-                                <li><strong>Mouse Wheel &amp; Trackpad:</strong> Scroll up or down over the crate to flip through records smoothly.</li>
-                                <li><strong>Touch Gestures:</strong> On mobile devices or tablets, swipe vertically across the sleeves to pull records forward or push them back.</li>
-                                <li><strong>Direct Clicking:</strong> Click on any record peeking out behind the front sleeve to jump directly to it.</li>
-                                <li><strong>Ambient Glow:</strong> As each record steps into the front position, the background subtly casts soft, ambient lighting matching the primary color palette of that album cover.</li>
-                            </ul>
-                            <figure class="doc-screenshot-figure is-md">
-                                <img src="images/stack.png" alt="Stack view showing a record sleeve in 3D perspective with the rest of the crate fanned out behind it and below it">
-                                <figcaption>The Stack view, with the ambient glow picking up the active cover's colors.</figcaption>
-                            </figure>
-                        </article>
-
-                        <hr class="section-divider">
-
                         <!-- View Modes -->
                         <article id="view-modes" class="doc-section">
                             <h2>Switching Views: Stack, Grid, and List</h2>
                             <p>
-                                Use the view switcher in the header (or floating pill on mobile) to toggle between browsing formats:
+                                Use the view switcher in the header (or floating pill on mobile) to toggle between
+                                browsing formats:
                             </p>
                             <ul>
-                                <li><strong>Stack View (Key 1):</strong> The signature 3D record crate. Perfect for deep listening sessions, tactile exploration, and discovering forgotten gems.</li>
-                                <li><strong>Grid View (Key 2):</strong> Displays album covers in a responsive multi-column gallery. Ideal when you want to scan across dozens of albums simultaneously.</li>
-                                <li><strong>List View (Key 3):</strong> A high-density table detailing artist, album title, release year, label format, and genre tags. Useful for cataloging, sorting, and systematic review.</li>
+                                <li><strong>Stack View (<kbd>1</kbd>):</strong> 3D record crate showing album covers
+                                    lined up in order.</li>
+                                <li><strong>Grid View (<kbd>2</kbd>):</strong> View multiple albums at a time.</li>
+                                <li><strong>List View (<kbd>3</kbd>):</strong> A compact list of albums showing artist,
+                                    album title, release year, format, and genre tags.</li>
                             </ul>
                             <div class="doc-screenshot-strip">
                                 <figure class="doc-screenshot-figure">
@@ -101,14 +89,40 @@
                                     <figcaption>Stack</figcaption>
                                 </figure>
                                 <figure class="doc-screenshot-figure">
-                                    <img src="images/grid.png" alt="Grid view showing album covers in a responsive multi-column gallery">
+                                    <img src="images/grid.png"
+                                        alt="Grid view showing album covers in a responsive multi-column gallery">
                                     <figcaption>Grid</figcaption>
                                 </figure>
                                 <figure class="doc-screenshot-figure">
-                                    <img src="images/list.png" alt="List view showing a dense table of albums with year, genre, and length columns">
+                                    <img src="images/list.png"
+                                        alt="List view showing a dense table of albums with year, genre, and length columns">
                                     <figcaption>List</figcaption>
                                 </figure>
                             </div>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- 3D Crate Gestures -->
+                        <article id="crate-gestures" class="doc-section">
+                            <h2>3D Crate Gestures and Controls</h2>
+                            <p>
+                                The default <strong>Stack</strong> view showcases your collection in a
+                                vertically-scrolling stack of album covers:
+                            </p>
+                            <ul>
+                                <li><strong>Flip through records:</strong> Scroll up or down over the stack to smoothly
+                                    flip through records. Click on any record peeking out from behind the front sleeve
+                                    to view it.</li>
+                                <li><strong>Ambient Glow:</strong> Enjoy color-matched backgrounds to help set the
+                                    mood for the album.</li>
+                            </ul>
+                            <figure class="doc-screenshot-figure is-md">
+                                <img src="images/stack.png"
+                                    alt="Stack view showing a record sleeve in 3D perspective with the rest of the crate fanned out behind it and below it">
+                                <figcaption>The Stack view, with the album's colors used for the background.
+                                </figcaption>
+                            </figure>
                         </article>
 
                         <hr class="section-divider">
@@ -117,14 +131,18 @@
                         <article id="keyboard-navigation" class="doc-section">
                             <h2>Keyboard Shortcuts</h2>
                             <p>
-                                Spindex is designed for full keyboard control without needing a mouse:
+                                Use keyboard shortcuts to navigate without a mouse:
                             </p>
                             <ul>
-                                <li><kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>←</kbd> / <kbd>→</kbd>: Move forward and backward through records.</li>
-                                <li><kbd>Enter</kbd>: Open the active record gatefold sleeve to inspect tracklists, liner notes, and lyrics.</li>
-                                <li><kbd>A</kbd> to <kbd>Z</kbd>: Jump instantly to the first record by an artist starting with that letter.</li>
+                                <li><kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>←</kbd> / <kbd>→</kbd>: Move forward and
+                                    backward through records.</li>
+                                <li><kbd>Enter</kbd>: Open the active record gatefold sleeve to inspect tracklists,
+                                    liner notes, and lyrics.</li>
+                                <li><kbd>A</kbd> to <kbd>Z</kbd>: Jump instantly to the first record by an artist
+                                    starting with that letter.</li>
                                 <li><kbd>/</kbd>: Focus the search bar.</li>
-                                <li><kbd>1</kbd>, <kbd>2</kbd>, <kbd>3</kbd>: Toggle between Stack, Grid, and List views.</li>
+                                <li><kbd>1</kbd>, <kbd>2</kbd>, <kbd>3</kbd>: Toggle between Stack, Grid, and List
+                                    views.</li>
                                 <li><kbd>4</kbd>: Launch full-screen Screensaver mode.</li>
                                 <li><kbd>Esc</kbd>: Close any active drawer, album sleeve, or modal.</li>
                                 <li><kbd>?</kbd>: Open the keyboard shortcuts reference card.</li>
@@ -137,11 +155,24 @@
                         <article id="jump-rails" class="doc-section">
                             <h2>Using the Jump Rail</h2>
                             <p>
-                                Along the right edge of the screen, an interactive jump rail displays either alphabetical markers (A to Z) or decade markers depending on your current sorting order.
+                                Along the right edge of the screen, an interactive jump rail displays either
+                                alphabetical markers (A to Z) or decade markers depending on your current sorting order.
                             </p>
                             <p>
-                                Click or drag your finger down the jump strip to skip past hundreds of records and land precisely at the section you want.
+                                Click or drag along the rail to jump directly to a letter or decade.
                             </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- See More -->
+                        <article id="see-more" class="doc-section">
+                            <h2>See More</h2>
+                            <ul>
+                                <li><a href="../finding-and-filtering/">Searching &amp; Filtering</a></li>
+                                <li><a href="../gatefold-album-inspector/">Album Details &amp; Gatefold View</a></li>
+                                <li><a href="../screensaver-mode/">Screensaver and Ambient Display</a></li>
+                            </ul>
                         </article>
 
                     </section>

@@ -18,7 +18,6 @@
 </head>
 
 <body>
-  <!-- Everything the app wants to say without being asked, in one stack so nothing lands on top of anything else -->
   <div id="status-stack" class="status-stack">
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
     <button id="update-pill" class="update-pill" type="button" hidden>Updated. Tap to refresh</button>
@@ -66,12 +65,11 @@
 
 
         <!-- Fixed-footprint region: opening search fades this content out and
-             overlays the input on top instead of resizing anything, so
-             nothing else in the header ever has to move to make room -->
+             overlays the input on top -->
         <div class="browse-controls">
           <div class="view-switch" role="group" aria-label="How to browse">
             <button type="button" class="view-btn" data-view="stack" aria-pressed="true" aria-label="Stack view"
-              title="Stack">
+              data-tooltip="Stack">
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
                 stroke-linejoin="round">
                 <rect x="6" y="3" width="12" height="5" rx="1"></rect>
@@ -80,7 +78,7 @@
               </svg>
             </button>
             <button type="button" class="view-btn" data-view="grid" aria-pressed="false" aria-label="Grid view"
-              title="Grid">
+              data-tooltip="Grid">
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
                 stroke-linejoin="round">
                 <rect x="3" y="3" width="7.5" height="7.5" rx="1"></rect>
@@ -90,7 +88,7 @@
               </svg>
             </button>
             <button type="button" class="view-btn" data-view="list" aria-pressed="false" aria-label="List view"
-              title="List">
+              data-tooltip="List">
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
                 stroke-linecap="round">
                 <line x1="8" y1="6" x2="21" y2="6"></line>
@@ -105,8 +103,7 @@
 
           <!-- Shapes what's currently in the crate: surprise, filter, search -->
           <div class="action-pill" id="crate-tools-pill">
-            <button id="surprise-btn" class="icon-btn" aria-label="Surprise me"
-              title="Surprise me: jump to a random record">
+            <button id="surprise-btn" class="icon-btn" aria-label="Surprise me" data-tooltip="Surprise me">
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="16 3 21 3 21 8"></polyline>
@@ -118,7 +115,7 @@
             </button>
 
             <button id="filter-toggle-btn" class="icon-btn filter-toggle" aria-label="Filter the crate"
-              title="Filter by decade, size, pressing, discs, speed">
+              data-tooltip="Filter">
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
                 stroke-linecap="round">
                 <line x1="4" y1="6" x2="20" y2="6"></line>
@@ -130,7 +127,7 @@
 
             <form class="crate-search" id="crate-search" role="search" autocomplete="off">
               <button type="button" id="search-toggle-btn" class="icon-btn" aria-label="Search the crate"
-                title="Search (/)">
+                data-tooltip="Search (/)">
                 <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
                   stroke-linecap="round">
                   <circle cx="11" cy="11" r="7"></circle>
@@ -144,9 +141,9 @@
           </div>
         </div>
 
-        <!-- Steps outside the crate: collection stats, app & sync settings -->
+        <!-- Collection stats, app, sync, & share settings -->
         <div class="action-pill" id="header-utility-pill">
-          <button id="stats-toggle-btn" class="icon-btn" aria-label="Collection stats" title="Collection stats">
+          <button id="stats-toggle-btn" class="icon-btn" aria-label="Collection stats" data-tooltip="Collection stats">
             <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
               <line x1="5" y1="20" x2="5" y2="11"></line>
@@ -155,8 +152,7 @@
             </svg>
           </button>
 
-          <button id="settings-toggle-btn" class="icon-btn" aria-label="Open settings"
-            title="Sync & Collection Settings">
+          <button id="settings-toggle-btn" class="icon-btn" aria-label="Open settings" data-tooltip="Settings">
             <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2">
               <circle cx="12" cy="12" r="3"></circle>
               <path
@@ -171,7 +167,8 @@
 
     <!-- Digging Crate: Primary Browsing Stage -->
     <main class="crate-stage" id="crate-stage">
-      <button id="demo-note" class="demo-note" type="button" hidden>Demo crate. Tap to connect your Discogs.</button>
+      <button id="demo-note" class="demo-note" type="button" hidden>Browsing the demo crate. Tap to connect to
+        Discogs.</button>
       <!-- Dynamic Ambient Backdrop Glow -->
       <div id="ambient-glow" class="ambient-glow" aria-hidden="true">
         <canvas id="ambient-glow-img" class="ambient-glow-img" width="64" height="64"></canvas>
@@ -683,26 +680,11 @@
           <!-- Not connected -->
           <div id="discogs-connect" hidden>
             <p class="settings-desc">Sign in with Discogs to bring in your collection. Spindex reads your collection and
-              release details only, and your login stays on this site's server. After that, press Check now whenever you
-              want to look for new records.
+              release details.
             </p>
             <a id="discogs-connect-btn" class="btn btn-primary" href="/api/discogs/login">Connect Discogs</a>
           </div>
-          <p class="settings-desc" id="discogs-unconfigured" hidden>Discogs sign-in isn't set up on this server yet. You
-            can still connect with a personal access token below.</p>
 
-          <details class="settings-advanced" id="discogs-token-details">
-            <summary>Use a personal access token instead</summary>
-            <label for="discogs-username">Username</label>
-            <input type="text" id="discogs-username" placeholder="vinylfan42" autocomplete="off" />
-
-            <label for="discogs-token">Personal Access Token</label>
-            <input type="password" id="discogs-token" placeholder="Discogs User Token" autocomplete="off" />
-            <small class="settings-hint">Generate one at discogs.com/settings/developers</small>
-
-            <button id="sync-token-btn" class="btn btn-secondary" style="margin-top: 1.25rem;">Save token &amp;
-              sync</button>
-          </details>
 
           <div id="sync-status" class="sync-status"></div>
         </div>

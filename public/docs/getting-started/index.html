@@ -12,10 +12,15 @@
     <script src="../docs-theme-loader.js"></script>
 
     <title>Getting Started with Spindex | Spindex Docs</title>
-    <meta name="description" content="Connect your Discogs collection, explore the demo crate, and browse your records offline.">
+    <meta name="description"
+        content="Connect your Discogs collection, explore the demo crate, and browse your records offline.">
     <meta name="category" content="Basics">
     <meta name="doc-id" content="getting-started">
     <link rel="canonical" href="https://spindex.ryanmarch.me/docs/getting-started/">
+
+
+
+
 
 
     <meta property="og:type" content="article">
@@ -52,10 +57,12 @@
                         <article id="overview" class="doc-section">
                             <h1>Getting Started with Spindex</h1>
                             <p class="lead">
-                                Spindex gives you a tactile, visual record crate in your browser backed by your Discogs collection.
+                                Spindex lets you browse your record collection as a virtual crate. Simply connect via
+                                Discogs to get started.
                             </p>
                             <p>
-                                Everything is built to work immediately on desktop computers, tablets, and phones. Your records save locally in your browser storage so you can dig through your crate wherever you are, even when offline.
+                                Records save in your browser local storage for offline browsing on desktop, tablet, and
+                                mobile devices.
                             </p>
                         </article>
 
@@ -68,14 +75,22 @@
                         <article id="demo-crate" class="doc-section">
                             <h2>The Demo Crate</h2>
                             <p>
-                                When you first launch Spindex, you do not need to sign in or set up an account right away. Spindex preloads a curated 12-album demo collection so you can flip through records, open gatefold sleeves, test views, and try keyboard shortcuts immediately.
+                                When you first launch Spindex, you can explore a demo collection to get a feel for
+                                how it works. You can flip through records in <a href="../digging-the-crate/">Stack, Grid, or List view</a>,
+                                open <a href="../gatefold-album-inspector/">gatefold sleeves</a> to inspect tracklists, explore credits, and view lyrics.
                             </p>
                             <p>
-                                A banner at the top of the crate indicates when you are exploring demo data. Tapping this banner opens the connection drawer so you can import your own collection whenever you are ready.
+                                A banner at the top of the crate indicates when demo data is active. Click the banner to
+                                open Settings and connect your collection.
                             </p>
-                            <p>
-                                If you want to return to the demo crate later to test features, append <code>?demo</code> to the website address in your browser.
-                            </p>
+                            <figure class="doc-screenshot-figure">
+                                <picture>
+                                    <source type="image/avif" srcset="images/demo-crate-stack.avif">
+                                    <img src="images/demo-crate-stack.png" alt="Stack view of demo crate"
+                                        loading="lazy">
+                                </picture>
+                                <figcaption>The demo crate in stack view.</figcaption>
+                            </figure>
                         </article>
 
                         <hr class="section-divider">
@@ -84,21 +99,45 @@
                         <article id="connecting-discogs" class="doc-section">
                             <h2>Connecting Your Discogs Account</h2>
                             <p>
-                                Bringing your collection into Spindex takes just a few clicks:
+                                Connect your account to import your collection:
                             </p>
                             <ol>
-                                <li>Click the gear icon in the top header to open <strong>Settings</strong>.</li>
+                                <li>
+                                    Click the gear icon in the top header to open <strong>Settings</strong>.
+                                    <figure class="doc-screenshot-figure is-sm">
+                                        <picture>
+                                            <source type="image/avif" srcset="images/settings-gear.avif">
+                                            <img src="images/settings-gear.png" alt="Gear icon in top header"
+                                                loading="lazy">
+                                        </picture>
+                                        <figcaption>The gear icon in the top header.</figcaption>
+                                    </figure>
+                                </li>
                                 <li>Under the Discogs section, click <strong>Connect Discogs</strong>.</li>
-                                <li>You will be directed to Discogs to authorize read-only access to your collection.</li>
-                                <li>Once approved, you return to Spindex and your collection begins importing automatically.</li>
+                                <figure class="doc-screenshot-figure is-sm">
+                                    <picture>
+                                        <source type="image/avif" srcset="images/settings-connect.avif">
+                                        <img src="images/settings-connect.png" alt="Connect Discogs button"
+                                            loading="lazy">
+                                    </picture>
+                                    <figcaption>Start connecting to Discogs.</figcaption>
+                                </figure>
+                                <li>You will be directed to Discogs to authorize read-only access to your collection.
+                                </li>
+                                <figure class="doc-screenshot-figure is-sm">
+                                    <picture>
+                                        <source type="image/avif" srcset="images/discogs-authorize-app.avif">
+                                        <img src="images/discogs-authorize-app.png" alt="Discogs authorize app page"
+                                            loading="lazy">
+                                    </picture>
+                                    <figcaption>Discogs authorize app page.</figcaption>
+                                </figure>
+                                <li>Once you authorize access, your collection will begin importing automatically.</li>
                             </ol>
                             <p>
-                                Spindex reads only your collection releases, master details, and artist credits. Your login credentials remain secure and are never shared.
+                                Spindex reads only your collection releases, master details, and artist credits. Your
+                                login credentials remain secure and are never shared.
                             </p>
-                            <figure class="doc-screenshot-figure is-md">
-                                <img src="images/settings.png" alt="Settings panel with a Connect Discogs button, a link to use a personal access token instead, and rows for barcode scanning, stats, screensaver, and more">
-                                <figcaption>The Settings panel is also where you check for new records and manage sharing.</figcaption>
-                            </figure>
                         </article>
 
                         <hr class="section-divider">
@@ -107,18 +146,20 @@
                         <article id="syncing-records" class="doc-section">
                             <h2>Checking for New Records</h2>
                             <p>
-                                Spindex operates on-demand to protect your battery life and respect API rate limits. It does not run background sync processes.
+                                Spindex syncs on demand rather than running background processes:
                             </p>
                             <p>
-                                Whenever you add new vinyl to your Discogs collection:
+                                Whenever you add new vinyl to your Discogs collection or <a href="../barcode-scanner/">scan barcodes</a> to catalog new arrivals:
                             </p>
                             <ul>
                                 <li>Open <strong>Settings</strong>.</li>
                                 <li>Click <strong>Check now</strong>.</li>
-                                <li>Spindex looks for releases added since your last check and adds them to your crate.</li>
+                                <li>Spindex looks for releases added since your last check and adds them to your crate.
+                                </li>
                             </ul>
                             <p>
-                                The settings panel displays a timestamp indicating the last time your collection was checked.
+                                The settings panel displays a timestamp indicating the last time your collection was
+                                checked.
                             </p>
                         </article>
 
@@ -128,11 +169,26 @@
                         <article id="offline-browsing" class="doc-section">
                             <h2>Offline Browsing</h2>
                             <p>
-                                Once your collection loads, the record details, artwork references, and tracklists reside in your browser's local database.
+                                Once your collection loads, the record details, artwork references, and tracklists
+                                reside in your browser's local database.
                             </p>
                             <p>
-                                You can bookmark Spindex, install it to your home screen or dock as a progressive web application, and flip through your crate on a flight or in locations without an active internet connection.
+                                You can bookmark Spindex, install it to your home screen or dock as a progressive web
+                                application, and flip through your crate on a flight or in locations without an active
+                                internet connection.
                             </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- See More -->
+                        <article id="see-more" class="doc-section">
+                            <h2>See More</h2>
+                            <ul>
+                                <li><a href="../digging-the-crate/">Browsing Records &amp; View Modes</a></li>
+                                <li><a href="../barcode-scanner/">Scanning Barcodes</a></li>
+                                <li><a href="../gatefold-album-inspector/">Album Details &amp; Gatefold View</a></li>
+                            </ul>
                         </article>
 
                     </section>

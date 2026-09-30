@@ -11,16 +11,21 @@
     <meta name="google" content="notranslate">
     <script src="../docs-theme-loader.js"></script>
 
-    <title>The Gatefold Album Inspector | Spindex Docs</title>
-    <meta name="description" content="Explore full album gatefolds, realistic vinyl disc finishes, synced song lyrics, credits, and liner notes.">
+    <title>Album Details &amp; Gatefold View | Spindex Docs</title>
+    <meta name="description"
+        content="View tracklists, synced lyrics, liner notes, musician credits, and pressing details in the gatefold album view.">
     <meta name="category" content="Features">
     <meta name="doc-id" content="gatefold-album-inspector">
     <link rel="canonical" href="https://spindex.ryanmarch.me/docs/gatefold-album-inspector/">
 
 
+
+
+
+
     <meta property="og:type" content="article">
-    <meta property="og:title" content="The Gatefold Album Inspector | Spindex Docs">
-    <meta property="og:description" content="Explore full album gatefolds, realistic vinyl disc finishes, synced song lyrics, credits, and liner notes.">
+    <meta property="og:title" content="Album Details &amp; Gatefold View | Spindex Docs">
+    <meta property="og:description" content="View tracklists, synced lyrics, liner notes, musician credits, and pressing details in the gatefold album view.">
     <meta property="og:url" content="https://spindex.ryanmarch.me/docs/gatefold-album-inspector/">
     <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
     <meta property="og:image:width" content="1200">
@@ -46,20 +51,23 @@
 
                 <!-- Content Area -->
                 <docs-anchor-helper>
-                    <section class="page-content" aria-label="Gatefold Album Inspector Content">
+                    <section class="page-content" aria-label="Album Details Content">
 
                         <!-- Overview -->
                         <article id="overview" class="doc-section">
-                            <h1>The Gatefold Album Inspector</h1>
+                            <h1>Album Details &amp; Gatefold View</h1>
                             <p class="lead">
-                                Pulling a record from the crate opens the gatefold inspector: a two-column workspace detailing every facet of the release.
+                                Select any record in your crate to open the gatefold view.
                             </p>
                             <p>
-                                The left column showcases the physical jacket, back cover, and a realistic vinyl disc rendering matched to your pressing. The right column compiles tracklists, song lyrics, liner notes, musician credits, streaming links, and your personal collection copy details.
+                                This view displays jacket artwork, vinyl disc styling, tracklists, synced song lyrics,
+                                musician credits, liner notes, and your collection details.
                             </p>
                             <figure class="doc-screenshot-figure">
-                                <img src="images/front.png" alt="Gatefold inspector showing an album jacket and peeking vinyl disc on the left, and title, credits, and a two-column tracklist on the right">
-                                <figcaption>The gatefold inspector for David Bowie's The Rise and Fall of Ziggy Stardust.</figcaption>
+                                <img src="images/front.png"
+                                    alt="Gatefold inspector showing an album jacket and peeking vinyl disc on the left, and title, credits, and a two-column tracklist on the right">
+                                <figcaption>The gatefold inspector for David Bowie's The Rise and Fall of Ziggy
+                                    Stardust.</figcaption>
                             </figure>
                         </article>
 
@@ -72,10 +80,8 @@
                         <article id="flipping-jacket" class="doc-section">
                             <h2>Flipping the Sleeve</h2>
                             <p>
-                                When rear cover art is available from archive sources, a flip button appears beneath the album jacket.
-                            </p>
-                            <p>
-                                Clicking the sleeve or the <strong>Flip to back cover</strong> button triggers a 3D rotation, letting you read back cover artwork, track notes, and barcode details just as you would when holding the physical jacket.
+                                When rear cover art is available, click the sleeve or the <strong>Flip to back
+                                    cover</strong> button to view the back cover.
                             </p>
                         </article>
 
@@ -83,20 +89,19 @@
 
                         <!-- Realistic Vinyl Disc Preview -->
                         <article id="vinyl-disc-preview" class="doc-section">
-                            <h2>Realistic Vinyl Disc Finishes</h2>
+                            <h2>Vinyl Disc Styles</h2>
                             <p>
-                                Peeking from the right edge of the jacket is an interactive vinyl disc. Spindex parses the format description strings in your Discogs pressing data to render accurate disc finishes:
+                                An interactive vinyl disc peeks from the right edge of the jacket. Spindex parses format
+                                descriptions from your Discogs pressing data to render disc styles:
                             </p>
                             <ul>
-                                <li><strong>Colored Vinyl:</strong> Vibrant solid hues such as red, blue, green, yellow, white, and orange.</li>
-                                <li><strong>Translucent &amp; Clear:</strong> Semi-transparent discs with visible light transmission.</li>
-                                <li><strong>Splatter &amp; Marble:</strong> Swirled and speckled patterns matching special edition pressings.</li>
-                                <li><strong>Picture Discs:</strong> Discs displaying full-bleed album artwork across the vinyl face.</li>
-                                <li><strong>Classic Black:</strong> Authentic vinyl sheen with grooved light reflections.</li>
+                                <li><strong>Color Vinyl:</strong> Solid colors including red, blue, green, yellow,
+                                    white, and orange.</li>
+                                <li><strong>Translucent &amp; Clear:</strong> Semi-transparent discs.</li>
+                                <li><strong>Splatter &amp; Marble:</strong> Swirled and patterned vinyl.</li>
+                                <li><strong>Picture Discs:</strong> Full artwork across the vinyl disc.</li>
+                                <li><strong>Classic Black:</strong> Standard black vinyl.</li>
                             </ul>
-                            <p>
-                                The center label also displays miniature artwork and a realistic spindle cutout.
-                            </p>
                         </article>
 
                         <hr class="section-divider">
@@ -108,11 +113,12 @@
                                 The tracklist details side and position markers (such as A1, A2, B1) and song durations.
                             </p>
                             <p>
-                                Clicking the lyrics icon next to any song opens a slide-over lyric sheet. Powered by LRCLIB, Spindex displays synchronized or plain-text lyrics, lets you step between tracks without leaving the sheet, and offers a quick shortcut to search on Genius if extended annotations are desired.
+                                Clicking the lyrics icon next to any song opens a slide-over lyric sheet.
                             </p>
                             <figure class="doc-screenshot-figure is-md">
-                                <img src="images/lyrics.png" alt="Lyrics drawer open over the gatefold, showing full lyrics for the current track with track navigation at the top">
-                                <figcaption>The lyrics sheet slides over the gatefold without losing your place.</figcaption>
+                                <img src="images/lyrics.png"
+                                    alt="Lyrics drawer open over the gatefold, showing full lyrics for the current track with track navigation at the top">
+                                <figcaption>View lyrics for any song on the album.</figcaption>
                             </figure>
                         </article>
 
@@ -122,13 +128,18 @@
                         <article id="liner-notes-credits" class="doc-section">
                             <h2>Liner Notes, Credits, and Artist Bios</h2>
                             <p>
-                                Spindex automatically enriches your collection by looking up historical context from Wikipedia and Wikidata:
+                                Spindex automatically enriches your collection by looking up historical context from
+                                Wikipedia and Wikidata:
                             </p>
                             <ul>
-                                <li><strong>Liner Notes:</strong> Read recording stories, critical reception, and the cultural background of the album.</li>
-                                <li><strong>Musician Credits:</strong> Detailed breakdowns of producers, mixing engineers, vocalists, and session musicians.</li>
-                                <li><strong>Artist Biography:</strong> Portrait imagery, origins, active years, and biographical notes for the performing artist.</li>
-                                <li><strong>Elsewhere in Your Crate:</strong> Quick links to other albums in your collection that feature the same artist or collaborators.</li>
+                                <li><strong>Liner Notes:</strong> Read recording stories, critical reception, and the
+                                    cultural background of the album.</li>
+                                <li><strong>Musician Credits:</strong> Detailed breakdowns of producers, mixing
+                                    engineers, vocalists, and session musicians.</li>
+                                <li><strong>Artist Biography:</strong> Portrait imagery, origins, active years, and
+                                    biographical notes for the performing artist.</li>
+                                <li><strong>Elsewhere in Your Crate:</strong> Quick links to other albums in your
+                                    collection that feature the same artist or collaborators.</li>
                             </ul>
                         </article>
 
@@ -136,15 +147,29 @@
 
                         <!-- Personal Copy Tracking -->
                         <article id="personal-copy" class="doc-section">
-                            <h2>Your Personal Copy</h2>
+                            <h2>Your Copy Details</h2>
                             <p>
-                                At the bottom of the right panel, Spindex presents your personal collector copy information:
+                                The lower section of the right panel displays your personal collection data:
                             </p>
                             <ul>
-                                <li><strong>Condition Grades:</strong> Goldmine standard condition ratings for both media and sleeve (such as Mint, Near Mint, Very Good Plus).</li>
-                                <li><strong>Date Added:</strong> When the record was cataloged into your collection.</li>
-                                <li><strong>Private Notes:</strong> Custom collector notes imported directly from your Discogs account.</li>
-                                <li><strong>Artwork Fixer:</strong> If an automated cover art match does not meet your preference, click the artwork tool to pick alternative high-resolution images.</li>
+                                <li><strong>Condition Grades:</strong> Media and sleeve ratings such as Mint, Near Mint,
+                                    or Very Good Plus.</li>
+                                <li><strong>Date Added:</strong> Date cataloged into your Discogs collection.</li>
+                                <li><strong>Private Notes:</strong> Notes imported from your Discogs account.</li>
+                                <li><strong>Artwork Fixer:</strong> Select alternative cover art if the automatic image
+                                    match is incorrect.</li>
+                            </ul>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- See More -->
+                        <article id="see-more" class="doc-section">
+                            <h2>See More</h2>
+                            <ul>
+                                <li><a href="../digging-the-crate/">Browsing Records &amp; View Modes</a></li>
+                                <li><a href="../finding-and-filtering/">Searching &amp; Filtering</a></li>
+                                <li><a href="../screensaver-mode/">Screensaver and Ambient Display</a></li>
                             </ul>
                         </article>
 

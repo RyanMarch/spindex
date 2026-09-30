@@ -209,8 +209,8 @@ Coordinates collection synchronization and data enrichment:
 ### [public/js/discogs.js](file:///Users/ryan/Sites/spindex/public/js/discogs.js)
 Client interface for Discogs authentication:
 - Checks authentication status via `/api/discogs/session`.
-- Routes proxy calls to `/api/discogs/...`.
-- Provides fallback support for personal access tokens stored locally if OAuth is not configured on the server.
+- Routes authenticated proxy calls to `/api/discogs/...`.
+- Coordinates shared rate limiting across API requests.
 
 ### [public/js/wiki.js](file:///Users/ryan/Sites/spindex/public/js/wiki.js)
 Fetches supplementary historical and release metadata:

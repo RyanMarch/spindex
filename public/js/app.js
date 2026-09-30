@@ -20,8 +20,9 @@ import { trackSummary, pressingNotes } from './vinyl.js';
 import { timeAgo, readSyncMeta, needsAutoSync } from './syncplan.js';
 import { sourceSnapshot } from './sourcestats.js';
 import { statsHTML, valueHTML } from './statsview.js';
-import { initDiscogs, discogsFetch, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs, saveToken, forgetToken } from './discogs.js';
+import { initDiscogs, discogsFetch, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs } from './discogs.js';
 import { ScannerDrawer } from './scanner-drawer.js';
+import { initTooltips } from './tooltip.js';
 
 const DEFAULT_TITLE = 'Spindex | Your record collection';
 
@@ -213,27 +214,13 @@ class App {
       },
     });
 
-    this.usernameInput = document.getElementById('discogs-username');
-    this.tokenInput = document.getElementById('discogs-token');
     this.syncBtn = document.getElementById('sync-discogs-btn');
-    this.syncTokenBtn = document.getElementById('sync-token-btn');
     this.discogsConnectedEl = document.getElementById('discogs-connected');
     this.discogsConnectedText = document.getElementById('discogs-connected-text');
     this.discogsConnectEl = document.getElementById('discogs-connect');
-    this.discogsUnconfiguredEl = document.getElementById('discogs-unconfigured');
     this.discogsDisconnectBtn = document.getElementById('discogs-disconnect-btn');
-    this.discogsTokenDetails = document.getElementById('discogs-token-details');
     this.syncStatus = document.getElementById('sync-status');
     this.clearCacheBtn = document.getElementById('clear-cache-btn');
-
-    // Restore saved settings
-    if (this.usernameInput) {
-      this.usernameInput.value = localStorage.getItem('discogs_username') || '';
-    }
-    if (this.tokenInput) {
-      this.tokenInput.value = localStorage.getItem('discogs_token') || '';
-    }
-
   }
 
   initControllers() {
@@ -335,6 +322,7 @@ class App {
     this.initShare();
     this.initWall();
     this.initFillStatus();
+    initTooltips(document.querySelector('.header-actions') || document);
     this.requestPersistentStorage();
 
     // Genre tabs are rendered from the collection, so listen on the bar
@@ -414,15 +402,9 @@ class App {
       }
     });
 
-    // Sync button
-    if (this.syncTokenBtn) {
-      this.syncTokenBtn.addEventListener('click', () => this.handleSync());
-    }
     if (this.discogsDisconnectBtn) {
       this.discogsDisconnectBtn.addEventListener('click', async () => {
-        if (discogsState().mode === 'token') await forgetToken();
-        else await disconnectDiscogs();
-        if (this.tokenInput) this.tokenInput.value = '';
+        await disconnectDiscogs();
         this.setSyncStatus('Disconnected from Discogs. Your crate stays on this device.', '');
       });
     }
@@ -481,18 +463,11 @@ class App {
 
     if (this.discogsConnectedEl) this.discogsConnectedEl.hidden = !connected;
     if (this.discogsConnectEl) this.discogsConnectEl.hidden = connected || !configured;
-    if (this.discogsUnconfiguredEl) this.discogsUnconfiguredEl.hidden = connected || configured;
-    if (this.discogsDisconnectBtn) this.discogsDisconnectBtn.textContent = mode === 'token' ? 'Forget token' : 'Disconnect';
-    if (this.discogsTokenDetails) {
-      // The token form is the main way in when sign-in isn't available; otherwise it stays tucked away
-      this.discogsTokenDetails.hidden = connected;
-      if (!connected && !configured) this.discogsTokenDetails.open = true;
-    }
+    if (this.discogsDisconnectBtn) this.discogsDisconnectBtn.textContent = 'Disconnect';
 
     if (this.discogsConnectedText && connected) {
-      this.discogsConnectedText.innerHTML =  /*html*/ `<span class="tag-kicker">${mode === 'oauth' ? 'Connected to Discogs as' : 'Using a personal access token for'}</span><strong class="tag-name">${this.escapeHTML(username)}</strong>`;
+      this.discogsConnectedText.innerHTML =  /*html*/ `<span class="tag-kicker">Connected to Discogs as</span><strong class="tag-name">${this.escapeHTML(username)}</strong>`;
     }
-    if (this.usernameInput && mode === 'token') this.usernameInput.value = username;
   }
 
   openStats() {
@@ -1584,11 +1559,10 @@ class App {
     document.getElementById('welcome-progress').hidden = true;
     document.getElementById('welcome-count').hidden = true;
     document.getElementById('welcome-covers').replaceChildren();
-    const connect = document.createElement(configured ? 'a' : 'button');
+    const connect = document.createElement('a');
     connect.className = 'btn btn-primary';
-    connect.textContent = configured ? 'Connect Discogs' : 'Connect with a token';
-    if (configured) connect.href = '/api/discogs/login';
-    else connect.type = 'button';
+    connect.textContent = 'Connect Discogs';
+    connect.href = '/api/discogs/login';
     const demo = document.createElement('button');
     demo.type = 'button';
     demo.className = 'text-btn';
@@ -1599,7 +1573,6 @@ class App {
     };
     connect.addEventListener('click', () => {
       try { localStorage.setItem('spindex_welcomed', '1'); } catch { /* fine */ }
-      if (!configured) { welcome.hidden = true; this.settingsToggleBtn?.click(); }
     });
     demo.addEventListener('click', dismiss);
     document.getElementById('welcome-actions').replaceChildren(connect, demo);
@@ -2041,16 +2014,9 @@ class App {
   }
 
   async runSync({ full = false, auto = false }) {
-    // Typed-in token: save it first (this is the fallback path; signed-in users skip straight to syncing)
-    if (!auto && discogsState().mode !== 'oauth') {
-      const username = this.usernameInput?.value.trim();
-      const token = this.tokenInput?.value.trim();
-      if (username && token) {
-        await saveToken(username, token);
-      } else if (!isDiscogsConnected()) {
-        this.setSyncStatus('Connect Discogs, or provide a username and personal token.', 'error');
-        return;
-      }
+    if (!isDiscogsConnected()) {
+      this.setSyncStatus('Connect Discogs first to sync your collection.', 'error');
+      return;
     }
 
     const { username } = discogsState();
@@ -2062,7 +2028,7 @@ class App {
       return;
     }
 
-    const buttons = [this.syncBtn, this.syncFullBtn, this.syncTokenBtn].filter(Boolean);
+    const buttons = [this.syncBtn, this.syncFullBtn].filter(Boolean);
     buttons.forEach((b) => { b.disabled = true; });
     this.setSyncStatus(hadRealRecords ? 'Checking for new records...' : 'Bringing in your collection...', '');
     if (!hadRealRecords) this.showFirstSync({});

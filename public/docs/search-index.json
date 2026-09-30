@@ -12,26 +12,26 @@
       "Offline Browsing"
     ],
     "excerpt": "Connect your Discogs collection, explore the demo crate, and browse your records offline.",
-    "lastUpdated": "2026-09-28"
+    "lastUpdated": "2026-09-30"
   },
   {
     "id": "digging-the-crate",
-    "title": "Digging the Crate",
+    "title": "Browsing Records & View Modes",
     "path": "digging-the-crate/",
     "category": "Exploring",
     "headings": [
       "Overview",
-      "3D Crate Gestures and Controls",
       "Switching Views: Stack, Grid, and List",
+      "3D Crate Gestures and Controls",
       "Keyboard Shortcuts",
       "Using the Jump Rail"
     ],
-    "excerpt": "Master crate gestures, navigate with keyboard shortcuts, and switch between Stack, Grid, and List views.",
-    "lastUpdated": "2026-09-28"
+    "excerpt": "Browse records across Stack, Grid, and List views, navigate with keyboard shortcuts, and use gestures.",
+    "lastUpdated": "2026-09-30"
   },
   {
     "id": "finding-and-filtering",
-    "title": "Finding and Filtering Records",
+    "title": "Searching & Filtering",
     "path": "finding-and-filtering/",
     "category": "Exploring",
     "headings": [
@@ -42,12 +42,28 @@
       "Advanced Filters Drawer",
       "Surprise Me (Shuffle)"
     ],
-    "excerpt": "Filter by genre tabs, search by title or song, refine by decade or speed, and let Surprise Me pick your next spin.",
-    "lastUpdated": "2026-09-28"
+    "excerpt": "Filter by genre, search by title or song, sort records, and refine by decade or format.",
+    "lastUpdated": "2026-09-30"
+  },
+  {
+    "id": "gatefold-album-inspector",
+    "title": "Album Details & Gatefold View",
+    "path": "gatefold-album-inspector/",
+    "category": "Features",
+    "headings": [
+      "Overview",
+      "Flipping the Sleeve",
+      "Vinyl Disc Styles",
+      "Tracklists and Synced Lyrics",
+      "Liner Notes, Credits, and Artist Bios",
+      "Your Copy Details"
+    ],
+    "excerpt": "View tracklists, synced lyrics, liner notes, musician credits, and pressing details in the gatefold album view.",
+    "lastUpdated": "2026-09-30"
   },
   {
     "id": "collection-insights",
-    "title": "Collection Statistics",
+    "title": "Collection Stats: By the Numbers",
     "path": "collection-insights/",
     "category": "Features",
     "headings": [
@@ -56,8 +72,8 @@
       "Decades and Release Eras",
       "Genres, Formats, and Speeds"
     ],
-    "excerpt": "Explore insights about your vinyl collection including release decades, top genres, formats, and speeds.",
-    "lastUpdated": "2026-09-28"
+    "excerpt": "View collection statistics including release decades, top genres, vinyl sizes, and playback speeds.",
+    "lastUpdated": "2026-09-30"
   },
   {
     "id": "barcode-scanner",
@@ -72,7 +88,7 @@
       "Selecting the Matching Pressing"
     ],
     "excerpt": "Add vinyl records to your crate using live camera scanning, photo uploads, or manual barcode entry.",
-    "lastUpdated": "2026-09-28"
+    "lastUpdated": "2026-09-30"
   },
   {
     "id": "screensaver-mode",
@@ -85,8 +101,8 @@
       "Launching Screensaver Mode",
       "Screen Wake Lock and Fullscreen"
     ],
-    "excerpt": "Turn an iPad or desktop monitor into a slowly drifting vinyl cover wall that keeps your display awake.",
-    "lastUpdated": "2026-09-28"
+    "excerpt": "Display a rotating grid of album covers that keeps your screen awake.",
+    "lastUpdated": "2026-09-30"
   },
   {
     "id": "sharing-your-crate",
@@ -95,28 +111,12 @@
     "category": "Features",
     "headings": [
       "Overview",
-      "Generating a Read-Only Link",
+      "Creating a Share Link",
       "Privacy and Security Safeguards",
       "The Visitor Experience",
       "Updating or Revoking Access"
     ],
-    "excerpt": "Create private read-only share links for friends to browse your vinyl collection while keeping personal data secure.",
-    "lastUpdated": "2026-09-28"
-  },
-  {
-    "id": "gatefold-album-inspector",
-    "title": "The Gatefold Album Inspector",
-    "path": "gatefold-album-inspector/",
-    "category": "Features",
-    "headings": [
-      "Overview",
-      "Flipping the Sleeve",
-      "Realistic Vinyl Disc Finishes",
-      "Tracklists and Synced Lyrics",
-      "Liner Notes, Credits, and Artist Bios",
-      "Your Personal Copy"
-    ],
-    "excerpt": "Explore full album gatefolds, realistic vinyl disc finishes, synced song lyrics, credits, and liner notes.",
-    "lastUpdated": "2026-09-28"
+    "excerpt": "Create unlisted read-only links to share your vinyl collection with private data excluded.",
+    "lastUpdated": "2026-09-30"
   }
 ]

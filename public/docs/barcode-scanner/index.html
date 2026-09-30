@@ -12,10 +12,14 @@
     <script src="../docs-theme-loader.js"></script>
 
     <title>Scanning Barcodes | Spindex Docs</title>
-    <meta name="description" content="Add vinyl records to your crate using live camera scanning, photo uploads, or manual barcode entry.">
+    <meta name="description"
+        content="Add vinyl records to your crate using live camera scanning, photo uploads, or manual barcode entry.">
     <meta name="category" content="Features">
     <meta name="doc-id" content="barcode-scanner">
     <link rel="canonical" href="https://spindex.ryanmarch.me/docs/barcode-scanner/">
+
+
+
 
 
     <meta property="og:type" content="article">
@@ -52,10 +56,11 @@
                         <article id="overview" class="doc-section">
                             <h1>Scanning Barcodes</h1>
                             <p class="lead">
-                                Quickly catalog new records by scanning the UPC or EAN barcode directly from the vinyl jacket or hype sticker.
+                                Find records by scanning the barcode on the jacket or hype sticker.
                             </p>
                             <p>
-                                Spindex includes a built-in barcode scanner drawer equipped with real-time camera detection, a flashlight toggle for dim record shops, image file uploads, and manual number entry.
+                                The scanner supports live camera detection, flashlight, image uploads, and manual
+                                barcode entry.
                             </p>
                         </article>
 
@@ -76,7 +81,7 @@
                                 <li>Allow browser camera permissions when prompted.</li>
                             </ol>
                             <p>
-                                The scanner drawer slides out with a live viewfinder, aiming reticle, and targeting laser guide.
+                                The scanner drawer opens with a camera viewfinder and targeting frame.
                             </p>
                         </article>
 
@@ -86,15 +91,19 @@
                         <article id="camera-controls" class="doc-section">
                             <h2>Camera Scanning and Controls</h2>
                             <p>
-                                Point your device camera at the barcode on the back of the album cover or protective outer sleeve:
+                                Point your device camera at the barcode on the back of the album cover or outer sleeve:
                             </p>
                             <ul>
-                                <li><strong>Target Reticle:</strong> Align the barcode horizontally within the framing corners.</li>
-                                <li><strong>Flashlight Toggle:</strong> When digging through dimly lit bins, tap the flashlight button to activate your phone torch.</li>
-                                <li><strong>Camera Switcher:</strong> Switch between wide and standard lenses on multi-camera mobile devices for optimal focus.</li>
+                                <li><strong>Framing:</strong> Align the barcode horizontally within the framing reticle.
+                                </li>
+                                <li><strong>Flashlight:</strong> Tap the flashlight button to turn on the camera light
+                                    in dim environments.</li>
+                                <li><strong>Camera Switcher:</strong> Switch between available cameras on multi-lens
+                                    mobile devices.</li>
                             </ul>
                             <p>
-                                As soon as a valid barcode is detected, your phone provides gentle feedback and searches the Discogs database for matching releases.
+                                When a barcode is detected, the device uses that identifier to search Discogs for
+                                matching releases.
                             </p>
                         </article>
 
@@ -104,15 +113,19 @@
                         <article id="alternative-entry" class="doc-section">
                             <h2>Photo Upload and Manual Entry</h2>
                             <p>
-                                If your camera is unavailable or the barcode is partially obscured, Spindex provides two backup methods:
+                                If camera access is unavailable, you can use photo upload or manual search:
                             </p>
                             <ul>
-                                <li><strong>Photo Upload:</strong> Click <strong>Photo</strong> to select an image from your photo library or disk. Spindex analyzes the picture locally and reads the barcode.</li>
-                                <li><strong>Manual Search:</strong> Type the numeric barcode digits directly into the input field below the viewfinder and press <strong>Search</strong>.</li>
+                                <li><strong>Photo Upload:</strong> Select an image file from your device. Spindex scans
+                                    the image locally to read the barcode.</li>
+                                <li><strong>Manual Search:</strong> Enter the barcode numbers into the input field and
+                                    click <strong>Search</strong>.</li>
                             </ul>
                             <figure class="doc-screenshot-figure is-md">
-                                <img src="images/scanner.png" alt="Scan Barcode drawer showing a camera permission denied message with Photo upload and manual barcode entry fields below it">
-                                <figcaption>When the camera isn't available, Photo upload and manual entry take over automatically.</figcaption>
+                                <img src="images/scanner.png"
+                                    alt="Scan Barcode drawer showing a camera permission denied message with Photo upload and manual barcode entry fields below it">
+                                <figcaption>When the camera isn't available, photo upload and manual entry can be used
+                                    instead</figcaption>
                             </figure>
                         </article>
 
@@ -122,7 +135,7 @@
                         <article id="matching-releases" class="doc-section">
                             <h2>Selecting the Matching Pressing</h2>
                             <p>
-                                Because a single barcode can correspond to multiple pressings across countries and formats, Spindex returns a list of candidate releases showing:
+                                When multiple pressings share the same barcode, candidate releases display:
                             </p>
                             <ul>
                                 <li>Artist and album title</li>
@@ -133,6 +146,18 @@
                             <p>
                                 Tap your pressing to view release details or add it straight to your crate.
                             </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- See More -->
+                        <article id="see-more" class="doc-section">
+                            <h2>See More</h2>
+                            <ul>
+                                <li><a href="../getting-started/">Getting Started</a></li>
+                                <li><a href="../gatefold-album-inspector/">Album Details &amp; Gatefold View</a></li>
+                                <li><a href="../finding-and-filtering/">Searching &amp; Filtering</a></li>
+                            </ul>
                         </article>
 
                     </section>

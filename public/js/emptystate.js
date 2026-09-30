@@ -10,8 +10,8 @@ export function emptyState({ total, shown, query = '', genre = '', filters = '',
     if (!connected) {
       return {
         title: 'Your crate is empty',
-        body: configured ? 'Connect Discogs and your collection shows up here.' : 'Connect with a personal access token in Settings and your collection shows up here.',
-        actions: [{ id: 'connect', label: configured ? 'Connect Discogs' : 'Open settings', primary: true }],
+        body: 'Connect Discogs and your collection shows up here.',
+        actions: [{ id: 'connect', label: 'Connect Discogs', primary: true }],
       };
     }
     return {

@@ -170,7 +170,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 .sort((a, b) => b.score - a.score)
                 .map(res => res.item);
 
-            logDocsSearchTelemetry(currentQuery, filtered.length);
         } else {
             document.title = `All Guides | Spindex Docs`;
             if (titleEl) titleEl.textContent = 'All Guides';
@@ -180,21 +179,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         renderResults(filtered, currentQuery);
-    }
-
-    let docsSearchLogTimer = null;
-    function logDocsSearchTelemetry(query, resultsCount) {
-        if (!query || query.length < 2) return;
-        clearTimeout(docsSearchLogTimer);
-        docsSearchLogTimer = setTimeout(() => {
-            try {
-                fetch('/api/docs/search-log', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: query.trim(), results_count: resultsCount })
-                }).catch(() => {});
-            } catch {}
-        }, 850);
     }
 
     function escapeHtml(str) {

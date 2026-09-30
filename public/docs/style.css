@@ -37,21 +37,22 @@
     --transition-normal: 0.25s ease-out;
 }
 
-[data-theme="light"] {
-    --bg-color: #f3f4f6;
-    --panel-bg: #ffffff;
-    --panel-border: #adadad;
-    --control-bg: #f9fafb;
-    --control-bg-hover: #f3f4f6;
-    --control-border: #e5e7eb;
+[data-theme="light"],
+[data-theme="dark"] {
+    --bg-color: #141419;
+    --panel-bg: #1c1c23;
+    --panel-border: rgba(255, 255, 255, 0.12);
+    --control-bg: #22222b;
+    --control-bg-hover: #2d2d39;
+    --control-border: rgba(255, 255, 255, 0.20);
 
-    --accent: #2563eb;
-    --accent-hover: #1d4ed8;
-    --accent-light: rgba(37, 99, 235, 0.08);
+    --accent: #f43f5e;
+    --accent-hover: #fb7185;
+    --accent-light: rgba(244, 63, 94, 0.12);
 
-    --text-main: #111827;
-    --text-muted: #6b7280;
-    --text-inverse: #ffffff;
+    --text-main: #f4f4f7;
+    --text-muted: #a1a1aa;
+    --text-inverse: #141419;
 }
 
 /* Classic Style variables */
@@ -255,6 +256,16 @@ a:hover {
     text-align: center;
 }
 
+.doc-inline-icon {
+    display: inline-block;
+    vertical-align: middle;
+    height: 1.4em;
+    width: auto;
+    border-radius: var(--radius-sm, 4px);
+    border: 1px solid var(--panel-border);
+    margin: 0 0.25rem;
+}
+
 /* Tighten container elements specifically for Docs */
 .user-docs-page .app-container {
     max-width: 1400px;
@@ -342,9 +353,10 @@ a:hover {
 
 .cta-card-icon img,
 .cta-card-icon svg {
-    width: 20px;
-    height: 20px;
+    width: 30px;
+    height: 30px;
     object-fit: contain;
+    margin: -7px 0 0 -5px;
 }
 
 .cta-card-title {
@@ -453,15 +465,15 @@ a:hover {
     list-style-type: decimal;
 }
 
-.page-content ul:not(.toc-list) > li,
-.page-content ol:not(.toc-list) > li {
+.page-content ul:not(.toc-list)>li,
+.page-content ol:not(.toc-list)>li {
     margin-bottom: 0.5rem;
     line-height: 1.6;
     color: var(--text-main);
 }
 
-.page-content ul:not(.toc-list) > li:last-child,
-.page-content ol:not(.toc-list) > li:last-child {
+.page-content ul:not(.toc-list)>li:last-child,
+.page-content ol:not(.toc-list)>li:last-child {
     margin-bottom: 0;
 }
 
@@ -1132,6 +1144,7 @@ kbd {
     .page-container-sidebar .header-logo {
         display: none !important;
     }
+
     .page-container-sidebar .app-header {
         justify-content: flex-end !important;
     }
@@ -1449,6 +1462,12 @@ kbd {
     display: flex;
     flex-direction: column;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.page-content .docs-card,
+.page-content .docs-card:visited {
+    color: var(--text-main);
+    text-decoration: none;
 }
 
 .docs-card:hover,
@@ -2261,15 +2280,18 @@ docs-logo svg {
         align-items: center;
         gap: 0;
     }
+
     .footer-copyright {
         flex: 1;
         text-align: left;
     }
+
     .footer-nav-links {
         flex: 1;
         display: flex;
         justify-content: center;
     }
+
     .footer-theme-selector {
         flex: 1;
         display: flex;

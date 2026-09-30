@@ -6,7 +6,7 @@
   "googleFontsUrl": false,
   "sidebarCta": {
     "title": "Open Spindex",
-    "description": "Browse your Discogs record collection like flipping through a crate.",
+    "description": "Browse your record collection like flipping through a crate.",
     "buttonText": "Launch Spindex",
     "buttonUrl": "/"
   },
