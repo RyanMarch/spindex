@@ -6,7 +6,7 @@ import { smallArtUrl } from './browse.js';
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const number = (n) => Number(n).toLocaleString('en-US');
 
-const section = (title, body, note = '') => `<section class="st-section"><h4>${esc(title)}</h4>${body}${note ? `<p class="st-note">${esc(note)}</p>` : ''}</section>`;
+export const section = (title, body, note = '') => `<section class="st-section"><h4>${esc(title)}</h4>${body}${note ? `<p class="st-note">${esc(note)}</p>` : ''}</section>`;
 
 // One line of an index: the name, a dotted leader, the number
 const indexRow = (name, count, lead = '') => `<li class="st-row">${lead}<span class="st-name">${esc(name)}</span><span class="st-dots" aria-hidden="true"></span><b>${number(count)}</b></li>`;
@@ -42,7 +42,7 @@ function standout(kicker, record, detail) {
   return `<li class="st-standout">${cover(record)}<span class="st-standout-text"><em>${esc(kicker)}</em><strong>${esc(record.title)}</strong><span>${esc(record.artist)} · ${esc(detail)}</span></span></li>`;
 }
 
-function renderStandoutItem(item) {
+export function renderStandoutItem(item) {
   if (item.type === 'artist-fan') {
     const stack = (item.records || []).map((r, i) => `<span style="--i:${i}">${cover(r, 'st-cover')}</span>`).join('');
     return `<li class="st-standout st-artist"><span class="st-fan">${stack}</span><span class="st-standout-text"><em>${esc(item.kicker)}</em><strong>${esc(item.artist)}</strong><span>${number(item.count)} records</span></span></li>`;
@@ -110,12 +110,17 @@ function growthChart(growth) {
   return `<div class="st-chart">${svg}${labels}</div><div class="st-axis"><span>${esc(monthLabel(growth[0].month))}</span><span>${esc(monthLabel(growth[growth.length - 1].month))}</span></div>`;
 }
 
+// The sentence at the top of the panel: how many records, by how many artists, how long they play, how far they span
+export function ledeHTML(stats) {
+  const hours = stats.runtimeSeconds / 3600;
+  const span = stats.oldest && stats.newest && stats.oldest.year !== stats.newest.year ? ` released between <b>${stats.oldest.year}</b> and <b>${stats.newest.year}</b>` : '';
+  return `<p class="st-lede"><b>${number(stats.total)}</b> ${stats.total === 1 ? 'record' : 'records'} by <b>${number(stats.artistCount)}</b> ${stats.artistCount === 1 ? 'artist' : 'artists'}${hours >= 1 ? `, about <b>${number(Math.round(hours))} hours</b> of music` : ''}${span ? `,${span}` : ''}.</p>`;
+}
+
 export function statsHTML(stats) {
   if (stats.total === 0) return '<p class="st-note">Nothing in the crate yet.</p>';
 
-  const hours = stats.runtimeSeconds / 3600;
-  const span = stats.oldest && stats.newest && stats.oldest.year !== stats.newest.year ? ` released between <b>${stats.oldest.year}</b> and <b>${stats.newest.year}</b>` : '';
-  const lede = `<p class="st-lede"><b>${number(stats.total)}</b> ${stats.total === 1 ? 'record' : 'records'} by <b>${number(stats.artistCount)}</b> ${stats.artistCount === 1 ? 'artist' : 'artists'}${hours >= 1 ? `, about <b>${number(Math.round(hours))} hours</b> of music` : ''}${span ? `,${span}` : ''}.</p>`;
+  const lede = ledeHTML(stats);
 
   const parts = [lede, '<div id="stat-value"></div>'];
   if (stats.decades.length) parts.push(section('On the shelf', spinesHTML(stats.decades), stats.undated ? `${stats.undated} without a year.` : ''));
