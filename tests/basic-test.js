@@ -154,6 +154,7 @@ const jsFiles = [
   'public/js/sync.js',
   'public/js/db.js',
   'public/js/mock-data.js',
+  'public/js/landing-wall.js',
 ];
 
 for (const file of jsFiles) {
