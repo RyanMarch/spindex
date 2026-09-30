@@ -4,6 +4,7 @@
 // something, a tie is said out loud rather than hidden, and anything that is an estimate says "about".
 import { formatsOf, discCount } from './vinyl.js';
 import { groupCredits, creditKinds } from './sync.js';
+import { artistsOnRecord } from './track-artists.js';
 
 // How many records must have their details (or credits, tracklists, grades) before a fact built on them is worth
 // showing, and how many records the front-runner needs
@@ -156,6 +157,12 @@ function factsFromDetails(records, now) {
   const pool = [];
   const detailed = records.filter((r) => r.details);
   const withCredits = detailed.filter((r) => r.details.credits?.length);
+
+  // The record with the most different artists on it: a compilation, a soundtrack, a tribute. This is about who is billed
+  // and named on the tracks, not the musicians and crew in the credits, and needs no minimum number of records.
+  const widest = detailed.map((record) => ({ record, artists: artistsOnRecord(record).length }))
+    .sort((a, b) => b.artists - a.artists || byTitle(a.record, b.record))[0];
+  if (widest && widest.artists >= 3) pool.push(about('most-artists', 'Most artists on one record', widest.record, `${widest.artists} artists`));
 
   if (detailed.length >= MIN_COVERED) {
     const labels = tallyRecords(detailed, (r) => (r.details.labels || [])

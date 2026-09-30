@@ -1,5 +1,6 @@
 // lyrics-drawer.js - Controls the slide-over lyric sheet component
 import { fetchLyrics, formatLyricsHTML, escapeHTML } from './lyrics.js';
+import { trackCredit, lyricsArtist } from './track-artists.js';
 
 export class LyricsDrawer {
   constructor() {
@@ -181,7 +182,7 @@ export class LyricsDrawer {
   }
 
   geniusUrl(record, track) {
-    const artist = escapeHTML(record?.artist || '');
+    const artist = escapeHTML(lyricsArtist(record, track));
     const title = escapeHTML(track?.title || '');
     return `https://genius.com/search?q=${encodeURIComponent(`${artist} ${title}`)}`;
   }
@@ -204,7 +205,7 @@ export class LyricsDrawer {
     if (this.posEl) this.posEl.textContent = track.position || `Track ${index + 1}`;
     if (this.titleEl) this.titleEl.textContent = track.title || 'Untitled Track';
     if (this.subtitleEl) {
-      this.subtitleEl.textContent = `${this.record.artist || 'Unknown Artist'} · ${this.record.title || ''}`;
+      this.subtitleEl.textContent = `${trackCredit(this.record, track) || this.record.artist || 'Unknown Artist'} · ${this.record.title || ''}`;
     }
 
     // Update Stepper
@@ -246,7 +247,7 @@ export class LyricsDrawer {
 
     // Fetch lyrics
     const result = await fetchLyrics({
-      artist: this.record.artist,
+      artist: lyricsArtist(this.record, track),
       title: track.title,
       album: this.record.title,
       duration: track.duration,
