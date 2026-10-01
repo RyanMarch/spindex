@@ -514,7 +514,7 @@ export class GatefoldController {
       ['Artists', artists >= 2 ? String(artists) : ''],
       ['Label', usefulValue(label?.name) || usefulValue(record.context?.infobox?.label)],
       ['Length', calculateTotalDuration(record.tracklist) || ''],
-      ['Spins', spinsLabel(record)],
+      // ['Spins', spinsLabel(record)],
       ['Produced by', this.producers(record)],
     ].filter(([, value]) => value);
 
