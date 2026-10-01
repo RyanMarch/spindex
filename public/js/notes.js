@@ -21,6 +21,7 @@ import { parseVinyl, vinylFill } from './vinyl.js';
 import { crateArtUrl } from './crate.js';
 import { getLyricsDrawer } from './lyrics-drawer.js';
 import { trackCredit, showTrackArtists, artistsOnRecord, lyricsArtist } from './track-artists.js';
+import { spinsLabel } from './stats-facts.js';
 
 // How long opening an album waits for its Discogs details before showing what it has
 const SETTLE_MS = 160;
@@ -513,6 +514,7 @@ export class GatefoldController {
       ['Artists', artists >= 2 ? String(artists) : ''],
       ['Label', usefulValue(label?.name) || usefulValue(record.context?.infobox?.label)],
       ['Length', calculateTotalDuration(record.tracklist) || ''],
+      ['Spins', spinsLabel(record)],
       ['Produced by', this.producers(record)],
     ].filter(([, value]) => value);
 

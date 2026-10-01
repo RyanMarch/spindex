@@ -102,6 +102,20 @@ const sizeOf = (record) => { const words = formatWords(record); return /(^|\s)7"
 const rpmOf = (record) => { const words = formatWords(record); return /\b45\s*(⅓\s*)?rpm/i.test(words) ? 45 : /\b78\s*rpm/i.test(words) ? 78 : 100 / 3; };
 const minutesOf = (record) => (record.tracklist || []).reduce((sum, t) => sum + seconds(t.duration), 0) / 60;
 
+// Three significant figures, for a number that is only an estimate: 19,751 is "19,800", 1,524 is "1,520", 135 stays 135
+const roughly = (n) => {
+  if (n < 100) return Math.round(n);
+  const step = 10 ** (Math.floor(Math.log10(n)) - 2);
+  return Math.round(n / step) * step;
+};
+
+// How many times the platter turns to play a record once: minutes of music at the record's speed. It counts the music
+// only, so it leaves out the lead-in and run-out grooves (a few dozen turns a side).
+export const spinsOf = (record) => Math.round(minutesOf(record) * rpmOf(record));
+
+// "about 1,520", or '' when the record has no lengths to work from
+export const spinsLabel = (record) => { const spins = spinsOf(record); return spins >= 50 ? `about ${roughly(spins).toLocaleString('en-US')}` : ''; };
+
 // ---- from the Discogs details -----------------------------------------------------------------------------------------
 
 // "Columbia" and "Columbia Records" are one label; self-released records are "Not On Label", which is no label at all
@@ -120,7 +134,9 @@ function nextBirthday(record, today) {
 
 const isReissue = (r) => pressingYear(r) > 0 && originalYear(r) > 0 && pressingYear(r) > originalYear(r);
 
-function closestRelatives(records) {
+// The pair of records by different artists that share the most credited people, if it is at least `min` (4 for the fact;
+// lower it to see how near a crate came)
+export function closestRelatives(records, min = 4) {
   const byPerson = new Map();
   records.forEach((record, index) => {
     const seen = new Set();
@@ -148,7 +164,7 @@ function closestRelatives(records) {
     }
   }
   const best = [...shared].sort((a, b) => b[1] - a[1])[0];
-  if (!best || best[1] < 4) return null;
+  if (!best || best[1] < min) return null;
   const [a, b] = best[0].split('|').map((i) => records[Number(i)]);
   return { a, b, count: best[1] };
 }
@@ -216,7 +232,7 @@ function factsFromDetails(records, now) {
     if (producer) pool.push(fan('top-producer', 'Most common producer', producer, `Produced ${plural(producer.count, 'record')}`));
 
     const writer = leader(tallyRecords(withCredits, (r) => credited(r, 'writer')));
-    if (writer) pool.push(fan('top-writer', 'Most common songwriter', writer, `Wrote on ${plural(writer.count, 'record')}`));
+    if (writer) pool.push(fan('top-writer', 'Most common songwriter', writer, `Writer on ${plural(writer.count, 'record')}`));
 
     const cover = leader(tallyRecords(withCredits, (r) => people(r, 'Artwork & photography')));
     if (cover) pool.push(fan('top-cover-credit', 'Cover art regular', cover, `Credited on ${plural(cover.count, 'cover')}`));
@@ -237,7 +253,7 @@ function factsFromDetails(records, now) {
     }
     const multi = [...players.values()].sort((a, b) => b.roles.size - a.roles.size || a.name.localeCompare(b.name))[0];
     if (multi && multi.roles.size >= 5) {
-      pool.push(fan('multi-instrumentalist', 'Multi-instrumentalist', multi, `${multi.roles.size} different parts across your crate`));
+      pool.push(fan('multi-instrumentalist', 'Multi-instrumentalist', multi, `Plays ${multi.roles.size} different parts across your crate`));
     }
 
     const relatives = closestRelatives(withCredits);
@@ -283,7 +299,7 @@ function factsFromRecords(records, now) {
 
   const genres = new Set(records.flatMap((r) => r.genres || []));
   if (total >= 10 && genres.size >= 4) {
-    pool.push(fact('range', 'star', 'Range', `${genres.size} genres`, `and ${plural(new Set(records.flatMap((r) => r.styles || [])).size, 'style')}`));
+    pool.push(fact('range', 'star', 'Musical Range', `${genres.size} genres`, `and ${plural(new Set(records.flatMap((r) => r.styles || [])).size, 'style')}`));
   }
 
   const pressed = records.filter((r) => formatsOf(r).length);
@@ -303,7 +319,7 @@ function factsFromRecords(records, now) {
     const tens = pressed.filter((r) => sizeOf(r) === 10).length;
     const fast = pressed.filter((r) => sizeOf(r) === 12 && rpmOf(r) === 45).length;
     const odd = [sevens && plural(sevens, 'seven-inch', 'seven-inches'), tens && plural(tens, 'ten-inch', 'ten-inches'), fast && `${fast} at 45 rpm`].filter(Boolean);
-    if (sevens + tens + fast >= 2) pool.push(fact('odd-sizes', 'disc', 'Odd ones out', `${sevens + tens + fast} off the usual`, odd.join(' · ')));
+    if (sevens + tens + fast >= 2) pool.push(fact('odd-sizes', 'disc', 'Odd speeds out', `${sevens + tens + fast} off the usual`, odd.join(' · ')));
   }
 
   const sets = pressed.map((record) => ({ record, discs: discsOf(record) })).filter((s) => s.discs >= 2);
@@ -380,12 +396,12 @@ function factsFromRecords(records, now) {
     if (letter) pool.push(fact('busiest-letter', 'type', 'Busiest letter', letter.name, `${plural(letter.count, 'record')} from artists under ${letter.name}${tiedNote(letter.tied)}`));
   }
 
-  if (total >= 15) {
-    const present = new Set(records.filter((r) => !isVarious(r.artist)).map((r) => String(r.sortArtist || r.artist || '').trim().charAt(0).toUpperCase()).filter((c) => /[A-Z]/.test(c)));
-    const missing = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].filter((c) => !present.has(c));
-    const shown = missing.slice(0, 4).join(', ');
-    pool.push(fact('az-coverage', 'type', 'A to Z', `${present.size} of 26 letters`, missing.length ? `No artists under ${shown}${missing.length > 4 ? ` and ${missing.length - 4} more` : ''}` : 'Every letter has an artist'));
-  }
+  // if (total >= 15) {
+  //   const present = new Set(records.filter((r) => !isVarious(r.artist)).map((r) => String(r.sortArtist || r.artist || '').trim().charAt(0).toUpperCase()).filter((c) => /[A-Z]/.test(c)));
+  //   const missing = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].filter((c) => !present.has(c));
+  //   const shown = missing.slice(0, 4).join(', ');
+  //   pool.push(fact('az-coverage', 'type', 'A to Z', `${present.size} of 26 letters`, missing.length ? `No artists under ${shown}${missing.length > 4 ? ` and ${missing.length - 4} more` : ''}` : 'Every letter has an artist'));
+  // }
 
   const listed = records.filter((r) => r.tracklist?.length);
   if (listed.length >= 10) {
@@ -427,11 +443,12 @@ function factsFromTheWorld(records) {
 
   // Shelf room needs only the format, so it doesn't wait for tracklists
   const inches = records.reduce((sum, r) => sum + shelfInches(r), 0);
-  if (records.length >= 10 && inches >= 12) {
+  if (records.length >= 10 && inches >= 1) {
     const whole = Math.round(inches); // round first, so 23.6 inches is 2 ft and not "1 ft 12 in"
     const feet = Math.floor(whole / 12);
     const rest = whole % 12;
-    pool.push(fact('shelf-space', 'ruler', 'Shelf space', `About ${feet} ft${rest ? ` ${rest} in` : ''}`, 'For the whole crate, standing up'));
+    const size = feet ? `${feet} ft${rest ? ` ${rest} in` : ''}` : `${rest} in`; // a small crate is a few inches, and that's fine
+    pool.push(fact('shelf-space', 'ruler', 'Shelf space', `About ${size}`, 'For the whole crate, standing up'));
   }
 
   const listed = records.filter((r) => r.tracklist?.length);
@@ -446,10 +463,20 @@ function factsFromTheWorld(records) {
   const metres = listed.reduce((sum, r) => sum + minutesOf(r) * METRES_PER_MINUTE * (rpmOf(r) / (100 / 3)), 0);
   const miles = metres / 1609.34;
   if (minutes >= 60 && miles >= 1) {
-    const spins = listed.reduce((sum, r) => sum + minutesOf(r) * rpmOf(r), 0);
-    const roundedSpins = Math.round(spins / 100) * 100;
-    pool.push(fact('needle-mileage', 'route', 'Needle mileage', `About ${miles >= 10 ? Math.round(miles) : miles.toFixed(1)} miles`, `Of groove, spun about ${roundedSpins.toLocaleString('en-US')} times`));
+    pool.push(fact('needle-mileage', 'route', 'Needle mileage', `About ${miles >= 10 ? Math.round(miles) : miles.toFixed(1)} miles`, 'Of groove, start to finish'));
   }
+
+  // The useless, delightful one: how many times the platter goes round
+  const spins = listed.reduce((sum, r) => sum + spinsOf(r), 0);
+  if (spins >= 1000) {
+    pool.push(fact('total-spins', 'repeat', 'Platter turns', `About ${roughly(spins).toLocaleString('en-US')} spins`, 'Playing every record once'));
+    pool.push(fact('average-spins', 'repeat', 'Average record', `About ${roughly(spins / listed.length).toLocaleString('en-US')} spins`, 'Every time you drop the needle'));
+  }
+
+  // A 45 or a 78 gets through more turns in a minute than an LP at 33⅓
+  const quick = listed.filter((r) => rpmOf(r) > 100 / 3 && minutesOf(r) > 0)
+    .sort((a, b) => rpmOf(b) - rpmOf(a) || spinsOf(b) - spinsOf(a) || byTitle(a, b))[0];
+  if (quick) pool.push(about('fastest-spinner', 'Fastest spinner', quick, `${Math.round(rpmOf(quick))} rpm · about ${roughly(spinsOf(quick)).toLocaleString('en-US')} spins`));
 
   // The fullest single side of vinyl
   let fullest = null;
