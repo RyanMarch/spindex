@@ -110,7 +110,10 @@ graph TD
 │   │   └── <guide-slug>/           Individual user guide directories
 │   ├── assets/
 │   │   ├── apple-touch-icon.png    iOS icon asset
-│   │   └── brand/spindex-mark.svg  Application brand icon
+│   │   └── brand/
+│   │       ├── launch-button.svg   CTA button badge
+│   │       ├── spindex-mark.svg    Application brand icon
+│   │       └── spindex-mark-badge.svg Application brand icon with badge background
 │   ├── css/
 │   │   └── style.css               Complete application stylesheet
 │   └── js/

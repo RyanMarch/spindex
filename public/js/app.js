@@ -2065,7 +2065,7 @@ class App {
       if (!hadRealRecords) await this.firstRunYears();
 
       this.setSyncStatus(result.quick
-        ? (result.added > 0 ? `Added ${result.added} new ${result.added === 1 ? 'record' : 'records'}.` : 'Already up to date.')
+        ? (result.added > 0 ? `Added ${result.added} new ${result.added === 1 ? 'record' : 'records'}.` : 'Up to date.')
         : result.removed > 0 ? `Sync complete! Removed ${result.removed} ${result.removed === 1 ? 'record' : 'records'} no longer in your collection.` : 'Sync complete! Crate updated.', 'success');
       if (auto && hadRealRecords) {
         // Someone may be browsing: don't rebuild the stack under them. A small pill offers the update instead.

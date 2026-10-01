@@ -242,6 +242,9 @@ export class Wall {
     };
     this.onKey = (e) => {
       if (Date.now() - this.startedAt < 700) return;
+      if (['Shift', 'Control', 'Alt', 'Meta', 'PrintScreen', 'CapsLock'].includes(e.key)) return;
+      if (e.key.startsWith('AudioVolume') || e.key.startsWith('Media')) return;
+      if (e.metaKey || e.ctrlKey) return;
       e.preventDefault();
       e.stopPropagation();
       this.stop();
