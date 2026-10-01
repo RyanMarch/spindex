@@ -2918,14 +2918,16 @@ a.btn {
   line-height: 1.4;
 }
 
-.settings-footer-meta a {
+.settings-footer-meta a,
+.settings-footer-meta button {
   color: var(--text-muted);
   text-decoration: underline;
   text-underline-offset: 2px;
   transition: color 0.15s ease;
 }
 
-.settings-footer-meta a:hover {
+.settings-footer-meta a:hover,
+.settings-footer-meta button:hover {
   color: var(--color-accent);
 }
 
