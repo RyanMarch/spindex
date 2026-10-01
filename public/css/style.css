@@ -1986,6 +1986,15 @@ body.sleeve-open .station-container {
   text-wrap: pretty;
 }
 
+.gf-tartist {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.82em;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
 .gf-ttime {
   flex: 0 0 auto;
   font-family: var(--font-mono);
@@ -3154,7 +3163,7 @@ body.search-open .search-input:focus {
 @media (min-width: 641px) {
   .drawer-card {
     padding-top: calc(1.75rem + var(--sat));
-    padding-bottom: calc(1.75rem + var(--sab));
+    padding-bottom: 0;
     padding-right: calc(1.75rem + var(--sar));
   }
 }

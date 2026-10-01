@@ -3,6 +3,7 @@
 import { parseVinyl, formatsOf } from './vinyl.js';
 import { sortYear } from './years.js';
 import { getGenreTags } from './sync.js';
+import { computeCollectionFacts, estimatedPounds } from './stats-facts.js';
 
 const isMock = (r) => String(r.id).startsWith('discogs_mock_');
 const isVarious = (artist) => /^various(\s+artists)?$/i.test(String(artist || '').trim());
@@ -406,16 +407,19 @@ export function computeFunStats(records, { dated = [], lengths = [], runtimeSeco
 
   // 11. Estimated physical weight of the collection
   if (records.length >= 10) {
-    const approxLbs = Math.round(records.length * 0.52);
+    const approxLbs = Math.round(estimatedPounds(records)); // by disc count, size and weight of each record
     pool.push({
       id: 'collection-weight',
       type: 'fact',
       icon: 'scale',
       kicker: 'Estimated weight',
       title: `~${approxLbs} lbs`,
-      detail: `~${Math.round(approxLbs * 0.453592)} kg of vinyl`,
+      detail: `~${Math.round(approxLbs * 0.453592)} kg, sleeves and all`,
     });
   }
+
+  // 12. Everything the records themselves say: labels, credits, studios, countries, styles, titles, reissues (stats-facts.js)
+  pool.push(...computeCollectionFacts(records));
 
   return pool;
 }

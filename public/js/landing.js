@@ -412,7 +412,7 @@ export class LandingPageController {
     if (!host) return;
     const stats = computeStats(this.all);
     const pool = new Map(stats.standoutsPool.map((item) => [item.id, item]));
-    const facts = ['favorite-add-day', 'collection-weight', 'longest-track', 'most-tracks'].map((id) => pool.get(id)).filter(Boolean);
+    const facts = ['collection-weight', 'favorite-add-day', 'needle-mileage', 'flips'].map((id) => pool.get(id)).filter(Boolean);
     host.innerHTML =  /*html*/ [
       ledeHTML(stats),
       stats.decades.length ? section('On the shelf', spinesHTML(stats.decades)) : '',

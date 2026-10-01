@@ -574,7 +574,7 @@ import { sortYear, masterYearUpdates, itunesYearUpdates, isEditionTitle } from '
 }
 
 // ---- stale release details ---------------------------------------------------------------------------------------
-import { needsDeezerArt, needsItunesArt, buildCollectionRecord, scoreAlbumMatch, ART_SEARCH_VERSION, needsMasterTitleArt, titlesDiffer, needsDetails } from '../public/js/sync.js';
+import { needsDeezerArt, needsItunesArt, buildCollectionRecord, scoreAlbumMatch, ART_SEARCH_VERSION, needsMasterTitleArt, titlesDiffer, needsDetails, DETAILS_VERSION } from '../public/js/sync.js';
 
 // ---- artwork choices -------------------------------------------------------------------------------------------
 {
@@ -1000,9 +1000,12 @@ import { artControl, artChoiceUpdates } from '../public/js/artwork.js';
   assert.equal(needsDeezerArt({ ...wedding, details: undefined }), true, 'before its details are known it is treated like any other record');
 
   // details saved before the status was kept are fetched again, but only for records that could be custom (no master)
-  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: null, details: { labels: [] } }), true);
-  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: 5, details: { labels: [] } }), false, 'a record with a master cannot be custom');
-  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: null, details: { status: 'Draft' } }), false);
+  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: null, details: { labels: [], version: DETAILS_VERSION } }), true);
+  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: 5, details: { labels: [], version: DETAILS_VERSION } }), false, 'a record with a master cannot be custom');
+  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: null, details: { status: 'Draft', version: DETAILS_VERSION } }), false);
+  // details saved in an older shape (before track artists were kept) are fetched once more, whatever the record is
+  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: 5, details: { labels: [] } }), true, 'an older shape is refreshed even with a master');
+  assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1, masterId: null, details: { status: 'Draft' } }), true);
   assert.equal(needsDetails({ id: 'discogs_1', discogsId: 1 }), true, 'no details at all');
   assert.equal(needsDetails({ id: 'discogs_mock_1', discogsId: 1 }), false, 'demo records have none to fetch');
 }

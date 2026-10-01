@@ -20,6 +20,8 @@ import { isDiscogsConnected } from './discogs.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
 import { crateArtUrl } from './crate.js';
 import { getLyricsDrawer } from './lyrics-drawer.js';
+import { trackCredit, showTrackArtists, artistsOnRecord, lyricsArtist } from './track-artists.js';
+import { spinsLabel } from './stats-facts.js';
 
 // How long opening an album waits for its Discogs details before showing what it has
 const SETTLE_MS = 160;
@@ -506,10 +508,13 @@ export class GatefoldController {
 
   renderSpecs(record) {
     const label = record.details?.labels?.[0];
+    const artists = showTrackArtists(record) ? artistsOnRecord(record).length : 0;
     const rows = [
       ['Released', this.formatDate(record)],
+      ['Artists', artists >= 2 ? String(artists) : ''],
       ['Label', usefulValue(label?.name) || usefulValue(record.context?.infobox?.label)],
       ['Length', calculateTotalDuration(record.tracklist) || ''],
+      ['Spins', spinsLabel(record)],
       ['Produced by', this.producers(record)],
     ].filter(([, value]) => value);
 
@@ -526,7 +531,7 @@ export class GatefoldController {
   }
 
   lyricsUrl(record, track) {
-    return `https://genius.com/search?q=${encodeURIComponent(`${record.artist} ${track.title}`)}`;
+    return `https://genius.com/search?q=${encodeURIComponent(`${lyricsArtist(record, track)} ${track.title}`)}`;
   }
 
   renderTracklist(record) {
@@ -536,7 +541,10 @@ export class GatefoldController {
     if (tracks.length === 0) return;
 
     let hitShown = false;
-    const row = (t, idx) => `<li${!hitShown && this.hitTrack && t.title === this.hitTrack && (hitShown = true) ? ' class="is-hit"' : ''}><span class="gf-tpos">${this.escapeHTML(t.position || '·')}</span><span class="gf-tname">${this.escapeHTML(t.title)}</span><span class="gf-ttime">${this.escapeHTML(t.duration || '')}</span><button type="button" class="gf-lyrics" data-action="lyrics" data-track-index="${idx}" aria-label="View lyrics for ${this.escapeHTML(t.title)}" title="View lyrics"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 11h11M4 16h16M4 21h8"/></svg></button></li>`;
+    // A compilation (or a split, or a tribute) prints who is on each track under its title
+    const withArtists = showTrackArtists(record);
+    const byline = (t) => (withArtists && trackCredit(record, t) ? `<span class="gf-tartist">${this.escapeHTML(trackCredit(record, t))}</span>` : '');
+    const row = (t, idx) => `<li${!hitShown && this.hitTrack && t.title === this.hitTrack && (hitShown = true) ? ' class="is-hit"' : ''}><span class="gf-tpos">${this.escapeHTML(t.position || '·')}</span><span class="gf-tname">${this.escapeHTML(t.title)}${byline(t)}</span><span class="gf-ttime">${this.escapeHTML(t.duration || '')}</span><button type="button" class="gf-lyrics" data-action="lyrics" data-track-index="${idx}" aria-label="View lyrics for ${this.escapeHTML(t.title)}" title="View lyrics"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 11h11M4 16h16M4 21h8"/></svg></button></li>`;
 
     const sides = groupTracksBySide(tracks);
     if (sides && sides.length > 0) {

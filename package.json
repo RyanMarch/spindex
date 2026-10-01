@@ -9,7 +9,7 @@
     "docs:new": "node scripts/add-new-doc.js",
     "docs:build": "node scripts/generate-docs-index.js",
     "lint:syntax": "node tests/syntax-test.mjs",
-    "test": "npm run lint:syntax && node tests/basic-test.js && node tests/oauth-test.mjs && node tests/cache-test.mjs && node tests/ext-test.mjs && node tests/share-test.mjs && node tests/sw-test.mjs && node tests/vinyl-test.mjs && node tests/logic-test.mjs && node tests/barcode-test.mjs"
+    "test": "npm run lint:syntax && node tests/basic-test.js && node tests/oauth-test.mjs && node tests/cache-test.mjs && node tests/ext-test.mjs && node tests/share-test.mjs && node tests/sw-test.mjs && node tests/vinyl-test.mjs && node tests/logic-test.mjs && node tests/facts-test.mjs && node tests/track-artists-test.mjs && node tests/barcode-test.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.137.0"

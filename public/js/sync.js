@@ -1,5 +1,6 @@
 // sync.js - Discogs syncing and iTunes art enrichment
 import { upsertRecords, updateRecord, getAllRecords, deleteRecords } from './db.js';
+import { mapTrackArtists } from './track-artists.js';
 import { discogsFetch } from './discogs.js';
 import { createLimiter } from './limiter.js';
 import { noteSource } from './sourcestats.js';
@@ -1349,6 +1350,9 @@ export function mapDiscogsTracklist(list) {
     }));
 }
 
+// 2: track artists are kept
+export const DETAILS_VERSION = 2;
+
 export function parseReleaseDetails(data) {
   const seenLabels = new Set();
   const labels = [];
@@ -1361,6 +1365,8 @@ export function parseReleaseDetails(data) {
   }
 
   return {
+    // Which shape these details have, so records saved before a field existed can be fetched again (see needsDetails)
+    version: DETAILS_VERSION,
     labels,
     status: data.status || '',
     country: data.country || '',
@@ -1372,6 +1378,8 @@ export function parseReleaseDetails(data) {
       text: f.text || '',
     })),
     artists: (data.artists || []).map((a) => ({ id: a.id, name: stripDisambiguation(a.name) })),
+    // Who is on each track, for compilations and the like: { "A1": { names, credit } }; {} on an ordinary album
+    trackArtists: mapTrackArtists(data.tracklist),
     credits: (() => {
       const rawCredits = [...(data.extraartists || [])];
       for (const t of data.tracklist || []) {
@@ -1552,7 +1560,7 @@ export function loadRecordDetails(record, priority = 'high') {
     const job = (async () => {
       const result = await fetchReleaseDetails(record, priority);
       if (result.status !== 'ok') return null;
-      const updates = { details: result.details };
+      const updates = { details: refreshedDetails(record.details, result.details) };
       if ((!record.tracklist || record.tracklist.length === 0) && result.tracklist.length > 0) {
         updates.tracklist = result.tracklist;
       }
@@ -1569,17 +1577,28 @@ export function loadRecordDetails(record, priority = 'high') {
 // the release's status was kept: that status is what tells a custom release from an ordinary one, and only records without a
 // master can be custom.
 export const needsDetails = (record) => Boolean(record.discogsId) && !String(record.id).startsWith('discogs_mock_')
-  && (!record.details || (record.details.status === undefined && !record.masterId));
+  && (!record.details || (record.details.status === undefined && !record.masterId) || (record.details.version || 1) < DETAILS_VERSION);
+
+// Fresh details laid over the ones a record already had. Credits are the one thing that can be lost by fetching again:
+// they may have come from the album's master release (only done when someone opens a record), and a background fetch
+// doesn't look there, so a refresh that finds none keeps the ones already found.
+export function refreshedDetails(old, fresh) {
+  if (!old) return fresh;
+  const keep = !fresh.credits?.length && old.credits?.length;
+  return { ...fresh, credits: keep ? old.credits : fresh.credits, creditsFallbackChecked: fresh.creditsFallbackChecked || Boolean(old.creditsFallbackChecked) };
+}
 
 // Backfill full release details, one gentle request at a time. Stops if throttled and resumes next load.
 export async function enrichDetailsInBackground(records, onEach) {
-  for (const record of records) {
+  // "Various" records first: they are the compilations, where the track artists matter most
+  const variousFirst = (r) => (/^various(\s+artists)?$/i.test(String(r.artist || '').trim()) ? 0 : 1);
+  for (const record of [...records].sort((a, b) => variousFirst(a) - variousFirst(b))) {
     if (!needsDetails(record)) continue;
 
     const result = await fetchReleaseDetails(record, 'low');
     if (result.status === 'throttled') break;
     if (result.status === 'ok') {
-      const updates = { details: result.details };
+      const updates = { details: refreshedDetails(record.details, result.details) };
       if ((!record.tracklist || record.tracklist.length === 0) && result.tracklist.length > 0) {
         updates.tracklist = result.tracklist;
       }
