@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="../../assets/brand/spindex-mark.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../assets/apple-touch-icon.png">
+    <link rel="manifest" href="../../manifest.webmanifest">
+    <meta name="apple-mobile-web-app-title" content="Spindex" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="google" content="notranslate">
+    <script src="../docs-theme-loader.js"></script>
+
+    <title>Collection Stats: By the Numbers | Spindex Docs</title>
+    <meta name="description" content="See your collection by the numbers: how long it plays, a shelf of spines by decade, fun facts like its estimated weight and your cataloging habit, and what it is worth.">
+    <meta name="category" content="Features">
+    <meta name="doc-id" content="collection-insights">
+    <link rel="canonical" href="https://spindex.ryanmarch.me/docs/collection-insights/">
+
+
+
+
+
+
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Collection Stats: By the Numbers | Spindex Docs">
+    <meta property="og:description" content="See your collection by the numbers: how long it plays, a shelf of spines by decade, fun facts like its estimated weight and your cataloging habit, and what it is worth.">
+    <meta property="og:url" content="https://spindex.ryanmarch.me/docs/collection-insights/">
+    <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Docs Style Sheet -->
+    <link rel="stylesheet" href="../style.css">
+    <script src="../docs-components.js" type="module"></script>
+</head>
+
+<body class="user-docs-page">
+    <div class="app-container">
+        <!-- Mobile Navigation Overlay -->
+        <div id="mobile-overlay" class="mobile-overlay"></div>
+
+        <main class="page-container-sidebar user-docs">
+            <!-- Sidebar Navigation -->
+            <docs-sidebar></docs-sidebar>
+
+            <!-- Right-side Content & Header Wrapper -->
+            <div class="page-content-wrapper">
+                <docs-header></docs-header>
+
+                <!-- Content Area -->
+                <docs-anchor-helper>
+                    <section class="page-content" aria-label="Collection Stats Content">
+
+                        <!-- Overview -->
+                        <article id="overview" class="doc-section">
+                            <h1>Collection Stats: By the Numbers</h1>
+                            <p class="lead">
+                                The stats panel shows what your collection adds up to: how much music it holds, how it
+                                spreads across the decades, and a few facts you would never have counted yourself.
+                            </p>
+                            <p>
+                                Nearly everything is worked out on your device from the records you have synced. The
+                                one exception is the market value, which comes from Discogs.
+                            </p>
+                        </article>
+
+                        <!-- Table of Contents -->
+                        <docs-table-of-contents></docs-table-of-contents>
+
+                        <hr class="section-divider">
+
+                        <!-- Opening Stats -->
+                        <article id="opening-stats" class="doc-section">
+                            <h2>Viewing Your Statistics</h2>
+                            <p>
+                                You can open the stats panel at any time:
+                            </p>
+                            <ul>
+                                <li>Click the bar chart icon in the top header utility pill.</li>
+                                <li>Or open <strong>Settings</strong> and click the <strong>Collection stats</strong> row.</li>
+                            </ul>
+                            <p>
+                                The panel slides in from the side without disrupting your current position in the crate.
+                                It is not shown while you are browsing someone else's shared crate.
+                            </p>
+                            <figure class="doc-screenshot-figure is-sm">
+                                <img src="images/stats.png" alt="The By the numbers panel: a one-line summary of the collection, a shelf of spines for each decade, and fun facts such as estimated weight and cataloging habit" loading="lazy">
+                                <figcaption>The stats panel for the 12-record demo crate. The fun facts change each time you open it.</figcaption>
+                            </figure>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Summary -->
+                        <article id="summary" class="doc-section">
+                            <h2>The Summary</h2>
+                            <p>
+                                The panel opens with a single sentence: how many records you have, how many artists they
+                                come from, about how long they take to play, and the span of years they were released
+                                across. For the demo crate it reads <em>12 records by 12 artists, about 10 hours of
+                                music, released between 1959 and 2007.</em>
+                            </p>
+                            <ul>
+                                <li><strong>Playing time</strong> adds up the track lengths Discogs lists. A release with no lengths on file counts as zero, and the hours only show once there is at least one.</li>
+                                <li><strong>Artists</strong> are counted by name. Compilations credited to Various Artists are not counted as an artist.</li>
+                            </ul>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Worth -->
+                        <article id="worth" class="doc-section">
+                            <h2>What It Is Worth</h2>
+                            <p>
+                                When you are connected to Discogs and looking at your own collection, a line under the
+                                summary says what your collection is worth right now. It gives a median value and the
+                                range from lowest to highest, with a small marker showing where the median sits between
+                                them.
+                            </p>
+                            <p>
+                                The figure is based on current marketplace listings on Discogs, so it moves as prices
+                                move. Spindex asks for it each time you open the panel and never saves it. You will not
+                                see it in the demo crate, and if Discogs cannot be reached you will get a short note
+                                instead.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- On the Shelf -->
+                        <article id="shelf" class="doc-section">
+                            <h2>On the Shelf</h2>
+                            <p>
+                                Your records stand on a shelf, one row for each decade and one spine for every record,
+                                with the count at the end of the row. It is a quick way to see whether you are a
+                                1970s person or a 2000s person.
+                            </p>
+                            <p>
+                                Spindex uses the year shown on each record. Records with no year are left off the shelf
+                                and counted in a note underneath. In a very large crate one spine can stand for a few
+                                records, and the note says how many.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Fun Facts -->
+                        <article id="fun-facts" class="doc-section">
+                            <h2>Fun Facts</h2>
+                            <p>
+                                Below the shelf are four facts picked at random from a long list, so the panel is a
+                                little different each time you open it. They are all worked out from what is already
+                                inside your records: their Discogs details, formats, dates, tracklists, and titles.
+                            </p>
+
+                            <h3>The physical world</h3>
+                            <ul>
+                                <li><strong>Estimated weight:</strong> a rough weight for the whole pile, sleeves and all, in pounds and kilograms. It looks at each record: a double album has two discs and a bigger jacket, a 180 gram disc is heavier, and a seven-inch is a fraction of an LP.</li>
+                                <li><strong>Shelf space:</strong> about how many feet and inches of shelf the crate needs, standing up. Double albums are thicker and seven-inches are thin.</li>
+                                <li><strong>Start to finish:</strong> how many sides there are to play, which is how many times you would flip or change a record to hear everything.</li>
+                                <li><strong>Needle mileage:</strong> about how many miles of groove the needle would follow to play it all. This is an estimate: it assumes about 23 meters of groove for each minute at 33 &frac13; rpm, and more at 45.</li>
+                                <li><strong>Platter turns,</strong> the silly one: about how many times the platter goes round to play every record once, and the <strong>average record</strong> (how many turns each play takes). It is minutes of music times the record's speed, so it leaves out the few dozen turns of lead-in and run-out groove on each side.</li>
+                                <li><strong>Fastest spinner:</strong> your 45 or 78 rpm record, which gets through more turns a minute than an LP at 33 &frac13;.</li>
+                                <li><strong>Longest side of vinyl:</strong> the single side with the most music on it.</li>
+                            </ul>
+
+                            <h3>When things arrived</h3>
+                            <ul>
+                                <li><strong>Cataloging habit,</strong> <strong>biggest haul,</strong> <strong>first and latest additions,</strong> <strong>busiest month,</strong> <strong>longest dry spell,</strong> <strong>collecting since,</strong> and your <strong>pace</strong> (a new record about every so many days), all from the dates you added records to Discogs.</li>
+                                <li><strong>Next birthday:</strong> the pressing in your crate that has a release date coming up in the next two months, when Discogs knows the exact day. For a reissue, it is the pressing's birthday and not the album's.</li>
+                            </ul>
+
+                            <h3>From the full Discogs details</h3>
+                            <p>
+                                These appear once each release's details have loaded.
+                            </p>
+                            <ul>
+                                <li><strong>Most common label, recording studio, mastering studio, and pressing plant,</strong> each shown with a fan of the covers it touches. "Columbia" and "Columbia Records" count as one label, and self-released records are left out.</li>
+                                <li><strong>Label loyalty:</strong> when a few labels cover a big share of the crate.</li>
+                                <li><strong>Most common performer, producer, songwriter, and cover artist or photographer.</strong> A musician's own records do not count towards being the most common performer, so this is about the people who keep turning up on other people's albums.</li>
+                                <li><strong>Multi-instrumentalist:</strong> the person credited with the most different parts across your records.</li>
+                                <li><strong>Do it yourself:</strong> how many records were produced by their own artist.</li>
+                                <li><strong>Closest relatives:</strong> the two records by different artists that share the most credited people.</li>
+                                <li><strong>Well travelled:</strong> how many countries your pressings come from, and which one has the most.</li>
+                                <li><strong>Most people credited</strong> on a single record.</li>
+                            </ul>
+
+                            <h3>About your collection</h3>
+                            <ul>
+                                <li><strong>Collector facts:</strong> albums you own more than once in different pressings, reissues and limited editions as a share of the crate, mono pressings, multi-disc sets, and the odd ones out (seven-inches, ten-inches, and twelve-inches at 45 rpm).</li>
+                                <li><strong>Biggest reissue gap:</strong> the record whose pressing is furthest from its first release, and the <strong>average age</strong> of a record in your crate.</li>
+                                <li><strong>Condition,</strong> if you grade your records in Discogs: the share at Near Mint or better, how many sleeves are in rougher or better shape than their records, and your roughest record. Your grades are private to you.</li>
+                                <li><strong>Oldest and newest release,</strong> <strong>favorite release year,</strong> <strong>longest album, quickest spin, most tracks on one record,</strong> <strong>longest single track,</strong> and the total number of <strong>songs</strong>.</li>
+                                <li><strong>Most artists on one record:</strong> the compilation, soundtrack, or tribute with the most different artists on it. This counts the artists billed and named on each track, not the musicians and crew in the credits.</li>
+                                <li><strong>Most collected artist,</strong> <strong>favorite style,</strong> <strong>longest stretch</strong> (the artist with the widest span of years in your crate), <strong>self-titled releases,</strong> <strong>solo discoveries,</strong> and your <strong>range</strong> of genres and styles.</li>
+                                <li><strong>Word games:</strong> longest and shortest title, the shortest artist name, records named after a song on them, your busiest letter, how much of the alphabet your artists cover, the most repeated word in your song titles, and a color that keeps turning up in titles.</li>
+                            </ul>
+
+                            <p>
+                                A fact only appears when there is enough behind it. "Most common label" needs a label to
+                                show up on at least three records, and the weight estimate and cataloging habit need at
+                                least ten records in the crate. When two or more are tied, the card says so. Credits
+                                depend on what Discogs has on file for each release, so they fill in for some records
+                                and not others.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Filed Under -->
+                        <article id="filed-under" class="doc-section">
+                            <h2>Filed Under</h2>
+                            <p>
+                                A list of genres with a count beside each, like the index at the back of a book. Every
+                                record is filed under its main genre, so the counts add up to your whole collection.
+                                The seven biggest genres get a line of their own and the rest are grouped as
+                                <strong>Everything else</strong>. A record with no genre is filed as <strong>Unfiled</strong>.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Pressings -->
+                        <article id="pressings" class="doc-section">
+                            <h2>Pressings</h2>
+                            <p>
+                                This section tallies your records by how the vinyl looks: black, clear, color,
+                                marbled, splatter, swirl, split, and picture discs, each with a small disc swatch in
+                                that color. Standard black pressings are counted too, and for most collections they are
+                                the biggest line.
+                            </p>
+                            <p>
+                                Color comes from the full Discogs details for each release, which Spindex fills in
+                                gradually after a sync. Until they have all loaded, a note tells you how many records
+                                the tally covers so far.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- Added Over Time -->
+                        <article id="added-over-time" class="doc-section">
+                            <h2>Added Over Time</h2>
+                            <p>
+                                A line showing how your collection grew, month by month, from the dates you added each
+                                record to Discogs. Months where you added nothing take up their real share of the
+                                width, and each new year gets a faint marker, so a buying spree shows up as a steep
+                                climb.
+                            </p>
+                        </article>
+
+                        <hr class="section-divider">
+
+                        <!-- See More -->
+                        <article id="see-more" class="doc-section">
+                            <h2>See More</h2>
+                            <ul>
+                                <li><a href="../finding-and-filtering/">Searching &amp; Filtering</a></li>
+                                <li><a href="../digging-the-crate/">Browsing Records &amp; View Modes</a></li>
+                                <li><a href="../sharing-your-crate/">Sharing Your Crate</a></li>
+                            </ul>
+                        </article>
+
+                    </section>
+                </docs-anchor-helper>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <docs-footer></docs-footer>
+
+        <!-- Lightbox Modal -->
+        <div id="lightbox-modal" class="lightbox-modal" aria-hidden="true" role="dialog" aria-label="Image Viewer">
+            <button class="lightbox-close" aria-label="Close image viewer">&times;</button>
+            <img class="lightbox-content" id="lightbox-img" alt="">
+            <div class="lightbox-caption" id="lightbox-caption"></div>
+        </div>
+    </div>
+</body>
+
+</html>

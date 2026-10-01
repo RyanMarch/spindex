@@ -1,4 +1,6 @@
-// Crate search: a record matches on its title or artist, or on the name of one of its tracks.
+// Crate search: a record matches on its title or artist, or on the name of one of its tracks (and, on a compilation, the
+// artist of that track).
+import { trackNames } from './track-artists.js';
 
 export function fold(text) {
   return String(text || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -8,7 +10,8 @@ export function searchWords(query) {
   return fold(query).split(/\s+/).filter(Boolean);
 }
 
-// Every word has to be found together: in the album's title and artist, or in the artist plus a single track's title.
+// Every word has to be found together: in the album's title and artist, or in the artist plus a single track's title and
+// its own artist.
 // Returns null for no match, { track: null } for an album match, or { track, index } when only a track matched.
 export function matchRecord(record, words) {
   if (!words.length) return { track: null };
@@ -18,7 +21,7 @@ export function matchRecord(record, words) {
   const tracks = Array.isArray(record.tracklist) ? record.tracklist : [];
   for (let index = 0; index < tracks.length; index += 1) {
     const title = tracks[index]?.title;
-    if (title && has(`${fold(title)} ${artist}`)) return { track: title, index };
+    if (title && has(`${fold(title)} ${artist} ${fold(trackNames(record, tracks[index]).join(' '))}`)) return { track: title, index };
   }
   return null;
 }

@@ -5,20 +5,412 @@
   <meta charset="UTF-8">
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="description" content="Browse your Discogs record collection like flipping through a crate">
+  <meta name="description" content="Dig through your Discogs record collection like a real crate. Flip through big covers, tracklists, liner notes and lyrics, scan barcodes, and share a link.">
+  <link rel="canonical" href="https://spindex.ryanmarch.me/">
   <meta name="theme-color" content="#0c0c10">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Spindex">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+
+  <!-- What a link to Spindex looks like when it is pasted into a message or shared. The image is a placeholder (the logo). -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Spindex">
+  <meta property="og:title" content="Spindex: dig through your records like a real crate">
+  <meta property="og:description" content="Turn your Discogs collection into a stack you can flip through. Big covers, full tracklists, liner notes and lyrics, all in your browser.">
+  <meta property="og:url" content="https://spindex.ryanmarch.me/">
+  <meta property="og:image" content="https://spindex.ryanmarch.me/assets/apple-touch-icon.png">
+  <meta property="og:image:width" content="180">
+  <meta property="og:image:height" content="180">
+  <meta property="og:image:alt" content="The Spindex logo">
+  <meta name="twitter:card" content="summary">
+
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Spindex",
+      "url": "https://spindex.ryanmarch.me/",
+      "description": "Browse your Discogs record collection like a real crate: big covers, full tracklists, liner notes, lyrics, collection stats and a screensaver.",
+      "applicationCategory": "MusicApplication",
+      "operatingSystem": "Any"
+    }
+  </script>
+
+  <!-- Without JavaScript the app can't run, so show the home page (its text is already in this page) instead of nothing -->
+  <noscript>
+    <style>
+      body { overflow: auto !important; height: auto !important; }
+      #landing-page[hidden] { display: block !important; }
+      .app-layout, #status-stack,
+      .landing-station, .landing-view-display, #landing-stats, #landing-gatefold-art, #landing-wall,
+      [data-landing-action], [data-landing-connect] { display: none !important; }
+    </style>
+  </noscript>
+  <script>
+    // A first-time visit gets the home page, but the app can only decide that once it has loaded. Until it has, keep the
+    // app out of sight so there is no flash of the demo crate first. (app.js lifts this; so does a timer, in case it can't.)
+    try {
+      var q = location.search;
+      var about = location.pathname === '/about' || /[?&]about\b/.test(q);
+      var first = (location.pathname === '/' || location.pathname.indexOf('/album/') === 0) && !localStorage.getItem('spindex_welcomed') && !/[?&](demo|crate|wall|discogs)\b/.test(q);
+      if (about || first) {
+        document.documentElement.classList.add('landing-pending');
+        setTimeout(function () { document.documentElement.classList.remove('landing-pending'); }, 4000);
+      }
+    } catch (e) { /* storage blocked: the app just shows as usual */ }
+  </script>
   <title>Spindex | Your record collection</title>
   <link rel="stylesheet" href="/css/style.css?v=139">
+  <link rel="stylesheet" href="/css/landing.css?v=8">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="/assets/brand/spindex-mark.svg">
 </head>
 
 <body>
-  <!-- Everything the app wants to say without being asked, in one stack so nothing lands on top of anything else -->
+  <!-- Landing / marketing page: first-time visitors, /about, and Settings > About -->
+  <div id="landing-page" class="landing-page" hidden>
+    <header class="landing-nav">
+      <div class="landing-nav-inner">
+        <a href="#top" class="landing-brand">
+          <img src="/assets/brand/spindex-mark.svg" width="26" height="26" alt="">
+          <span>Spindex</span>
+        </a>
+        <nav class="landing-nav-menu" aria-label="Sections">
+          <a href="#features">The crate</a>
+          <a href="#gatefold">Gatefold</a>
+          <a href="#screensaver">Screensaver</a>
+          <a href="#insights">Stats</a>
+          <a href="/docs/">Guides</a>
+        </nav>
+        <div class="landing-nav-actions">
+          <a href="/api/discogs/login" class="text-btn landing-nav-connect" data-landing-connect>Load my collection</a>
+          <button type="button" class="btn btn-primary" data-landing-action="enter-crate"
+            data-label-connected="Open my crate">Try the demo</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- Cover: the same two-column station as the app, a vertical stack on the left and the record's details on the right -->
+      <section class="landing-hero" id="top">
+        <h1 class="landing-title">Dig through your records <em>like a real crate.</em></h1>
+
+        <div class="landing-deck">
+          <p class="landing-lede">
+            Spindex turns your record collection into a stack to dig through. Big covers, full tracklists,
+            liner notes, and lyrics.
+          </p>
+          <div class="landing-deck-actions">
+            <div class="landing-actions">
+              <button type="button" class="btn btn-primary" data-landing-action="enter-crate"
+                data-label-connected="Open my crate">Try the demo</button>
+              <a href="/api/discogs/login" class="btn btn-secondary" data-landing-connect>Load my collection</a>
+            </div>
+            <noscript><p class="landing-fineprint">Spindex runs in your browser, so it needs JavaScript turned on to open a crate.</p></noscript>
+          </div>
+        </div>
+
+        <div class="landing-station">
+          <div class="landing-stack-col">
+            <div class="landing-crate-glow" id="landing-crate-glow" aria-hidden="true"></div>
+            <div class="landing-crate-floor" aria-hidden="true"></div>
+            <div class="landing-stack-clip">
+              <div class="landing-stack" id="landing-crate-stage" tabindex="0" role="group"
+                aria-roledescription="carousel"
+                aria-label="A few records from the demo crate. Use the up and down arrow keys to flip through them, and Enter to open one.">
+              </div>
+            </div>
+          </div>
+
+          <div class="landing-meta">
+            <h2 class="meta-title" id="landing-meta-title" aria-live="polite"></h2>
+            <p class="meta-artist" id="landing-meta-artist"></p>
+            <div class="meta-details-row">
+              <span id="landing-meta-year"></span>
+              <span id="landing-meta-duration"></span>
+              <span id="landing-meta-tracks"></span>
+            </div>
+            <div class="meta-genres" id="landing-meta-genres"></div>
+            <div class="meta-actions">
+              <button type="button" class="meta-inspect-btn" id="landing-open-btn">
+                Open Sleeve
+                <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" fill="none" stroke-width="2"
+                  aria-hidden="true">
+                  <path d="M5 12h14M12 5l7 7-7 7"></path>
+                </svg>
+              </button>
+            </div>
+            <div class="landing-pager" role="group" aria-label="Move through the crate">
+              <button type="button" class="nav-pill-btn" id="landing-crate-prev" aria-label="Previous record">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2.5"
+                  aria-hidden="true">
+                  <path d="M18 15l-6-6-6 6"></path>
+                </svg>
+              </button>
+              <span class="nav-pill-counter" id="landing-crate-count"></span>
+              <button type="button" class="nav-pill-btn" id="landing-crate-next" aria-label="Next record">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2.5"
+                  aria-hidden="true">
+                  <path d="M6 9l6 6 6-6"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- The crate -->
+      <section class="landing-section" id="features">
+        <p class="landing-kicker"><span>01</span> The crate</p>
+        <h2 class="landing-statement">
+          See the whole crate and <em>the next record a flip away.</em>
+        </h2>
+
+        <div class="landing-columns">
+          <div class="landing-prose">
+            <p>
+              Spindex shows high-resolution artwork of your current record and keeps the rest a flick away. Scroll, tap
+              the arrow keys, or swipe your way through the stack.
+            </p>
+            <p>
+              Search by title, artist or even a song. Filter by genre, jump by letter or decade, or hit Surprise Me
+              when you can't decide. Behind it all, a soft glow picks up color from whichever cover you're holding.
+            </p>
+            <p class="landing-prose-links">
+              <a href="/docs/digging-the-crate/" class="landing-link">Digging the crate</a>
+              <a href="/docs/finding-and-filtering/" class="landing-link">Finding &amp; filtering</a>
+            </p>
+          </div>
+
+          <div class="landing-views">
+            <div class="landing-seg" role="tablist" aria-label="Preview a view">
+              <button type="button" role="tab" class="landing-seg-btn active" aria-selected="true"
+                data-view-type="stack">Stack</button>
+              <button type="button" role="tab" class="landing-seg-btn" aria-selected="false"
+                data-view-type="grid">Grid</button>
+              <button type="button" role="tab" class="landing-seg-btn" aria-selected="false"
+                data-view-type="list">List</button>
+            </div>
+            <div id="landing-view-display" class="landing-view-display" role="tabpanel"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 02 Gatefold -->
+      <section class="landing-section landing-rule" id="gatefold">
+        <p class="landing-kicker"><span>02</span> Gatefold inspector</p>
+        <div class="landing-split">
+          <div class="landing-gatefold-art" id="landing-gatefold-art" aria-hidden="true"></div>
+          <div class="landing-split-copy">
+            <h2 class="landing-headline">Open the sleeve. <em>Read the whole record.</em></h2>
+            <p class="landing-sub">
+              Pick any record and the jacket opens. Liner notes, label information, pressings, credits, and tracklists
+              all displayed like you're holding the record in your lap.
+            </p>
+            <dl class="landing-credits">
+              <div>
+                <dt>Wax</dt>
+                <dd>See the color of your specific pressing: black, splatter, marble, translucent or picture disc.
+                </dd>
+              </div>
+              <div>
+                <dt>Sleeve</dt>
+                <dd>Flip the jacket over for the back cover, then read the tracklist, liner notes, and credits.</dd>
+              </div>
+              <div>
+                <dt>Words</dt>
+                <dd>Open a lyric sheet beside the record and sing along with the songs as they play on your turntable.
+                </dd>
+              </div>
+              <div>
+                <dt>Crew</dt>
+                <dd>Spot the producers, writers, and labels that turn up again and again across your shelves.</dd>
+              </div>
+            </dl>
+            <a href="/docs/gatefold-album-inspector/" class="landing-link">Gatefold inspector guide</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- 03 Screensaver: a full-bleed wall with the copy set on top of it -->
+      <section class="landing-poster" id="screensaver">
+        <div class="landing-wall" id="landing-wall" aria-hidden="true"></div>
+        <div class="landing-poster-inner">
+          <div class="landing-poster-panel">
+            <p class="landing-kicker"><span>03</span> Screensaver</p>
+            <h2 class="landing-headline">Leave it on beside the turntable.</h2>
+            <p class="landing-sub">
+              Sit back and watch as your album covers drift slowly across the screen. See highlights from your
+              collection with artist, title, and year.
+            </p>
+            <ul class="landing-ticks">
+              <li>Mirror it to a TV or prop up a display next to the speakers.</li>
+              <li>It goes full screen and keeps the display awake.</li>
+              <li>Press <kbd>4</kbd> anywhere in Spindex, or bookmark <code>/?wall</code> to start straight into it.
+              </li>
+            </ul>
+            <div class="landing-actions">
+              <a href="/?wall" class="btn btn-secondary">Start the screensaver</a>
+              <a href="/docs/screensaver-mode/" class="landing-link">Screensaver guide</a>
+            </div>
+            <!-- <p class="landing-fineprint">Screensaver needs a tablet-sized screen or larger.</p> -->
+          </div>
+        </div>
+      </section>
+
+      <!-- 04 Fine print, as a tracklist -->
+      <section class="landing-section" id="utilities">
+        <p class="landing-kicker"><span>04</span> The fine print</p>
+        <h2 class="landing-statement">Your collection stays yours. <em>Here's the tracklist.</em></h2>
+
+        <ol class="landing-tracks">
+          <li class="landing-side" aria-hidden="true">Side A &middot; Handy</li>
+          <li class="landing-track">
+            <span class="landing-track-pos">A1</span>
+            <div>
+              <h3>Scan a barcode, add a record</h3>
+              <p>Point your camera at the barcode on a jacket to find the exact pressing, then add it to your
+                collection.
+                No camera? Upload a photo or type the number.</p>
+            </div>
+            <a href="/docs/barcode-scanner/" class="landing-link">Guide</a>
+          </li>
+          <li class="landing-track">
+            <span class="landing-track-pos">A2</span>
+            <div>
+              <h3>Works offline</h3>
+              <p>Once your collection has loaded, the covers, tracklists and details are right there on your device.
+                Bookmark it and dig anywhere, even without a signal.</p>
+            </div>
+            <a href="/docs/getting-started/" class="landing-link">Guide</a>
+          </li>
+          <li class="landing-track">
+            <span class="landing-track-pos">A3</span>
+            <div>
+              <h3>Share a link, keep the details</h3>
+              <p>Send friends an unlisted, read-only link. Prices, condition grades and your notes never leave your
+                device, and you can switch the link off whenever you like.</p>
+            </div>
+            <a href="/docs/sharing-your-crate/" class="landing-link">Guide</a>
+          </li>
+          <li class="landing-side" aria-hidden="true">Side B &middot; Private</li>
+          <li class="landing-track">
+            <span class="landing-track-pos">B1</span>
+            <div>
+              <h3>Your records live on your device</h3>
+              <p>Your collection is visible only to you, and those who you choose to share a link with.</p>
+            </div>
+            <a href="/terms#privacy" class="landing-link">Privacy</a>
+          </li>
+          <li class="landing-track">
+            <span class="landing-track-pos">B2</span>
+            <div>
+              <h3>Sign in with Discogs</h3>
+              <p>Use your Discogs account to sign in. Spindex won't ever see your password or any other data.</p>
+            </div>
+            <a href="/docs/getting-started/" class="landing-link">Guide</a>
+          </li>
+          <li class="landing-track">
+            <span class="landing-track-pos">B3</span>
+            <div>
+              <h3>No ads, no trackers</h3>
+              <p>No advertising scripts, no tracking pixels, no analytics watching what you browse. Nothing about
+                your collection is sold.</p>
+            </div>
+            <a href="/terms#privacy" class="landing-link">Privacy</a>
+          </li>
+        </ol>
+      </section>
+
+      <!-- 05 Stats: the app's own panel, computed from the demo crate -->
+      <section class="landing-section landing-rule" id="insights">
+        <p class="landing-kicker"><span>05</span> By the numbers</p>
+        <h2 class="landing-statement">See the shape of your shelf. <em>Understand your collection.</em></h2>
+
+        <div class="landing-stats-split">
+          <div class="landing-stats-copy">
+            <p class="landing-sub">
+              Anyone can count their records. Spindex works out the things you'd never add up yourself.
+            </p>
+            <ul class="landing-questions">
+              <li>How much does the whole pile weigh?</li>
+              <li>What is it worth right now?</li>
+              <li>Which day do you add records most?</li>
+              <li>How long would it take to play it all?</li>
+              <li>What color are the records in your crate?</li>
+            </ul>
+            <a href="/docs/collection-insights/" class="landing-link">About collection stats</a>
+          </div>
+          <div>
+            <div class="landing-stats stats-content" id="landing-stats"></div>
+            <p class="landing-fineprint">
+              View your collection's stats panel. See what your collection is worth, live from Discogs
+              marketplace listings. Catch new and interesting facts about your collection as you go.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Closing: one full page of spot color -->
+      <section class="landing-close">
+        <div class="landing-close-inner">
+          <h2>Start digging.</h2>
+          <p>
+            Look around the demo first, or load your own collection.
+          </p>
+          <div class="landing-actions">
+            <button type="button" class="btn btn-secondary" data-landing-action="enter-crate"
+              data-label-connected="Open my crate">Try the demo</button>
+            <a href="/api/discogs/login" class="text-btn" data-landing-connect>Load my collection</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="landing-footer">
+      <div class="landing-footer-inner">
+        <div class="landing-footer-brand">
+          <a href="#top" class="landing-brand">
+            <img src="/assets/brand/spindex-mark.svg" width="22" height="22" alt="">
+            <span>Spindex</span>
+          </a>
+          <p>A virtual record crate for people who still buy the physical thing.</p>
+        </div>
+        <nav aria-label="Try it">
+          <h4>Try it</h4>
+          <ul>
+            <li><a href="#" data-landing-action="enter-crate" data-label-connected="Open my crate">Try the demo</a></li>
+            <li><a href="/?wall">Screensaver</a></li>
+            <li><a href="/api/discogs/login" data-landing-connect>Load my collection</a></li>
+          </ul>
+        </nav>
+        <nav aria-label="Guides">
+          <h4>Guides</h4>
+          <ul>
+            <li><a href="/docs/getting-started/">Getting started</a></li>
+            <li><a href="/docs/gatefold-album-inspector/">Gatefold inspector</a></li>
+            <li><a href="/docs/barcode-scanner/">Barcode scanner</a></li>
+            <li><a href="/docs/">All guides</a></li>
+          </ul>
+        </nav>
+        <nav aria-label="About">
+          <h4>About</h4>
+          <ul>
+            <li><a href="/terms">Terms of service</a></li>
+            <li><a href="/terms#privacy">Privacy</a></li>
+            <li><a href="https://github.com/RyanMarch/spindex" target="_blank" rel="noopener">GitHub</a></li>
+          </ul>
+        </nav>
+      </div>
+      <div class="landing-footer-bottom">
+        <span>&copy; 2026 Ryan March. Record data from Discogs, MusicBrainz, Wikidata, and LRCLIB.</span>
+        <span>Spindex uses the Discogs API but is not affiliated with, sponsored or endorsed by Discogs.
+          &lsquo;Discogs&rsquo; is a trademark of Zink Media, LLC.</span>
+      </div>
+    </footer>
+  </div>
+
   <div id="status-stack" class="status-stack">
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
     <button id="update-pill" class="update-pill" type="button" hidden>Updated. Tap to refresh</button>
@@ -66,12 +458,11 @@
 
 
         <!-- Fixed-footprint region: opening search fades this content out and
-             overlays the input on top instead of resizing anything, so
-             nothing else in the header ever has to move to make room -->
+             overlays the input on top -->
         <div class="browse-controls">
           <div class="view-switch" role="group" aria-label="How to browse">
             <button type="button" class="view-btn" data-view="stack" aria-pressed="true" aria-label="Stack view"
-              title="Stack">
+              data-tooltip="Stack">
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
                 stroke-linejoin="round">
                 <rect x="6" y="3" width="12" height="5" rx="1"></rect>
@@ -80,7 +471,7 @@
               </svg>
             </button>
             <button type="button" class="view-btn" data-view="grid" aria-pressed="false" aria-label="Grid view"
-              title="Grid">
+              data-tooltip="Grid">
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
                 stroke-linejoin="round">
                 <rect x="3" y="3" width="7.5" height="7.5" rx="1"></rect>
@@ -90,7 +481,7 @@
               </svg>
             </button>
             <button type="button" class="view-btn" data-view="list" aria-pressed="false" aria-label="List view"
-              title="List">
+              data-tooltip="List">
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
                 stroke-linecap="round">
                 <line x1="8" y1="6" x2="21" y2="6"></line>
@@ -105,8 +496,7 @@
 
           <!-- Shapes what's currently in the crate: surprise, filter, search -->
           <div class="action-pill" id="crate-tools-pill">
-            <button id="surprise-btn" class="icon-btn" aria-label="Surprise me"
-              title="Surprise me: jump to a random record">
+            <button id="surprise-btn" class="icon-btn" aria-label="Surprise me" data-tooltip="Surprise me">
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="16 3 21 3 21 8"></polyline>
@@ -118,7 +508,7 @@
             </button>
 
             <button id="filter-toggle-btn" class="icon-btn filter-toggle" aria-label="Filter the crate"
-              title="Filter by decade, size, pressing, discs, speed">
+              data-tooltip="Filter">
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
                 stroke-linecap="round">
                 <line x1="4" y1="6" x2="20" y2="6"></line>
@@ -130,7 +520,7 @@
 
             <form class="crate-search" id="crate-search" role="search" autocomplete="off">
               <button type="button" id="search-toggle-btn" class="icon-btn" aria-label="Search the crate"
-                title="Search (/)">
+                data-tooltip="Search (/)">
                 <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
                   stroke-linecap="round">
                   <circle cx="11" cy="11" r="7"></circle>
@@ -144,9 +534,9 @@
           </div>
         </div>
 
-        <!-- Steps outside the crate: collection stats, app & sync settings -->
+        <!-- Collection stats, app, sync, & share settings -->
         <div class="action-pill" id="header-utility-pill">
-          <button id="stats-toggle-btn" class="icon-btn" aria-label="Collection stats" title="Collection stats">
+          <button id="stats-toggle-btn" class="icon-btn" aria-label="Collection stats" data-tooltip="Collection stats">
             <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
               <line x1="5" y1="20" x2="5" y2="11"></line>
@@ -155,8 +545,7 @@
             </svg>
           </button>
 
-          <button id="settings-toggle-btn" class="icon-btn" aria-label="Open settings"
-            title="Sync & Collection Settings">
+          <button id="settings-toggle-btn" class="icon-btn" aria-label="Open settings" data-tooltip="Settings">
             <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2">
               <circle cx="12" cy="12" r="3"></circle>
               <path
@@ -171,7 +560,8 @@
 
     <!-- Digging Crate: Primary Browsing Stage -->
     <main class="crate-stage" id="crate-stage">
-      <button id="demo-note" class="demo-note" type="button" hidden>Demo crate. Tap to connect your Discogs.</button>
+      <button id="demo-note" class="demo-note" type="button" hidden>Browsing the demo crate. Tap to connect to
+        Discogs.</button>
       <!-- Dynamic Ambient Backdrop Glow -->
       <div id="ambient-glow" class="ambient-glow" aria-hidden="true">
         <canvas id="ambient-glow-img" class="ambient-glow-img" width="64" height="64"></canvas>
@@ -683,26 +1073,11 @@
           <!-- Not connected -->
           <div id="discogs-connect" hidden>
             <p class="settings-desc">Sign in with Discogs to bring in your collection. Spindex reads your collection and
-              release details only, and your login stays on this site's server. After that, press Check now whenever you
-              want to look for new records.
+              release details.
             </p>
             <a id="discogs-connect-btn" class="btn btn-primary" href="/api/discogs/login">Connect Discogs</a>
           </div>
-          <p class="settings-desc" id="discogs-unconfigured" hidden>Discogs sign-in isn't set up on this server yet. You
-            can still connect with a personal access token below.</p>
 
-          <details class="settings-advanced" id="discogs-token-details">
-            <summary>Use a personal access token instead</summary>
-            <label for="discogs-username">Username</label>
-            <input type="text" id="discogs-username" placeholder="vinylfan42" autocomplete="off" />
-
-            <label for="discogs-token">Personal Access Token</label>
-            <input type="password" id="discogs-token" placeholder="Discogs User Token" autocomplete="off" />
-            <small class="settings-hint">Generate one at discogs.com/settings/developers</small>
-
-            <button id="sync-token-btn" class="btn btn-secondary" style="margin-top: 1.25rem;">Save token &amp;
-              sync</button>
-          </details>
 
           <div id="sync-status" class="sync-status"></div>
         </div>
@@ -734,6 +1109,7 @@
           <button id="settings-wall-btn" class="settings-row" type="button" hidden>Screensaver</button>
           <button id="settings-help-btn" class="settings-row settings-row-keys" type="button">Keyboard
             shortcuts</button>
+          <button id="settings-about-row-btn" class="settings-row" type="button">About Spindex</button>
           <details class="settings-advanced" id="health-details">
             <summary>Diagnostics <span class="health-summary" id="health-summary"></span></summary>
             <div id="health-content" class="health-content"></div>
@@ -755,6 +1131,11 @@
           <div class="settings-footer-meta">
             <span>&copy; <span id="settings-year">2026</span> <a href="https://ryanmarch.me/" target="_blank"
                 rel="noopener">Ryan March</a></span>
+            <span class="settings-footer-dot" aria-hidden="true">&bull;</span>
+            <button id="settings-about-btn" class="settings-terms-link" type="button"
+              style="background:none;border:none;padding:0;cursor:pointer;font:inherit;color:inherit;">About</button>
+            <span class="settings-footer-dot" aria-hidden="true">&bull;</span>
+            <a href="/docs/" class="settings-terms-link">Guides</a>
             <span class="settings-footer-dot" aria-hidden="true">&bull;</span>
             <a href="/terms" class="settings-terms-link">Terms</a>
           </div>

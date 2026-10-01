@@ -3,3 +3,8 @@
 
 # A shared, read-only crate: /s/<id> serves the app, which reads the snapshot for that id
 /s/*  /  200
+
+# Home & marketing page
+/about  /  200
+/about/*  /  200
+

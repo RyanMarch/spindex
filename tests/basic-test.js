@@ -29,6 +29,8 @@ const requiredFiles = [
   'public/js/years.js',
   'public/js/syncplan.js',
   'public/js/stats.js',
+  'public/js/stats-facts.js',
+  'public/js/track-artists.js',
   'public/js/statsview.js',
   'public/js/mock-data.js',
   'public/js/barcode.js',
@@ -150,10 +152,14 @@ const jsFiles = [
   'public/js/years.js',
   'public/js/syncplan.js',
   'public/js/stats.js',
+  'public/js/stats-facts.js',
+  'public/js/track-artists.js',
   'public/js/statsview.js',
   'public/js/sync.js',
   'public/js/db.js',
   'public/js/mock-data.js',
+  'public/js/landing.js',
+  'public/js/landing-wall.js',
 ];
 
 for (const file of jsFiles) {
@@ -168,7 +174,7 @@ for (const file of jsFiles) {
 }
 
 // 5. Verify rule: no forbidden word 'premium' in text content
-for (const file of [...jsFiles, 'public/index.html', 'public/css/style.css']) {
+for (const file of [...jsFiles, 'public/index.html', 'public/css/style.css', 'public/css/landing.css']) {
   const content = fs.readFileSync(path.join(root, file), 'utf8');
   assert.ok(!content.toLowerCase().includes('premium'), `File ${file} contains forbidden word "premium"`);
 }
@@ -193,6 +199,55 @@ assert.equal(testCrate.records[testCrate.currentIndex].artist, 'Hayley Williams'
 // Pressing 'B' should jump to David Bowie (index 0)
 testCrate.jumpToLetter('B');
 assert.equal(testCrate.currentIndex, 0);
+
+// 7. The demo crate's numbers feed the stats panel and the home page, so its tracklists must be whole records
+const seconds = (duration) => duration.split(':').reduce((total, part) => total * 60 + Number(part), 0);
+const runtime = (title) => {
+  const record = MOCK_RECORDS.find((r) => r.title === title);
+  return { tracks: record.tracklist.length, minutes: record.tracklist.reduce((sum, t) => sum + seconds(t.duration), 0) / 60 };
+};
+assert.equal(runtime('London Calling').tracks, 19, 'London Calling is a 19-track double album');
+assert.ok(runtime('London Calling').minutes > 63 && runtime('London Calling').minutes < 67, 'London Calling runs about 65 minutes');
+assert.equal(runtime('Hounds of Love').tracks, 12, 'Hounds of Love has 12 tracks');
+assert.equal(runtime('Diamond Life').tracks, 9, 'Diamond Life has 9 tracks');
+assert.equal(runtime('Dummy').tracks, 11, 'Dummy has 11 tracks');
+for (const record of MOCK_RECORDS) {
+  assert.ok(record.tracklist.every((t) => /^\d+:\d{2}$/.test(t.duration)), `Every demo track needs a m:ss length: ${record.title}`);
+  assert.ok(runtime(record.title).minutes >= 30, `A full-length record should run at least 30 minutes: ${record.title}`);
+}
+
+// 8. Spindex can add a scanned record to the user's Discogs collection, so the home page must not call it read-only
+const indexHtml = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
+const homePage = indexHtml.slice(indexHtml.indexOf('id="landing-page"'), indexHtml.indexOf('id="status-stack"')).replace(/<!--[\s\S]*?-->/g, '');
+assert.ok(!/read-only (sign|access|permission)|reads only|never (write|change)/i.test(homePage), 'The home page must not describe Discogs access as read-only');
+
+// 9. Sharing and search: what a pasted link looks like, and what crawlers may (and may not) take
+const tag = (pattern) => (indexHtml.match(pattern) || [])[1];
+assert.equal(tag(/<link rel="canonical" href="([^"]+)"/), 'https://spindex.ryanmarch.me/', 'The app page needs a canonical address');
+assert.ok(tag(/property="og:title" content="([^"]+)"/), 'The app page needs an og:title');
+assert.ok(tag(/property="og:description" content="([^"]+)"/), 'The app page needs an og:description');
+assert.equal(tag(/name="twitter:card" content="([^"]+)"/), 'summary', 'The placeholder logo needs a small-image card');
+const ogImage = tag(/property="og:image" content="([^"]+)"/);
+assert.ok(ogImage?.startsWith('https://'), 'og:image must be an absolute address');
+assert.ok(fs.existsSync(path.join(root, 'public', new URL(ogImage).pathname)), `og:image must be a file that exists: ${ogImage}`);
+const description = tag(/name="description" content="([^"]+)"/);
+assert.ok(description.length >= 70 && description.length <= 170, `The description should fit a search result: ${description.length} characters`);
+JSON.parse(tag(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)); // throws if the structured data is not valid JSON
+
+const robots = fs.readFileSync(path.join(root, 'public/robots.txt'), 'utf8');
+for (const disallowed of ['/s/', '/api/', '/album/']) {
+  assert.ok(robots.split('\n').includes(`Disallow: ${disallowed}`), `robots.txt must keep crawlers out of ${disallowed}`);
+}
+assert.ok(robots.includes('Sitemap: https://spindex.ryanmarch.me/sitemap.xml'), 'robots.txt must point at the sitemap');
+const sitemap = fs.readFileSync(path.join(root, 'public/sitemap.xml'), 'utf8');
+const listed = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]).pathname);
+assert.ok(listed.includes('/') && listed.includes('/docs/'), 'The sitemap lists the home page and the guides');
+assert.ok(!listed.some((p) => p.startsWith('/s/') || p.startsWith('/album/') || p === '/about'), 'The sitemap must not list shares, albums or /about');
+for (const dir of fs.readdirSync(path.join(root, 'public/docs'), { withFileTypes: true }).filter((d) => d.isDirectory())) {
+  if (fs.existsSync(path.join(root, 'public/docs', dir.name, 'index.html'))) {
+    assert.ok(listed.includes(`/docs/${dir.name}/`), `Run npm run docs:build: the sitemap is missing the ${dir.name} guide`);
+  }
+}
 
 console.log('All basic and integration tests passed successfully.');
 
