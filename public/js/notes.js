@@ -16,7 +16,7 @@ import { usefulValue, isCustomRelease } from './values.js';
 import { externalFetch } from './external.js';
 import { artControl, artChoiceUpdates } from './artwork.js';
 import { fixTimeSignatures, fetchAlbumSections, fetchInfobox, fetchArtistBio, fetchBackCover, findAlbumPage, isVariousArtists } from './wiki.js';
-import { isDiscogsConnected } from './discogs.js';
+import { isDiscogsConnected, pauseDiscogsBackground, resumeDiscogsBackground } from './discogs.js';
 import { parseVinyl, vinylFill } from './vinyl.js';
 import { crateArtUrl } from './crate.js';
 import { getLyricsDrawer } from './lyrics-drawer.js';
@@ -251,6 +251,8 @@ export class GatefoldController {
       this.workspace.setAttribute('aria-hidden', 'false');
     }
 
+    pauseDiscogsBackground('gatefold');
+
     // Once the page has finished appearing, late arrivals fade in
     this.popInTimer = setTimeout(() => { this.popInReady = true; }, 500);
 
@@ -264,6 +266,7 @@ export class GatefoldController {
 
   // silent: the address bar already changed (Back button), so don't touch it again
   closeGatefold(silent = false) {
+    resumeDiscogsBackground('gatefold');
     getLyricsDrawer().close();
     this.renderToken++;
     this.popInReady = false;

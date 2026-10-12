@@ -11,6 +11,7 @@ const state = {
   username: '',
   configured: false, // does this server have a Discogs application set up at all?
   remaining: null, // requests left in Discogs' current rate-limit window, when the proxy reports it
+  remainingAt: 0, // timestamp when remaining was last updated
 };
 
 const listeners = new Set();
@@ -58,7 +59,10 @@ async function send(path, init) {
   }
 
   const remaining = res.headers.get('x-discogs-ratelimit-remaining');
-  if (remaining !== null) state.remaining = Number(remaining);
+  if (remaining !== null) {
+    state.remaining = Number(remaining);
+    state.remainingAt = Date.now();
+  }
   return res;
 }
 
@@ -73,13 +77,20 @@ export async function discogsFetch(path, init = {}, priority = 'high') {
 // Queue activity, for the "filling in details" indicator: fn({ pending, high, low, pausedUntil })
 export const onDiscogsQueue = (fn) => limiter.subscribe(fn);
 
-// How long to wait between background requests. Normally just over a second; slower when Discogs says we're close to
-// the limit (60 a minute), which the proxy reports back on every response.
+// Pause or resume low-priority background work while interactive actions (barcode scanner, album inspector) are active
+export const pauseDiscogsBackground = (reason) => limiter.pauseLow(reason);
+export const resumeDiscogsBackground = (reason) => limiter.resumeLow(reason);
+
+// How long to wait between background requests. Spaced conservatively (2.5s) to leave headroom for multiple devices
+// on the same network and instant interactive searches. Slows further when Discogs reports nearing the 60/min limit.
 export function paceMs() {
-  if (state.remaining === null) return 1100;
-  if (state.remaining <= 3) return 15000;
-  if (state.remaining <= 8) return 4000;
-  return 1100;
+  const isFresh = state.remainingAt && (Date.now() - state.remainingAt < 60000);
+  const remaining = isFresh ? state.remaining : null;
+  if (remaining === null) return 2500;
+  if (remaining <= 3) return 15000;
+  if (remaining <= 8) return 6000;
+  if (remaining <= 15) return 4000;
+  return 2500;
 }
 
 export async function disconnectDiscogs() {

@@ -1,6 +1,6 @@
 // tests/barcode-test.mjs - Unit tests for barcode validation, cleaning, and 1D decoding.
 import assert from 'node:assert/strict';
-import { cleanBarcode, isValidEAN13, isValidUPCA, isValidBarcode, decode1DBarcodeFromImageData } from '../public/js/barcode.js';
+import { cleanBarcode, isValidEAN13, isValidUPCA, isValidBarcode, decode1DBarcodeFromImageData, clearBarcodeSearchCache } from '../public/js/barcode.js';
 
 // 1. Cleaning barcodes
 assert.equal(cleanBarcode('0 7559-60861-1 3'), '075596086113');
@@ -109,5 +109,8 @@ for (let y = 0; y < vertHeight; y++) {
 
 const vertDecoded = decode1DBarcodeFromImageData({ width: vertWidth, height: vertHeight, data: vertPixelData });
 assert.equal(vertDecoded, '4006381333931', 'Successfully decoded vertically rotated EAN-13 barcode');
+
+// 7. Barcode cache clear
+clearBarcodeSearchCache();
 
 console.log('Barcode tests passed.');

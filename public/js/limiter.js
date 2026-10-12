@@ -3,7 +3,7 @@
 // requests (something the person is waiting on) jump ahead of 'low' ones (background filling). A 429 pauses the
 // whole queue and retries the request, so callers rarely see one.
 
-const DEFAULT_WAIT_MS = 30000;
+const DEFAULT_WAIT_MS = 60000;
 const MAX_WAIT_MS = 60000;
 
 export function retryAfterMs(res) {
@@ -20,9 +20,23 @@ export function createLimiter({
 } = {}) {
   const queues = { high: [], low: [] };
   const listeners = new Set();
+  const lowPausedReasons = new Set();
   let running = false;
   let nextAt = 0;
   let pausedUntil = 0;
+
+  const isLowPaused = () => lowPausedReasons.size > 0;
+
+  function pauseLow(reason = 'default') {
+    lowPausedReasons.add(reason);
+    emit();
+  }
+
+  function resumeLow(reason = 'default') {
+    lowPausedReasons.delete(reason);
+    emit();
+    pump();
+  }
 
   function stats() {
     return {
@@ -30,6 +44,7 @@ export function createLimiter({
       high: queues.high.length,
       low: queues.low.length,
       pausedUntil: pausedUntil > now() ? pausedUntil : 0,
+      lowPaused: isLowPaused(),
     };
   }
 
@@ -42,13 +57,14 @@ export function createLimiter({
     if (running) return;
     running = true;
     try {
-      while (queues.high.length || queues.low.length) {
+      while (queues.high.length || (!isLowPaused() && queues.low.length)) {
         const wait = Math.max(nextAt, pausedUntil) - now();
         if (wait > 0) {
           emit();
           await sleep(wait);
         }
-        const job = queues.high.shift() || queues.low.shift();
+        const job = queues.high.shift() || (!isLowPaused() ? queues.low.shift() : null);
+        if (!job) break;
         let res;
         try {
           res = await job.task();
@@ -88,5 +104,5 @@ export function createLimiter({
     return () => listeners.delete(fn);
   }
 
-  return { schedule, subscribe, stats };
+  return { schedule, subscribe, stats, pauseLow, resumeLow, isLowPaused };
 }

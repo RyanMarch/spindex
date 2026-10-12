@@ -528,8 +528,23 @@ import { createLimiter, retryAfterMs } from '../public/js/limiter.js';
   assert.ok(seen.some((s) => s.pausedUntil > 0), 'reports the pause');
   assert.equal(seen.at(-1).pending, 0, 'ends idle');
 
-  assert.equal(retryAfterMs(res(429)), 30000, 'default wait');
+  assert.equal(retryAfterMs(res(429)), 60000, 'default wait');
   assert.equal(retryAfterMs(res(429, { 'retry-after': '500' })), 60000, 'capped');
+
+  // Background queue can be paused (e.g. while scanner is open) while high-priority jobs still run
+  const pausable = createLimiter({ pace: () => 0, ...clock });
+  const log = [];
+  pausable.pauseLow('test');
+  assert.equal(pausable.isLowPaused(), true);
+  const p1 = pausable.schedule(async () => { log.push('low'); return res(200); }, 'low');
+  const p2 = pausable.schedule(async () => { log.push('high'); return res(200); }, 'high');
+  await p2;
+  assert.deepEqual(log, ['high'], 'high job runs while low is paused');
+  pausable.resumeLow('test');
+  assert.equal(pausable.isLowPaused(), false);
+  await p1;
+  assert.deepEqual(log, ['high', 'low'], 'low job runs after resume');
+
   console.log('Discogs queue tests passed.');
 }
 

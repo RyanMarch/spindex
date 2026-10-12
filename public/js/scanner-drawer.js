@@ -1,6 +1,6 @@
 // scanner-drawer.js - Barcode scanner slide-over drawer and camera controller
 import { cleanBarcode, isValidBarcode, detectBarcode, searchDiscogsBarcode, addReleaseToCollection } from './barcode.js';
-import { isDiscogsConnected, discogsState, onDiscogsQueue } from './discogs.js';
+import { isDiscogsConnected, discogsState, onDiscogsQueue, pauseDiscogsBackground, resumeDiscogsBackground } from './discogs.js';
 
 export class ScannerDrawer {
   constructor({ onRecordAdded, onViewInCrate, onOpenSettings } = {}) {
@@ -22,6 +22,7 @@ export class ScannerDrawer {
     this.fileInput = document.getElementById('scanner-file-input');
     this.manualForm = document.getElementById('scanner-manual-form');
     this.manualInput = document.getElementById('scanner-manual-input');
+    this.manualBtn = document.getElementById('scanner-manual-btn');
     this.resultsEl = document.getElementById('scanner-results');
     this.resultsStatusEl = document.getElementById('scanner-results-status');
     this.resultsListEl = document.getElementById('scanner-results-list');
@@ -112,6 +113,7 @@ export class ScannerDrawer {
   open() {
     if (!this.drawerEl) return;
 
+    pauseDiscogsBackground('scanner');
     this.drawerEl.classList.add('open');
     this.drawerEl.setAttribute('aria-hidden', 'false');
 
@@ -121,15 +123,28 @@ export class ScannerDrawer {
   close() {
     if (!this.drawerEl) return;
 
+    resumeDiscogsBackground('scanner');
     this.searchSessionId++;
     this.stopCamera();
     this.drawerEl.classList.remove('open');
     this.drawerEl.setAttribute('aria-hidden', 'true');
   }
 
+  setSearchingState(isSearching) {
+    if (this.manualBtn) {
+      this.manualBtn.disabled = isSearching;
+      this.manualBtn.classList.toggle('is-loading', isSearching);
+      this.manualBtn.textContent = isSearching ? 'Searching…' : 'Search';
+    }
+    if (this.manualInput) {
+      this.manualInput.disabled = isSearching;
+    }
+  }
+
   resetScannerView() {
     this.searchSessionId++;
     this.lastScannedCode = null;
+    this.setSearchingState(false);
     if (this.manualInput) this.manualInput.value = '';
     if (this.resultsEl) this.resultsEl.hidden = true;
     if (this.resultsListEl) this.resultsListEl.innerHTML =  /*html*/ '';
@@ -316,7 +331,7 @@ export class ScannerDrawer {
 
     try {
       const code = await detectBarcode(this.videoEl);
-      if (code && code !== this.lastScannedCode) {
+      if (code && isValidBarcode(code) && code !== this.lastScannedCode) {
         this.lastScannedCode = code;
         this.handleBarcodeDetected(code);
       }
@@ -344,10 +359,10 @@ export class ScannerDrawer {
       const code = await detectBarcode(img);
       URL.revokeObjectURL(objectUrl);
 
-      if (code) {
+      if (code && isValidBarcode(code)) {
         this.handleBarcodeDetected(code);
       } else {
-        if (this.hintEl) this.hintEl.textContent = 'No barcode detected in photo. Try another or enter digits below.';
+        if (this.hintEl) this.hintEl.textContent = code ? 'Barcode format not recognized in photo. Try typing digits below.' : 'No barcode detected in photo. Try another or enter digits below.';
         this.resumeScanning();
       }
     } catch (err) {
@@ -394,6 +409,22 @@ export class ScannerDrawer {
     const code = cleanBarcode(rawCode);
     if (!code) return;
 
+    if (!isValidBarcode(code)) {
+      if (this.hintEl) this.hintEl.textContent = 'Invalid barcode. Please check digits and try again.';
+      if (this.viewfinderWrap && !this.viewfinderWrap.hidden) {
+        this.resumeScanning();
+      } else if (this.resultsStatusEl) {
+        if (this.resultsEl) this.resultsEl.hidden = false;
+        this.resultsStatusEl.innerHTML =  /*html*/ `
+          <div class="scanner-error-card">
+            <p class="scanner-error-text">"${this.escapeHTML(rawCode)}" is not a recognized barcode format. Barcodes are typically 12-digit UPC or 13-digit EAN numbers.</p>
+            <button type="button" class="btn btn-secondary btn-sm scanner-rescan-btn">Try again</button>
+          </div>
+        `;
+      }
+      return;
+    }
+
     this.pauseScanning();
     this.playSuccessChime();
 
@@ -404,6 +435,7 @@ export class ScannerDrawer {
     if (this.hintEl) this.hintEl.textContent = `Barcode: ${code}`;
     if (this.viewfinderWrap) this.viewfinderWrap.hidden = true;
     if (this.resultsEl) this.resultsEl.hidden = false;
+    this.setSearchingState(true);
 
     let countdownTimer = null;
     let unsubscribeQueue = null;
@@ -415,16 +447,40 @@ export class ScannerDrawer {
       if (waitRemainingMs > 0) {
         const secs = Math.max(1, Math.ceil(waitRemainingMs / 1000));
         this.resultsStatusEl.innerHTML =  /*html*/ `
-          <div class="scanner-loading-row">
-            <span class="scanner-spinner"></span>
-            <span>Discogs rate limit reached (60/min). Retrying in <strong>${secs}s</strong>...</span>
+          <div class="scanner-identified-card is-waiting">
+            <div class="scanner-identified-header">
+              <span class="scanner-badge-detected">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Barcode Identified
+              </span>
+              <span class="scanner-detected-code">${this.escapeHTML(code)}</span>
+            </div>
+            <div class="scanner-loading-row">
+              <span class="scanner-spinner"></span>
+              <span class="scanner-loading-text">Discogs asked us to pace requests. Retrying in <strong>${secs}s</strong>…</span>
+            </div>
+            <p class="scanner-loading-subtext">Waiting for Discogs rate limit window to refresh</p>
           </div>
         `;
       } else {
         this.resultsStatusEl.innerHTML =  /*html*/ `
-          <div class="scanner-loading-row">
-            <span class="scanner-spinner"></span>
-            <span>Searching Discogs for <strong>${this.escapeHTML(code)}</strong>...</span>
+          <div class="scanner-identified-card">
+            <div class="scanner-identified-header">
+              <span class="scanner-badge-detected">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Barcode Identified
+              </span>
+              <span class="scanner-detected-code">${this.escapeHTML(code)}</span>
+            </div>
+            <div class="scanner-loading-row">
+              <span class="scanner-spinner"></span>
+              <span class="scanner-loading-text">Searching Discogs for <strong>${this.escapeHTML(code)}</strong>…</span>
+            </div>
+            <p class="scanner-loading-subtext">Sent request to Discogs. Waiting for release matches…</p>
           </div>
         `;
       }
@@ -487,6 +543,7 @@ export class ScannerDrawer {
         `;
       }
     } finally {
+      this.setSearchingState(false);
       if (countdownTimer) clearInterval(countdownTimer);
       if (unsubscribeQueue) unsubscribeQueue();
     }
