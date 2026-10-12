@@ -330,9 +330,19 @@ export async function detectBarcode(source) {
   return null;
 }
 
+const barcodeSearchCache = new Map();
+
+export function clearBarcodeSearchCache() {
+  barcodeSearchCache.clear();
+}
+
 export async function searchDiscogsBarcode(barcode) {
   const cleaned = cleanBarcode(barcode);
   if (!cleaned) throw new Error('Please enter a valid barcode');
+
+  if (barcodeSearchCache.has(cleaned)) {
+    return barcodeSearchCache.get(cleaned);
+  }
 
   const res = await discogsFetch(`/database/search?barcode=${encodeURIComponent(cleaned)}&type=release`);
   if (!res.ok) {
@@ -343,7 +353,7 @@ export async function searchDiscogsBarcode(barcode) {
     throw new Error(errorBody.message || `Discogs search error (${res.status})`);
   }
   const data = await res.json();
-  return (data.results || []).map((item) => {
+  const results = (data.results || []).map((item) => {
     let artist = '';
     let album = item.title || 'Untitled';
     if (item.title && item.title.includes(' - ')) {
@@ -369,6 +379,8 @@ export async function searchDiscogsBarcode(barcode) {
       barcode: item.barcode || [cleaned],
     };
   });
+  barcodeSearchCache.set(cleaned, results);
+  return results;
 }
 
 export async function addReleaseToCollection(username, releaseId, folderId = 1) {
