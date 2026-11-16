@@ -545,7 +545,7 @@ export function buildCollectionRecord(item, existing, fieldNames) {
 
 // A full sync reads the whole collection and picks up edits and removals. Otherwise it reads only as far as the newest
 // records we don't have yet (usually one request), and falls back to a full read whenever the numbers don't add up.
-export async function syncDiscogsCollection(username, onProgress, { full = false } = {}) {
+export async function syncDiscogsCollection(username, onProgress, { full = false, priority = 'high' } = {}) {
   const meta = readSyncMeta(username);
   const readEverything = needsFullSync(meta, Date.now(), full);
   let total = null;
@@ -557,10 +557,10 @@ export async function syncDiscogsCollection(username, onProgress, { full = false
 
   const existingRecords = await getAllRecords();
   const existingMap = new Map(existingRecords.map((r) => [r.id, r]));
-  const fieldNames = await fetchCollectionFieldNames(username);
+  const fieldNames = await fetchCollectionFieldNames(username, priority);
 
   while (page <= totalPages) {
-    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}&sort=added&sort_order=desc`);
+    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}&sort=added&sort_order=desc`, {}, priority);
 
     if (!res.ok) {
       const detail = await res.json().then((body) => body.error || body.message, () => '').catch(() => '');

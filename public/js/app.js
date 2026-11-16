@@ -2060,7 +2060,7 @@ class App {
         if (message) return this.setSyncStatus(message, '');
         if (quick) return this.setSyncStatus('Checking for new records...', '');
         this.setSyncStatus(`Syncing page ${page} of ${totalPages} (${count} albums)...`, '');
-      }, { full });
+      }, { full, priority: auto && hadRealRecords ? 'low' : 'high' }); // a check behind a crate someone is already looking at never makes them wait
 
       const stale = (await getAllRecords()).filter((r) => String(r.id).startsWith('discogs_mock_'));
       if (stale.length > 0) await deleteRecords(stale.map((r) => r.id));

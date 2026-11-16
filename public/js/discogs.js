@@ -63,6 +63,10 @@ async function send(path, init) {
     state.remaining = Number(remaining);
     state.remainingAt = Date.now();
   }
+  if (res.status === 429) {
+    // Which budget ran out? Discogs counts by source IP, so a low 'used' here means the proxy's address is shared
+    console.warn('Discogs answered 429', { used: res.headers.get('x-discogs-ratelimit-used'), limit: res.headers.get('x-discogs-ratelimit'), retryAfter: res.headers.get('retry-after') });
+  }
   return res;
 }
 
