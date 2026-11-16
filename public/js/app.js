@@ -473,6 +473,7 @@ class App {
         hiddenAt = Date.now();
         return;
       }
+      this.renderFillStatus?.();
       const updates = window.spindexUpdates;
       // Away for a while with a new version waiting: come back into it
       if (updates && shouldAutoReload({ ready: updates.isReady(), hiddenMs: hiddenAt ? Date.now() - hiddenAt : 0 })) {
@@ -856,17 +857,21 @@ class App {
   renderFillStatus() {
     const el = this.fillStatusEl;
     if (!el) return;
+    clearTimeout(this.fillStatusTimer);
     const { low, high, pausedUntil } = this.queueStats;
-    // Background work backs off quietly. The notice is only for a wait someone is sitting through.
-    const waiting = pausedUntil > 0 && high > 0;
+    // Background work backs off quietly. The notice is only for a wait someone is sitting through, and it counts
+    // down from the clock so it clears itself even if the queue never reports back (a suspended tab, a slow retry).
+    const secondsLeft = high > 0 && pausedUntil > 0 ? Math.ceil((pausedUntil - Date.now()) / 1000) : 0;
+    const waiting = secondsLeft > 0;
     const active = low > 0 || waiting;
     el.hidden = !active;
     if (!active) return;
     el.textContent = waiting
-      ? 'Discogs asked us to slow down. Resuming shortly…'
+      ? `Discogs asked us to slow down. Resuming in ${secondsLeft}s…`
       : this.fill?.total
         ? `${this.fill.label || 'Filling in details…'} ${this.fill.done} of ${this.fill.total}`
         : 'Finishing track lists…';
+    if (waiting) this.fillStatusTimer = setTimeout(() => this.renderFillStatus(), 1000);
   }
 
   // Records still showing a Discogs photo of the sleeve get clean cover art: Deezer first (fast), then iTunes for the rest
