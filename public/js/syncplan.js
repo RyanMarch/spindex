@@ -40,6 +40,28 @@ export function writeSyncMeta(username, meta, storage = globalThis.localStorage)
   }
 }
 
+// Custom field names (Media Condition and so on) are kept for a month so a launch does not have to ask for them.
+const FIELD_NAMES_DAYS = 30;
+const fieldKey = (username) => `spindex_fields_${String(username).toLowerCase()}`;
+
+export function readFieldNames(username, now = Date.now(), storage = globalThis.localStorage) {
+  try {
+    const saved = JSON.parse(storage.getItem(fieldKey(username)) || 'null');
+    const fresh = saved && Array.isArray(saved.names) && saved.names.length > 0 && now - saved.at < FIELD_NAMES_DAYS * 86400000;
+    return fresh ? saved.names : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeFieldNames(username, names, now = Date.now(), storage = globalThis.localStorage) {
+  try {
+    storage.setItem(fieldKey(username), JSON.stringify({ at: now, names }));
+  } catch {
+    // Private mode or full storage: the next sync just asks again
+  }
+}
+
 // Records in the crate that are no longer in the Discogs collection. Only ever answered after a complete read, and
 // never on a result that looks wrong: an empty answer, or a page count that doesn't match the total Discogs reported,
 // deletes nothing.

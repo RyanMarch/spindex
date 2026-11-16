@@ -45,7 +45,13 @@ export async function initDiscogs() {
 }
 
 // path: a Discogs API path such as "/releases/249504" or "/users/name/collection/folders/0/releases?page=1"
-const limiter = createLimiter({ pace: (res) => (res?.headers?.get('x-spindex-cache') === 'HIT' ? 0 : paceMs()) });
+// A throttle is remembered across reloads and shared between tabs, so reopening the app inside the window waits quietly
+const PAUSE_KEY = 'spindex_discogs_pause';
+const persist = {
+  load: () => Number(localStorage.getItem(PAUSE_KEY)) || 0,
+  save: (until) => localStorage.setItem(PAUSE_KEY, String(until)),
+};
+const limiter = createLimiter({ pace: (res) => (res?.headers?.get('x-spindex-cache') === 'HIT' ? 0 : paceMs()), persist });
 
 async function send(path, init) {
   if (state.mode !== 'oauth') {

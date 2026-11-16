@@ -528,8 +528,24 @@ import { createLimiter, retryAfterMs } from '../public/js/limiter.js';
   assert.ok(seen.some((s) => s.pausedUntil > 0), 'reports the pause');
   assert.equal(seen.at(-1).pending, 0, 'ends idle');
 
-  assert.equal(retryAfterMs(res(429)), 60000, 'default wait');
+  assert.equal(retryAfterMs(res(429)), 10000, 'first retry waits a short while');
+  assert.deepEqual([0, 1, 2, 5].map((a) => retryAfterMs(res(429), a)), [10000, 20000, 40000, 40000], 'each retry waits longer, up to the last step');
+  assert.equal(retryAfterMs(res(429), 0, { waits: [60000] }), 60000, 'a source can ask for longer steps');
+  assert.equal(retryAfterMs(res(429), 0, { jitter: 1 }), 12500, 'jitter only ever adds');
+  assert.equal(retryAfterMs(res(429, { 'retry-after': '20' }), 2), 20000, 'Retry-After wins over the steps');
   assert.equal(retryAfterMs(res(429, { 'retry-after': '500' })), 60000, 'capped');
+
+  // A pause that was saved (another tab, or before a reload) is honoured, and a new one is saved
+  t = 0;
+  let stored = 30000;
+  const saves = [];
+  const shared = createLimiter({ pace: () => 0, random: () => 0, ...clock, persist: { load: () => stored, save: (v) => { stored = v; saves.push(v); } } });
+  const startedAt = [];
+  let m = 0;
+  await shared.schedule(async () => { startedAt.push(t); return ++m === 1 ? res(429) : res(200); });
+  assert.equal(startedAt[0], 30000, 'waits out a pause it was told about before sending anything');
+  assert.equal(saves.length, 1, 'saves the pause it sets');
+  assert.equal(saves[0], 30000 + 10000, 'the retry waits 10 seconds');
 
   // Background queue can be paused (e.g. while scanner is open) while high-priority jobs still run
   const pausable = createLimiter({ pace: () => 0, ...clock });
@@ -545,7 +561,17 @@ import { createLimiter, retryAfterMs } from '../public/js/limiter.js';
   await p1;
   assert.deepEqual(log, ['high', 'low'], 'low job runs after resume');
 
-  console.log('Discogs queue tests passed.');
+  {
+  const { readFieldNames, writeFieldNames } = await import('../public/js/syncplan.js');
+  const mem = new Map();
+  const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+  assert.equal(readFieldNames('Ann', 0, storage), null, 'nothing saved yet');
+  writeFieldNames('Ann', [[1, 'Media Condition']], 1000, storage);
+  assert.deepEqual(readFieldNames('ann', 2000, storage), [[1, 'Media Condition']], 'saved names are found, whatever the case');
+  assert.equal(readFieldNames('Ann', 1000 + 31 * 86400000, storage), null, 'and expire after a month');
+}
+
+console.log('Discogs queue tests passed.');
 }
 
 // A free answer (a cache hit) skips the wait before the next request

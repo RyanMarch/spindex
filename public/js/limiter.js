@@ -3,12 +3,17 @@
 // requests (something the person is waiting on) jump ahead of 'low' ones (background filling). A 429 pauses the
 // whole queue and retries the request, so callers rarely see one.
 
-const DEFAULT_WAIT_MS = 60000;
+// Discogs' window is a rolling minute, so a short wait often clears it. When the source names a wait (Retry-After) it
+// is used as given; otherwise each retry waits a little longer than the last.
+const DEFAULT_WAITS_MS = [10000, 20000, 40000];
 const MAX_WAIT_MS = 60000;
 
-export function retryAfterMs(res) {
+// attempt: 0 for the first retry. jitter: 0 to 1, spreads out devices that were throttled together.
+export function retryAfterMs(res, attempt = 0, { waits = DEFAULT_WAITS_MS, jitter = 0 } = {}) {
   const seconds = Number(res?.headers?.get?.('retry-after'));
-  return Math.min(seconds > 0 ? seconds * 1000 : DEFAULT_WAIT_MS, MAX_WAIT_MS);
+  if (seconds > 0) return Math.min(seconds * 1000, MAX_WAIT_MS);
+  const base = waits[Math.min(attempt, waits.length - 1)];
+  return Math.min(Math.round(base * (1 + jitter * 0.25)), MAX_WAIT_MS);
 }
 
 export function createLimiter({
@@ -17,6 +22,9 @@ export function createLimiter({
   now = () => Date.now(),
   maxRetries = 3,
   throttled = (res) => res && res.status === 429, // MusicBrainz says 503
+  waits = DEFAULT_WAITS_MS, // how long each retry waits when the source does not say
+  random = Math.random,
+  persist = null, // { load(): timestamp, save(timestamp) } keeps a pause across reloads and tabs
 } = {}) {
   const queues = { high: [], low: [] };
   const listeners = new Set();
@@ -24,6 +32,17 @@ export function createLimiter({
   let running = false;
   let nextAt = 0;
   let pausedUntil = 0;
+
+  // Another tab, or this one before it was reloaded, may already have been told to wait
+  function syncPause() {
+    try {
+      const saved = Number(persist?.load?.()) || 0;
+      if (saved > pausedUntil) pausedUntil = saved;
+    } catch {
+      // Storage unavailable: the pause just lives in memory
+    }
+  }
+  syncPause();
 
   const isLowPaused = () => lowPausedReasons.size > 0;
 
@@ -58,6 +77,7 @@ export function createLimiter({
     running = true;
     try {
       while (queues.high.length || (!isLowPaused() && queues.low.length)) {
+        syncPause();
         const wait = Math.max(nextAt, pausedUntil) - now();
         if (wait > 0) {
           emit();
@@ -77,7 +97,8 @@ export function createLimiter({
         nextAt = now() + pace(res);
         if (throttled(res) && job.tries < maxRetries) {
           job.tries++;
-          pausedUntil = now() + retryAfterMs(res);
+          pausedUntil = now() + retryAfterMs(res, job.tries - 1, { waits, jitter: random() });
+          try { persist?.save?.(pausedUntil); } catch { /* memory only */ }
           queues[job.priority].unshift(job);
         } else {
           job.resolve(res);
