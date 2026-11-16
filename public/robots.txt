@@ -5,6 +5,8 @@ Allow: /
 Disallow: /s/
 # The Discogs and other API routes
 Disallow: /api/
+# The admin page
+Disallow: /admin/
 # Album addresses open the app on a record in someone's own collection
 Disallow: /album/
 
