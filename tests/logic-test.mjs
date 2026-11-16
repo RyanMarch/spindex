@@ -571,6 +571,21 @@ import { createLimiter, retryAfterMs } from '../public/js/limiter.js';
   assert.equal(readFieldNames('Ann', 1000 + 31 * 86400000, storage), null, 'and expire after a month');
 }
 
+{
+  const { noteSlowdown, readSlowdowns, pathKind, describeSlowdown } = await import('../public/js/sourcestats.js');
+  const mem = new Map();
+  const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+  assert.deepEqual(readSlowdowns(storage), [], 'empty to begin with');
+  for (let i = 0; i < 12; i++) noteSlowdown({ kind: 'release', used: i, limit: 60 }, storage);
+  const list = readSlowdowns(storage);
+  assert.equal(list.length, 10, 'only the latest ten are kept');
+  assert.equal(list[0].used, 11, 'newest first');
+  assert.equal(pathKind('/users/ann/collection/folders/0/releases?page=1'), 'collection', 'a name never reaches the log');
+  assert.equal(pathKind('/releases/123'), 'release');
+  assert.equal(describeSlowdown({ kind: 'master', used: 58, limit: 60 }), 'master, 58 of 60 used');
+  assert.equal(describeSlowdown({ kind: 'release' }), 'release, no budget reported');
+}
+
 console.log('Discogs queue tests passed.');
 }
 

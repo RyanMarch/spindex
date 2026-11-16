@@ -18,7 +18,7 @@ import { computeHealth, describeStorage, healthSummary } from './health.js';
 import { watchForUpdates, shouldAutoReload } from './updates.js';
 import { trackSummary, pressingNotes } from './vinyl.js';
 import { timeAgo, readSyncMeta, needsAutoSync } from './syncplan.js';
-import { sourceSnapshot } from './sourcestats.js';
+import { sourceSnapshot, readSlowdowns, describeSlowdown } from './sourcestats.js';
 import { statsHTML, valueHTML } from './statsview.js';
 import { initDiscogs, discogsFetch, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs } from './discogs.js';
 import { ScannerDrawer } from './scanner-drawer.js';
@@ -822,6 +822,7 @@ class App {
     const esc = (t) => this.escapeHTML ? this.escapeHTML(String(t)) : String(t);
     const row = (k, v) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`;
     const sources = sourceSnapshot();
+    const slowdowns = readSlowdowns();
     el.innerHTML =  /*html*/ `
       <dl class="health-rows">
         ${row('Records', h.total)}
@@ -839,7 +840,11 @@ class App {
       <p class="stat-note">Sources this session</p>
       ${sources.length
         ? `<dl class="health-rows">${sources.map((s) => row(s.name, `${s.ok} ok${s.failed ? `, ${s.failed} failed (${s.last})` : ''}`)).join('')}</dl>`
-        : '<p class="stat-note">Nothing asked yet.</p>'}`;
+        : '<p class="stat-note">Nothing asked yet.</p>'}
+      <p class="stat-note">Recent Discogs slow-downs</p>
+      ${slowdowns.length
+        ? `<dl class="health-rows">${slowdowns.slice(0, 5).map((d) => row(timeAgo(d.at), describeSlowdown(d))).join('')}</dl>`
+        : '<p class="stat-note">None recorded.</p>'}`;
   }
 
   // A small pill that says what the background Discogs work is doing, so a slow first load reads as intentional

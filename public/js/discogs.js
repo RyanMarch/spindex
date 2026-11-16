@@ -4,7 +4,7 @@
 // in an encrypted cookie and signs the request. Page scripts never see a credential.
 
 import { createLimiter } from './limiter.js';
-import { noteSource } from './sourcestats.js';
+import { noteSource, noteSlowdown, pathKind } from './sourcestats.js';
 
 const state = {
   mode: 'none',
@@ -70,8 +70,9 @@ async function send(path, init) {
     state.remainingAt = Date.now();
   }
   if (res.status === 429) {
-    // Which budget ran out? Discogs counts by source IP, so a low 'used' here means the proxy's address is shared
-    console.warn('Discogs answered 429', { used: res.headers.get('x-discogs-ratelimit-used'), limit: res.headers.get('x-discogs-ratelimit'), retryAfter: res.headers.get('retry-after') });
+    // Which budget ran out? Discogs counts by source IP, so a low 'used' means the proxy's address is shared
+    const num = (name) => { const v = res.headers.get(name); return v === null || v === '' ? null : Number(v); };
+    noteSlowdown({ kind: pathKind(path), used: num('x-discogs-ratelimit-used'), limit: num('x-discogs-ratelimit'), retryAfter: num('retry-after') });
   }
   return res;
 }
