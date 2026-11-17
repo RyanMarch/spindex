@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spindex-cache-v52';
+const CACHE_NAME = 'spindex-cache-v53';
 // Covers and photos live in their own cache: it outlives app updates, so browsing offline (and reopening the app) doesn't
 // fetch every sleeve again. Bounded, so it can't grow without limit.
 const IMAGE_CACHE = 'spindex-images-v1';
@@ -70,7 +70,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   // Server functions (Discogs sign-in, the Discogs proxy) carry per-user data: never cache them
-  if (new URL(event.request.url).pathname.startsWith('/api/')) return;
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/api/')) return;
+  // Requests to other sites (Discogs, read directly with a one-request signature) are not ours to keep. Pictures are.
+  if (url.origin !== self.location.origin && event.request.destination !== 'image') return;
 
   // Pictures: show what we have at once and refresh it in the background. Images from other sites arrive as "opaque"
   // responses (status 0), which are fine to keep and show.

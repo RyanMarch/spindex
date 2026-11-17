@@ -53,12 +53,44 @@ const persist = {
 };
 const limiter = createLimiter({ pace: (res) => (res?.headers?.get('x-spindex-cache') === 'HIT' ? 0 : paceMs()), persist });
 
-async function send(path, init) {
+// Discogs counts requests by the address they come from. Through our server that is an address shared with other
+// sites, so a person's own collection (private, never cached) is read straight from their browser with a one-request
+// signature from the server. Anything the shared cache can answer stays on the proxy. If the direct route fails for any
+// reason, this session goes back to the proxy and carries on.
+const DIRECT_PATH = /^\/users\/[^/?]+\/collection\//;
+let directOff = false;
+export const directAvailable = () => !directOff;
+export const resetDirect = () => { directOff = false; };
+
+async function sendDirect(path, init) {
+  if (directOff || init?.method || !DIRECT_PATH.test(path)) return null;
+  try {
+    // Signed at the last moment: the signature carries a timestamp, and the queue may have made this request wait
+    const signed = await fetch(`/api/discogs/sign?path=${encodeURIComponent(path)}`, { credentials: 'same-origin' });
+    if (!signed.ok) return null; // not signed in, or not something we sign: the proxy will say why
+    const { url, authorization } = await signed.json();
+    const res = await fetch(url, { headers: { Authorization: authorization, Accept: 'application/vnd.discogs.v2.discogs+json' } });
+    if (res.status === 400 || res.status === 401 || res.status === 403) {
+      directOff = true;
+      noteSource('Discogs direct', false, `answered ${res.status}`);
+      return null;
+    }
+    noteSource('Discogs direct', res.ok || res.status === 404 || res.status === 429, `answered ${res.status}`);
+    return res;
+  } catch {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('offline');
+    directOff = true; // blocked by the browser, a content blocker or the network
+    noteSource('Discogs direct', false, 'blocked');
+    return null;
+  }
+}
+
+export async function send(path, init) {
   if (state.mode !== 'oauth') {
     throw new Error('Not connected to Discogs');
   }
 
-  const res = await fetch(`/api/discogs${path}`, { credentials: 'same-origin', ...init });
+  const res = (await sendDirect(path, init)) || (await fetch(`/api/discogs${path}`, { credentials: 'same-origin', ...init }));
   if (res.status === 401) {
     // The connection is no longer valid (revoked, or the cookie expired): fall back and let the UI say so
     await initDiscogs();
