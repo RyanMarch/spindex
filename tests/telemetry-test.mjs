@@ -1,7 +1,7 @@
 // Tests for the server-side slow-down log and the admin route that reads it.
 import assert from 'node:assert/strict';
 import { buildEvent, eventKey, recordEvent, readEvents, summarize, sameSecret, pathKind, egressInfo, LOG_PREFIX, validateReport, mergeBucket, recordReport, readBuckets, summarizeRoutes, hourKey, setupStatus, probeDiscogs } from '../functions/_lib/telemetry.js';
-import { createReporter, detectPlatform, outcomeOf } from '../public/js/reporter.js';
+import { createReporter, detectPlatform, outcomeOf, buildFrom } from '../public/js/reporter.js';
 import { onRequestPost as report } from '../functions/api/discogs/report.js';
 import { seal } from '../functions/_lib/session.js';
 import { onRequestGet as admin } from '../functions/api/admin/throttles.js';
@@ -115,6 +115,9 @@ assert.ok(body.routes && Array.isArray(body.routes.series), 'route stats are inc
   assert.equal(good.direct, 'off:401');
   assert.equal(validateReport({ counts: {}, direct: '<script>', platform: 'toaster' }).direct, 'unknown', 'free text is refused');
   assert.equal(validateReport({ counts: {}, platform: 'toaster' }).platform, 'other');
+  assert.equal(good.build, 'unknown', 'no build given');
+  assert.equal(validateReport({ counts: {}, build: 'v55' }).build, 'v55');
+  assert.equal(validateReport({ counts: {}, build: '<b>x</b>' }).build, 'unknown', 'free text is refused');
   assert.equal(validateReport(null), null);
   assert.equal(validateReport({ nothing: 1 }), null);
 
@@ -128,7 +131,7 @@ assert.ok(body.routes && Array.isArray(body.routes.series), 'route stats are inc
   const bstore = { DISCOGS_DATA: kv() };
   const t0 = Date.UTC(2026, 10, 17, 21, 5);
   await recordReport(bstore, good, t0);
-  await recordReport(bstore, validateReport({ counts: { 'direct|collection|throttled': 2, 'proxy-miss|release|ok': 4 }, throttles: [{ route: 'direct', kind: 'collection' }, { route: 'proxy-miss', kind: 'artist' }], direct: 'on', platform: 'desktop' }), t0 + 3600000);
+  await recordReport(bstore, validateReport({ counts: { 'direct|collection|throttled': 2, 'proxy-miss|release|ok': 4 }, throttles: [{ route: 'direct', kind: 'collection' }, { route: 'proxy-miss', kind: 'artist' }], direct: 'on', build: 'v55', platform: 'desktop' }), t0 + 3600000);
   const buckets = await readBuckets(bstore);
   assert.deepEqual(buckets.map((b) => b.hour), ['2026-11-17T21', '2026-11-17T22']);
   const routes = summarizeRoutes(buckets);
@@ -139,9 +142,11 @@ assert.ok(body.routes && Array.isArray(body.routes.series), 'route stats are inc
   assert.equal(routes.lastDirectOkHour, '2026-11-17T21', 'the last hour a direct request worked');
   assert.equal(routes.byKind['collection|direct'], 5);
   assert.deepEqual(routes.devices, { 'ios-app': 1, 'desktop-browser': 1 });
+  assert.deepEqual(routes.builds, { unknown: 1, v55: 1 }, 'which builds are reporting');
   const throttled = await readEvents(bstore);
   assert.equal(throttled.length, 2, 'direct throttles are logged; a proxy one the server already saw is not logged twice');
   assert.ok(throttled.every((e) => e.via === 'direct'));
+  assert.ok(throttled.some((e) => e.build === 'v55'), 'a throttle carries the build that saw it');
   assert.equal(throttled[0].via, 'direct');
   assert.deepEqual(summarizeRoutes([]).series, []);
 
@@ -168,6 +173,8 @@ assert.ok(body.routes && Array.isArray(body.routes.series), 'route stats are inc
   assert.equal(detectPlatform('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 5), 'ios', 'an iPad that says it is a Mac');
   assert.equal(detectPlatform('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 0), 'desktop');
   assert.equal(detectPlatform('Mozilla/5.0 (Linux; Android 14)'), 'android');
+  assert.equal(buildFrom(['spindex-images-v1', 'spindex-cache-v54', 'spindex-cache-v55']), 'v55', 'the newest cache wins');
+  assert.equal(buildFrom([]), 'unknown');
   assert.equal(outcomeOf(200), 'ok');
   assert.equal(outcomeOf(404), 'ok', 'a missing release is an answer, not a failure');
   assert.equal(outcomeOf(429), 'throttled');

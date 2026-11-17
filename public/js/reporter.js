@@ -13,14 +13,20 @@ export function detectPlatform(userAgent = '', maxTouchPoints = 0) {
 export const outcomeOf = (status) => (status === 429 ? 'throttled' : status >= 200 && status < 300 || status === 404 ? 'ok' : 'failed');
 
 // send(body) delivers a report; directState() says whether the direct route is on ("on" or "off:401")
-export function createReporter({ send, directState = () => 'unknown', platform = 'other', standalone = false, flushAt = 25 } = {}) {
+// Which build of the app is running, read from the service worker's cache name ("spindex-cache-v55" is "v55")
+export const buildFrom = (cacheNames = []) => {
+  const versions = cacheNames.map((n) => /^spindex-cache-v(\d{1,4})$/.exec(n)).filter(Boolean).map((m) => Number(m[1]));
+  return versions.length ? `v${Math.max(...versions)}` : 'unknown';
+};
+
+export function createReporter({ send, directState = () => 'unknown', build = () => 'unknown', platform = 'other', standalone = false, flushAt = 25 } = {}) {
   let counts = {};
   let throttles = [];
   let pending = 0;
 
   function flush() {
     if (!pending) return;
-    const body = { counts, throttles, direct: directState(), platform, standalone };
+    const body = { counts, throttles, direct: directState(), build: build(), platform, standalone };
     counts = {};
     throttles = [];
     pending = 0;

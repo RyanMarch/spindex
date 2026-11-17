@@ -137,6 +137,7 @@ export function validateReport(body) {
     counts,
     throttles,
     direct,
+    build: typeof body.build === 'string' && /^v\d{1,4}$/.test(body.build) ? body.build : 'unknown',
     platform: PLATFORMS.includes(body.platform) ? body.platform : 'other',
     standalone: body.standalone === true,
   };
@@ -151,6 +152,7 @@ export function mergeBucket(bucket, report, now = Date.now()) {
   const device = `${report.platform}${report.standalone ? '-app' : '-browser'}`;
   out.platforms = { ...out.platforms, [device]: ((out.platforms || {})[device] || 0) + 1 };
   out.direct = { ...out.direct, [report.direct]: ((out.direct || {})[report.direct] || 0) + 1 };
+  out.builds = { ...out.builds, [report.build]: ((out.builds || {})[report.build] || 0) + 1 };
   out.reports = (out.reports || 0) + 1;
   out.lastAt = now;
   return out;
@@ -165,7 +167,7 @@ export async function recordReport(env, report, now = Date.now()) {
     await env.DISCOGS_DATA.put(key, JSON.stringify(mergeBucket(saved, report, now)), { expirationTtl: KEEP_SECONDS });
     // A throttle the server saw itself is already in the log; only the ones it could not see (direct) are added here
     for (const t of report.throttles.filter((x) => x.route === 'direct')) {
-      await recordEvent(env, { at: now, via: t.route, kind: t.kind, used: null, limit: null, retryAfter: null, colo: 'browser' });
+      await recordEvent(env, { at: now, via: t.route, kind: t.kind, used: null, limit: null, retryAfter: null, colo: 'browser', build: report.build });
     }
     return true;
   } catch {
@@ -210,6 +212,7 @@ export function summarizeRoutes(buckets) {
     byKind,
     series,
     devices: sum({}, 'platforms'),
+    builds: sum({}, 'builds'),
     directState: direct,
     lastDirectOkHour: lastDirectOk ? lastDirectOk.hour : null,
     lastReportAt: buckets.reduce((latest, b) => Math.max(latest, b.lastAt || 0), 0) || null,
