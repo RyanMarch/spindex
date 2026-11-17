@@ -4,7 +4,7 @@
 // in an encrypted cookie and signs the request. Page scripts never see a credential.
 
 import { createLimiter } from './limiter.js';
-import { noteSource } from './sourcestats.js';
+import { noteSource, noteSlowdown, pathKind } from './sourcestats.js';
 
 const state = {
   mode: 'none',
@@ -45,7 +45,13 @@ export async function initDiscogs() {
 }
 
 // path: a Discogs API path such as "/releases/249504" or "/users/name/collection/folders/0/releases?page=1"
-const limiter = createLimiter({ pace: (res) => (res?.headers?.get('x-spindex-cache') === 'HIT' ? 0 : paceMs()) });
+// A throttle is remembered across reloads and shared between tabs, so reopening the app inside the window waits quietly
+const PAUSE_KEY = 'spindex_discogs_pause';
+const persist = {
+  load: () => Number(localStorage.getItem(PAUSE_KEY)) || 0,
+  save: (until) => localStorage.setItem(PAUSE_KEY, String(until)),
+};
+const limiter = createLimiter({ pace: (res) => (res?.headers?.get('x-spindex-cache') === 'HIT' ? 0 : paceMs()), persist });
 
 async function send(path, init) {
   if (state.mode !== 'oauth') {
@@ -62,6 +68,11 @@ async function send(path, init) {
   if (remaining !== null) {
     state.remaining = Number(remaining);
     state.remainingAt = Date.now();
+  }
+  if (res.status === 429) {
+    // Which budget ran out? Discogs counts by source IP, so a low 'used' means the proxy's address is shared
+    const num = (name) => { const v = res.headers.get(name); return v === null || v === '' ? null : Number(v); };
+    noteSlowdown({ kind: pathKind(path), used: num('x-discogs-ratelimit-used'), limit: num('x-discogs-ratelimit'), retryAfter: num('retry-after') });
   }
   return res;
 }

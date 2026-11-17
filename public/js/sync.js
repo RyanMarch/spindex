@@ -5,7 +5,7 @@ import { discogsFetch } from './discogs.js';
 import { createLimiter } from './limiter.js';
 import { noteSource } from './sourcestats.js';
 import { fingerprintFromUrl, sameArtwork, discogsImageUrl } from './imagematch.js';
-import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds } from './syncplan.js';
+import { needsFullSync, canStopEarly, readSyncMeta, writeSyncMeta, removedRecordIds, readFieldNames, writeFieldNames } from './syncplan.js';
 import { isCustomRelease } from './values.js';
 import { masterYearUpdates, itunesYearUpdates, isEditionTitle, wikidataYearUpdates } from './years.js';
 import { externalJSON } from './external.js';
@@ -13,7 +13,7 @@ import { externalJSON } from './external.js';
 // Apple allows roughly 20 iTunes searches a minute per address, and when it says no, it leaves out the CORS header, so
 // the browser reports a rejected request rather than a 429. Everything goes through one paced queue, and a rejection
 // pauses it and retries instead of ending the whole pass.
-const itunesLimiter = createLimiter({ pace: () => 3200, maxRetries: 2 });
+const itunesLimiter = createLimiter({ pace: () => 3200, maxRetries: 2, waits: [60000] });
 
 async function itunesFetch(url, priority = 'low') {
   const res = await itunesLimiter.schedule(async () => {
@@ -426,13 +426,20 @@ export function calculateTotalDuration(tracks) {
 // each identified by a field id. Read them by name so condition grades never masquerade as notes.
 const DEFAULT_FIELD_NAMES = new Map([[1, 'Media Condition'], [2, 'Sleeve Condition'], [3, 'Notes']]);
 
-export async function fetchCollectionFieldNames(username, priority = 'high') {
+// The field names almost never change, so they are kept for a month. Only a full or forced sync asks Discogs again.
+export async function fetchCollectionFieldNames(username, priority = 'high', { refresh = false } = {}) {
+  if (!refresh) {
+    const saved = readFieldNames(username);
+    if (saved) return new Map(saved);
+  }
   try {
     const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/fields`, {}, priority);
     if (!res.ok) return DEFAULT_FIELD_NAMES;
     const data = await res.json();
     const map = new Map((data.fields || []).map((f) => [f.id, f.name]));
-    return map.size > 0 ? map : DEFAULT_FIELD_NAMES;
+    if (map.size === 0) return DEFAULT_FIELD_NAMES;
+    writeFieldNames(username, [...map]);
+    return map;
   } catch {
     return DEFAULT_FIELD_NAMES;
   }
@@ -545,7 +552,7 @@ export function buildCollectionRecord(item, existing, fieldNames) {
 
 // A full sync reads the whole collection and picks up edits and removals. Otherwise it reads only as far as the newest
 // records we don't have yet (usually one request), and falls back to a full read whenever the numbers don't add up.
-export async function syncDiscogsCollection(username, onProgress, { full = false } = {}) {
+export async function syncDiscogsCollection(username, onProgress, { full = false, priority = 'high' } = {}) {
   const meta = readSyncMeta(username);
   const readEverything = needsFullSync(meta, Date.now(), full);
   let total = null;
@@ -557,10 +564,10 @@ export async function syncDiscogsCollection(username, onProgress, { full = false
 
   const existingRecords = await getAllRecords();
   const existingMap = new Map(existingRecords.map((r) => [r.id, r]));
-  const fieldNames = await fetchCollectionFieldNames(username);
+  const fieldNames = await fetchCollectionFieldNames(username, priority, { refresh: readEverything });
 
   while (page <= totalPages) {
-    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}&sort=added&sort_order=desc`);
+    const res = await discogsFetch(`/users/${encodeURIComponent(username)}/collection/folders/0/releases?page=${page}&per_page=${perPage}&sort=added&sort_order=desc`, {}, priority);
 
     if (!res.ok) {
       const detail = await res.json().then((body) => body.error || body.message, () => '').catch(() => '');

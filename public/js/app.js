@@ -18,7 +18,7 @@ import { computeHealth, describeStorage, healthSummary } from './health.js';
 import { watchForUpdates, shouldAutoReload } from './updates.js';
 import { trackSummary, pressingNotes } from './vinyl.js';
 import { timeAgo, readSyncMeta, needsAutoSync } from './syncplan.js';
-import { sourceSnapshot } from './sourcestats.js';
+import { sourceSnapshot, readSlowdowns, describeSlowdown } from './sourcestats.js';
 import { statsHTML, valueHTML } from './statsview.js';
 import { initDiscogs, discogsFetch, discogsState, isDiscogsConnected, onDiscogsChange, onDiscogsQueue, disconnectDiscogs } from './discogs.js';
 import { ScannerDrawer } from './scanner-drawer.js';
@@ -473,6 +473,7 @@ class App {
         hiddenAt = Date.now();
         return;
       }
+      this.renderFillStatus?.();
       const updates = window.spindexUpdates;
       // Away for a while with a new version waiting: come back into it
       if (updates && shouldAutoReload({ ready: updates.isReady(), hiddenMs: hiddenAt ? Date.now() - hiddenAt : 0 })) {
@@ -821,6 +822,7 @@ class App {
     const esc = (t) => this.escapeHTML ? this.escapeHTML(String(t)) : String(t);
     const row = (k, v) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`;
     const sources = sourceSnapshot();
+    const slowdowns = readSlowdowns();
     el.innerHTML =  /*html*/ `
       <dl class="health-rows">
         ${row('Records', h.total)}
@@ -838,7 +840,11 @@ class App {
       <p class="stat-note">Sources this session</p>
       ${sources.length
         ? `<dl class="health-rows">${sources.map((s) => row(s.name, `${s.ok} ok${s.failed ? `, ${s.failed} failed (${s.last})` : ''}`)).join('')}</dl>`
-        : '<p class="stat-note">Nothing asked yet.</p>'}`;
+        : '<p class="stat-note">Nothing asked yet.</p>'}
+      <p class="stat-note">Recent Discogs slow-downs</p>
+      ${slowdowns.length
+        ? `<dl class="health-rows">${slowdowns.slice(0, 5).map((d) => row(timeAgo(d.at), describeSlowdown(d))).join('')}</dl>`
+        : '<p class="stat-note">None recorded.</p>'}`;
   }
 
   // A small pill that says what the background Discogs work is doing, so a slow first load reads as intentional
@@ -856,17 +862,21 @@ class App {
   renderFillStatus() {
     const el = this.fillStatusEl;
     if (!el) return;
+    clearTimeout(this.fillStatusTimer);
     const { low, high, pausedUntil } = this.queueStats;
-    // Background work backs off quietly. The notice is only for a wait someone is sitting through.
-    const waiting = pausedUntil > 0 && high > 0;
+    // Background work backs off quietly. The notice is only for a wait someone is sitting through, and it counts
+    // down from the clock so it clears itself even if the queue never reports back (a suspended tab, a slow retry).
+    const secondsLeft = high > 0 && pausedUntil > 0 ? Math.ceil((pausedUntil - Date.now()) / 1000) : 0;
+    const waiting = secondsLeft > 0;
     const active = low > 0 || waiting;
     el.hidden = !active;
     if (!active) return;
     el.textContent = waiting
-      ? 'Discogs asked us to slow down. Resuming shortly…'
+      ? `Discogs asked us to slow down. Resuming in ${secondsLeft}s…`
       : this.fill?.total
         ? `${this.fill.label || 'Filling in details…'} ${this.fill.done} of ${this.fill.total}`
         : 'Finishing track lists…';
+    if (waiting) this.fillStatusTimer = setTimeout(() => this.renderFillStatus(), 1000);
   }
 
   // Records still showing a Discogs photo of the sleeve get clean cover art: Deezer first (fast), then iTunes for the rest
@@ -2055,7 +2065,7 @@ class App {
         if (message) return this.setSyncStatus(message, '');
         if (quick) return this.setSyncStatus('Checking for new records...', '');
         this.setSyncStatus(`Syncing page ${page} of ${totalPages} (${count} albums)...`, '');
-      }, { full });
+      }, { full, priority: auto && hadRealRecords ? 'low' : 'high' }); // a check behind a crate someone is already looking at never makes them wait
 
       const stale = (await getAllRecords()).filter((r) => String(r.id).startsWith('discogs_mock_'));
       if (stale.length > 0) await deleteRecords(stale.map((r) => r.id));
