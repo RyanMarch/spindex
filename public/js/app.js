@@ -823,28 +823,38 @@ class App {
     const row = (k, v) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`;
     const sources = sourceSnapshot();
     const slowdowns = readSlowdowns();
+    const rows = (list) => `<dl class="health-rows">${list.join('')}</dl>`;
+    const section = (title, body) => `<section class="health-section"><h4 class="health-heading">${title}</h4>${body}</section>`;
+    const empty = (text) => `<p class="health-empty">${text}</p>`;
+    const albums = (n) => `${n} ${n === 1 ? 'album' : 'albums'}`;
+    const failedNote = (s) => (s.failed ? `, ${s.failed} failed (${s.last})` : '');
+
+    const collection = h.total === 0
+      ? empty('Nothing here yet. Your records appear after you connect Discogs and check for new ones.')
+      : rows([
+        row('Records', h.total),
+        row('Cleaner covers', `${h.covers.cleaner} of ${h.total}`),
+        row('Discogs images', `${h.covers.discogs}${h.covers.offered ? ` (${h.covers.offered} with another cover on offer)` : ''}`),
+        row('Covers you chose', h.covers.pinned),
+        row('Release details', `${h.details.have} of ${h.details.total}${h.details.custom ? ` (${h.details.custom} custom)` : ''}`),
+        row('Original years', `${h.years.resolved} of ${h.years.total}`),
+        row('Back covers', h.backCovers.opened ? `${h.backCovers.found} found in ${albums(h.backCovers.opened)} opened` : 'Found as you open albums'),
+        row('Still to work out', h.pending.art + h.pending.details === 0 ? 'Nothing' : `${h.pending.art} cover searches, ${h.pending.details} details`),
+      ]);
+
     el.innerHTML =  /*html*/ `
-      <dl class="health-rows">
-        ${row('Records', h.total)}
-        ${row('Cleaner covers', `${h.covers.cleaner} of ${h.total}`)}
-        ${row('Discogs images', `${h.covers.discogs}${h.covers.offered ? ` (${h.covers.offered} with another cover on offer)` : ''}`)}
-        ${row('Covers you chose', h.covers.pinned)}
-        ${row('Release details', `${h.details.have} of ${h.details.total}${h.details.custom ? ` (${h.details.custom} custom)` : ''}`)}
-        ${row('Original years', `${h.years.resolved} of ${h.years.total}`)}
-        ${row('Back covers', h.backCovers.opened ? `${h.backCovers.found} found, ${h.backCovers.none} none, in ${h.backCovers.opened} albums opened` : 'Found as you open albums')}
-        ${row('Still to work out', h.pending.art + h.pending.details === 0 ? 'Nothing' : `${h.pending.art} cover searches, ${h.pending.details} details`)}
-        ${row('Storage used', `${storage.used} of ${storage.quota}`)}
-        ${row('Protection', storage.persisted)}
-        ${row('Pictures kept offline', imageCount)}
-      </dl>
-      <p class="stat-note">Sources this session</p>
-      ${sources.length
-        ? `<dl class="health-rows">${sources.map((s) => row(s.name, `${s.ok} ok${s.failed ? `, ${s.failed} failed (${s.last})` : ''}`)).join('')}</dl>`
-        : '<p class="stat-note">Nothing asked yet.</p>'}
-      <p class="stat-note">Recent Discogs slow-downs</p>
-      ${slowdowns.length
-        ? `<dl class="health-rows">${slowdowns.slice(0, 5).map((d) => row(timeAgo(d.at), describeSlowdown(d))).join('')}</dl>`
-        : '<p class="stat-note">None recorded.</p>'}`;
+      ${section('Your collection', collection)}
+      ${section('On this device', rows([
+        row('Storage used', `${storage.used} of ${storage.quota}`),
+        row('Protection', storage.persisted),
+        row('Pictures kept offline', imageCount),
+      ]))}
+      ${section('Outside sources this session', sources.length
+        ? rows(sources.map((s) => row(s.name, `${s.ok} ok${failedNote(s)}`)))
+        : empty('Nothing asked yet.'))}
+      ${section('Recent Discogs slow-downs', slowdowns.length
+        ? rows(slowdowns.slice(0, 5).map((d) => row(timeAgo(d.at), describeSlowdown(d))))
+        : empty('None recorded.'))}`;
   }
 
   // A small pill that says what the background Discogs work is doing, so a slow first load reads as intentional

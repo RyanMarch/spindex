@@ -32,11 +32,14 @@ export function computeHealth(records) {
 
 // Turn what the browser reports about storage into words
 export function describeStorage({ usage, quota, persisted } = {}) {
-  const megabytes = (n) => `${(n / (1024 * 1024)).toFixed(n >= 100 * 1024 * 1024 ? 0 : 1)} MB`;
+  // Whole numbers for big sizes, one decimal for small ones; gigabytes once it is that large
+  const size = (n) => (n >= 1024 ** 3
+    ? `${(n / 1024 ** 3).toFixed(n >= 100 * 1024 ** 3 ? 0 : 1)} GB`
+    : `${(n / (1024 * 1024)).toFixed(n >= 100 * 1024 * 1024 ? 0 : 1)} MB`);
   return {
-    used: Number.isFinite(usage) ? megabytes(usage) : 'unknown',
-    quota: Number.isFinite(quota) && quota > 0 ? megabytes(quota) : 'unknown',
-    persisted: persisted === true ? 'Protected from automatic clean-up' : persisted === false ? 'Not protected: the browser may clear it if space runs short' : 'Unknown',
+    used: Number.isFinite(usage) ? size(usage) : 'unknown',
+    quota: Number.isFinite(quota) && quota > 0 ? size(quota) : 'unknown',
+    persisted: persisted === true ? 'Protected from automatic clean-up' : persisted === false ? 'Not protected from clean-up' : 'Unknown',
   };
 }
 

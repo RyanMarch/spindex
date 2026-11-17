@@ -269,6 +269,15 @@ Proxies allowlisted requests to `api.discogs.com`: reads, plus one write (adding
 - Automatically attaches user OAuth credentials or server credentials.
 - Disallows every other method and any non-allowlisted path.
 
+### Direct collection reads (`/api/discogs/sign`)
+Discogs counts requests by the address they come from, and the proxy shares its address with other Cloudflare sites. So the signed-in person's own collection (private, never cached) is read straight from their browser:
+- `/api/discogs/sign?path=...` returns `{ url, authorization }` for one vetted `GET` under `/users/<you>/collection/`, using the same allow-list as the proxy. Anything else gets 403; public pages and searches stay on the cached proxy.
+- The header uses OAuth **HMAC-SHA1** (`signedHeader` in `functions/_lib/oauth.js`): it covers the method, address, parameters, time and a one-time nonce, and reveals neither the consumer secret nor the token secret. (The proxy's own PLAINTEXT signatures contain the secrets and must never leave the server.)
+- The client (`sendDirect` in `public/js/discogs.js`) signs at the last moment, then calls Discogs. A refused signature or a blocked request switches the rest of the session back to the proxy. A 429 is not a failure of the route: the queue retries it as usual.
+- Discogs does not expose its rate-limit headers to browser scripts, so direct answers carry none; the queue paces by its own default.
+- The service worker ignores requests to other origins (except pictures), so private Discogs answers are never stored by it.
+- Settings > Diagnostics lists "Discogs direct" under sources: its successes, and why it fell back.
+
 ### External Proxies & Relays
 
 #### External Metadata Relay (`/api/ext`)
