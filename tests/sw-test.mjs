@@ -153,7 +153,7 @@ const opaque = () => ({ status: 0, type: 'opaque', clone() { return this; } });
     return {
       controller,
       addEventListener: (type, fn) => { if (type === 'controllerchange') handlers.push(fn); },
-      fire: () => handlers.forEach((fn) => fn()),
+      fire: () => Promise.all(handlers.map((fn) => fn())),
       getRegistration: async () => ({ update: async () => { made.updates++; } }),
     };
   };
@@ -163,11 +163,11 @@ const opaque = () => ({ status: 0, type: 'opaque', clone() { return this; } });
   let told = 0;
   const first = makeContainer(null);
   const w1 = watchForUpdates({ container: first, onReady: () => told++ });
-  first.fire();
+  await first.fire();
   assert.equal(told, 0, 'the first install is not announced');
-  first.fire();
+  await first.fire();
   assert.equal(told, 1, 'the next takeover is');
-  first.fire();
+  await first.fire();
   assert.equal(told, 1, 'and only once');
   assert.equal(w1.isReady(), true);
 
@@ -175,12 +175,34 @@ const opaque = () => ({ status: 0, type: 'opaque', clone() { return this; } });
   let told2 = 0;
   const second = makeContainer({});
   watchForUpdates({ container: second, onReady: () => told2++ });
-  second.fire();
+  await second.fire();
   assert.equal(told2, 1, 'an update over an existing worker is announced');
 
   await w1.check();
   assert.equal(made.updates, 1, 'coming back to the app asks the browser to look for a new version');
   assert.equal(watchForUpdates({ container: undefined, onReady() {} }), null, 'no service worker support: nothing to watch');
+
+  // A page asks the worker which build it is, and an update only counts when the build differs
+  const { askBuild } = await import('../public/js/updates.js');
+  const worker = (build) => ({ postMessage: (msg, ports) => { if (msg === 'build' && build) ports[0].postMessage({ build }); } });
+  assert.equal(await askBuild(worker('v57')), 'v57');
+  assert.equal(await askBuild(worker(null), 20), null, 'a worker that does not answer is unknown');
+  assert.equal(await askBuild(undefined), null);
+  const listeners2 = {};
+  const sameBuild = { controller: worker('v57'), addEventListener: (t, fn) => { listeners2[t] = fn; } };
+  let announced = 0;
+  watchForUpdates({ container: sameBuild, onReady: () => announced++ });
+  await listeners2.controllerchange();
+  assert.equal(announced, 0, 'the same build swapped in again (emptying the caches) is not an update');
+  const newer = { controller: worker('v57'), addEventListener: (t, fn) => { listeners2[t] = fn; } };
+  watchForUpdates({ container: newer, onReady: () => announced++ });
+  newer.controller = worker('v58');
+  await listeners2.controllerchange();
+  assert.equal(announced, 1, 'a different build is');
+  const oldWorker = { controller: { postMessage() {} }, addEventListener: (t, fn) => { listeners2[t] = fn; } };
+  watchForUpdates({ container: oldWorker, onReady: () => announced++ });
+  await listeners2.controllerchange();
+  assert.equal(announced, 2, 'a worker that cannot say which build it is falls back to announcing');
 
   // The notice appears once per build: after reloading into it, a repeat announcement of the same build stays quiet
   const { shouldShowUpdate, markBuildSeen } = await import('../public/js/updates.js');
