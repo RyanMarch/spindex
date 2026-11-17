@@ -15,7 +15,7 @@ import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBack
 import { sortYear } from './years.js';
 import { computeStats } from './stats.js';
 import { computeHealth, describeStorage, healthSummary } from './health.js';
-import { watchForUpdates, shouldAutoReload } from './updates.js';
+import { watchForUpdates, shouldAutoReload, shouldShowUpdate, markBuildSeen, currentBuild } from './updates.js';
 import { trackSummary, pressingNotes } from './vinyl.js';
 import { timeAgo, readSyncMeta, needsAutoSync } from './syncplan.js';
 import { sourceSnapshot, readSlowdowns, describeSlowdown } from './sourcestats.js';
@@ -95,7 +95,12 @@ if ('serviceWorker' in navigator) {
     });
     window.spindexUpdates = watchForUpdates({
       container: navigator.serviceWorker,
-      onReady: () => { const pill = document.getElementById('update-pill'); if (pill) pill.hidden = false; },
+      onReady: async () => {
+        const build = await currentBuild();
+        if (!shouldShowUpdate(build)) return; // already reloaded into this build
+        const pill = document.getElementById('update-pill');
+        if (pill) { pill.dataset.build = build; pill.hidden = false; }
+      },
     });
   }
 }
@@ -466,9 +471,13 @@ class App {
     document.getElementById('demo-note')?.addEventListener('click', () => this.openSettings());
 
     // Coming back to the app after a while: pick up a new version of the app if one is waiting
-    document.getElementById('update-pill')?.addEventListener('click', () => location.reload());
+    document.getElementById('update-pill')?.addEventListener('click', (event) => {
+      markBuildSeen(event.currentTarget.dataset.build);
+      event.currentTarget.hidden = true;
+      location.reload();
+    });
     let hiddenAt = 0;
-    document.addEventListener('visibilitychange', () => {
+    document.addEventListener('visibilitychange', async () => {
       if (document.visibilityState === 'hidden') {
         hiddenAt = Date.now();
         return;
@@ -477,6 +486,7 @@ class App {
       const updates = window.spindexUpdates;
       // Away for a while with a new version waiting: come back into it
       if (updates && shouldAutoReload({ ready: updates.isReady(), hiddenMs: hiddenAt ? Date.now() - hiddenAt : 0 })) {
+        markBuildSeen(await currentBuild());
         location.reload();
         return;
       }
