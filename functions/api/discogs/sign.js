@@ -1,7 +1,7 @@
-// GET /api/discogs/sign?path=<discogs path> - a one-request signature so the browser can read the signed-in user's own
-// collection from Discogs directly. Discogs counts requests by the address they come from, and this server shares its
-// address with other sites; the person's own connection has a budget of its own. Only private collection reads are
-// signed here. Everything the shared cache can answer stays on the proxy.
+// GET /api/discogs/sign?path=<discogs path> - a one-request signature so the browser can read from Discogs directly.
+// Discogs counts requests by the address they come from, and this server shares its address with other sites; the
+// person's own connection has a budget of its own. Only reads the proxy would allow are signed (the person's own
+// collection, releases, masters, artists and barcode searches), never anything else.
 import { configured, apiBase, signedHeader } from '../../_lib/oauth.js';
 import { readSession } from '../../_lib/session.js';
 import { allowedUpstream } from '../../_lib/proxy.js';
@@ -20,7 +20,7 @@ export async function onRequestGet({ request, env }) {
     return json({ error: 'That Discogs endpoint is not available.' }, 403);
   }
   const upstreamPath = allowedUpstream(parsed.pathname, parsed.searchParams, session);
-  if (!upstreamPath || !/^\/users\/[^/]+\/collection\//.test(upstreamPath)) {
+  if (!upstreamPath || upstreamPath.startsWith('/oauth/')) {
     return json({ error: 'That Discogs endpoint is not available.' }, 403);
   }
 

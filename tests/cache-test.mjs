@@ -71,6 +71,18 @@ try {
   await get(['releases', '2']);
   assert.equal(upstreamCalls, 2, 'a different release is a different cache entry');
 
+  // A cache-only lookup answers from the cache or says "nothing here", and never asks Discogs
+  upstreamCalls = 0;
+  const hit = await get(['releases', '1'], { Cookie: cookie });
+  assert.equal(hit.headers.get('x-spindex-cache'), 'HIT');
+  const onlyMiss = await proxy({ request: new Request('https://spindex.test/api/discogs/releases/999?cacheonly=1', { headers: { Cookie: cookie } }), env, params: { path: ['releases', '999'] }, waitUntil: () => {} });
+  assert.equal(onlyMiss.status, 204, 'not cached: nothing is returned');
+  assert.equal(upstreamCalls, 0, 'and Discogs was not asked');
+  const onlyHit = await proxy({ request: new Request('https://spindex.test/api/discogs/releases/1?cacheonly=1', { headers: { Cookie: cookie } }), env, params: { path: ['releases', '1'] }, waitUntil: () => {} });
+  assert.equal(onlyHit.status, 200, 'cached: the page comes back as normal');
+  assert.equal(upstreamCalls, 0);
+  upstreamCalls = 2;
+
   // The collection is never cached
   await get(['users', 'TestUser', 'collection', 'folders', '0', 'releases']);
   await new Promise((resolve) => setTimeout(resolve));

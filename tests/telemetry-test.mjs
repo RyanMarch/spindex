@@ -128,7 +128,7 @@ assert.ok(body.routes && Array.isArray(body.routes.series), 'route stats are inc
   const bstore = { DISCOGS_DATA: kv() };
   const t0 = Date.UTC(2026, 10, 17, 21, 5);
   await recordReport(bstore, good, t0);
-  await recordReport(bstore, validateReport({ counts: { 'direct|collection|throttled': 2, 'proxy-miss|release|ok': 4 }, throttles: [{ route: 'direct', kind: 'collection' }], direct: 'on', platform: 'desktop' }), t0 + 3600000);
+  await recordReport(bstore, validateReport({ counts: { 'direct|collection|throttled': 2, 'proxy-miss|release|ok': 4 }, throttles: [{ route: 'direct', kind: 'collection' }, { route: 'proxy-miss', kind: 'artist' }], direct: 'on', platform: 'desktop' }), t0 + 3600000);
   const buckets = await readBuckets(bstore);
   assert.deepEqual(buckets.map((b) => b.hour), ['2026-11-17T21', '2026-11-17T22']);
   const routes = summarizeRoutes(buckets);
@@ -140,7 +140,8 @@ assert.ok(body.routes && Array.isArray(body.routes.series), 'route stats are inc
   assert.equal(routes.byKind['collection|direct'], 5);
   assert.deepEqual(routes.devices, { 'ios-app': 1, 'desktop-browser': 1 });
   const throttled = await readEvents(bstore);
-  assert.equal(throttled.length, 2, 'a throttle the app saw is logged as an event too');
+  assert.equal(throttled.length, 2, 'direct throttles are logged; a proxy one the server already saw is not logged twice');
+  assert.ok(throttled.every((e) => e.via === 'direct'));
   assert.equal(throttled[0].via, 'direct');
   assert.deepEqual(summarizeRoutes([]).series, []);
 
