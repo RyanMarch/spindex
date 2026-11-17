@@ -182,6 +182,19 @@ const opaque = () => ({ status: 0, type: 'opaque', clone() { return this; } });
   assert.equal(made.updates, 1, 'coming back to the app asks the browser to look for a new version');
   assert.equal(watchForUpdates({ container: undefined, onReady() {} }), null, 'no service worker support: nothing to watch');
 
+  // The notice appears once per build: after reloading into it, a repeat announcement of the same build stays quiet
+  const { shouldShowUpdate, markBuildSeen } = await import('../public/js/updates.js');
+  const mem = new Map();
+  const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+  assert.equal(shouldShowUpdate('v56', storage), true, 'a build not yet reloaded into is announced');
+  markBuildSeen('v56', storage);
+  assert.equal(shouldShowUpdate('v56', storage), false, 'the same build is not announced again');
+  assert.equal(shouldShowUpdate('v57', storage), true, 'a newer build is');
+  assert.equal(shouldShowUpdate('unknown', storage), true, 'when the build cannot be read, the notice still works');
+  markBuildSeen('unknown', storage);
+  assert.equal(shouldShowUpdate('v57', storage), true, 'an unreadable build is never recorded');
+  assert.equal(shouldShowUpdate('v56', { getItem() { throw new Error('blocked'); } }), true, 'no storage: still announced');
+
   assert.equal(shouldAutoReload({ ready: true, hiddenMs: AUTO_RELOAD_AFTER_MS }), true, 'away long enough with an update waiting: reload');
   assert.equal(shouldAutoReload({ ready: true, hiddenMs: 10000 }), false, 'a quick glance away never reloads');
   assert.equal(shouldAutoReload({ ready: false, hiddenMs: AUTO_RELOAD_AFTER_MS * 10 }), false, 'nothing to reload into');
