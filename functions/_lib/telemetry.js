@@ -67,14 +67,14 @@ const median = (list) => {
 
 // A read of the pattern: a low typical 'used' means something other than Spindex spent the budget
 export function summarize(events) {
-  const count = (field) => events.reduce((acc, e) => ({ ...acc, [e[field]]: (acc[e[field]] || 0) + 1 }), {});
+  const count = (field, fallback = 'unknown') => events.reduce((acc, e) => ({ ...acc, [e[field] ?? fallback]: (acc[e[field] ?? fallback] || 0) + 1 }), {});
   const used = events.map((e) => e.used).filter((v) => v !== null && v !== undefined);
   const medianUsed = median(used);
   return {
     total: events.length,
     byColo: count('colo'),
     byKind: count('kind'),
-    byVia: count('via'),
+    byVia: count('via', 'proxy'),
     medianUsed,
     reading: medianUsed === null
       ? 'Discogs has not reported its budget on these, so the cause is unknown.'
@@ -163,7 +163,8 @@ export async function recordReport(env, report, now = Date.now()) {
     const key = hourKey(now);
     const saved = await env.DISCOGS_DATA.get(key, 'json').catch(() => null);
     await env.DISCOGS_DATA.put(key, JSON.stringify(mergeBucket(saved, report, now)), { expirationTtl: KEEP_SECONDS });
-    for (const t of report.throttles) {
+    // A throttle the server saw itself is already in the log; only the ones it could not see (direct) are added here
+    for (const t of report.throttles.filter((x) => x.route === 'direct')) {
       await recordEvent(env, { at: now, via: t.route, kind: t.kind, used: null, limit: null, retryAfter: null, colo: 'browser' });
     }
     return true;

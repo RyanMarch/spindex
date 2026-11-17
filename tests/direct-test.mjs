@@ -41,8 +41,12 @@ assert.equal((await ask('/users/ANN/collection/fields')).status, 200, 'the name 
 
 assert.equal((await ask('/users/ann/collection/folders/0/releases', {})).status, 401, 'no session, no signature');
 assert.equal((await ask('/users/bob/collection/folders/0/releases')).status, 403, "someone else's collection");
-assert.equal((await ask('/releases/123')).status, 403, 'public pages stay on the cached proxy');
-assert.equal((await ask('/database/search?barcode=0769152437408')).status, 403, 'searches stay on the proxy');
+assert.equal((await ask('/releases/123')).status, 200, 'public pages are signed too, for a cache miss');
+assert.equal((await ask('/masters/9')).status, 200);
+assert.equal((await ask('/artists/55')).status, 200);
+assert.equal((await ask('/database/search?barcode=0769152437408')).status, 200, 'a barcode search');
+assert.equal((await ask('/database/search?q=anything')).status, 403, 'a free-text search is not allowed');
+assert.equal((await ask('/labels/5')).status, 403, 'nor is anything the proxy would refuse');
 assert.equal((await ask('/oauth/identity')).status, 403);
 assert.equal((await ask('/users/ann/collection/folders/0/releases?page=1&sort=drop')).status, 200, 'unknown query values are dropped, not signed');
 assert.ok(!(await (await ask('/users/ann/collection/folders/0/releases?evil=1&page=1')).json()).url.includes('evil'), 'only vetted query values are signed');
@@ -72,9 +76,47 @@ assert.equal(first.status, 200);
 assert.deepEqual(calls.slice(-2).map((c) => c.split('?')[0]), ['/api/discogs/sign', 'https://api.discogs.com/users/ann/collection/folders/0/releases'], 'a collection read goes straight to Discogs');
 assert.ok(!calls.some((c) => c.startsWith('/api/discogs/users')), 'and not through the proxy');
 
+// A public page: the shared cache is asked first, and only a miss goes to Discogs
+let cacheAnswer = () => new Response(null, { status: 204 });
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (input, init = {}) => {
+  const target = String(input);
+  if (target.startsWith('/api/discogs/releases/') || target.startsWith('/api/discogs/masters/')) { calls.push(target); return cacheAnswer(); }
+  return realFetch(input, init);
+};
+direct = () => new Response('{"title":"Fresh","lowest_price":12.5,"num_for_sale":4}', { status: 200, headers: { 'content-type': 'application/json' } });
 calls.length = 0;
-await send('/releases/123');
-assert.deepEqual(calls, ['/api/discogs/releases/123'], 'a public page stays on the proxy');
+const missed = await send('/releases/123');
+assert.equal(calls[0], '/api/discogs/releases/123?cacheonly=1', 'the cache is asked without spending a request');
+assert.ok(calls.some((c) => c.startsWith('/api/discogs/sign')) && calls.some((c) => c.startsWith('https://api.discogs.com/')), 'a miss goes to Discogs from the browser');
+const fresh = await missed.json();
+assert.equal(fresh.title, 'Fresh');
+assert.ok(!('lowest_price' in fresh) && !('num_for_sale' in fresh), 'prices are removed before the app keeps anything');
+
+cacheAnswer = () => new Response('{"title":"Cached"}', { status: 200, headers: { 'x-spindex-cache': 'HIT' } });
+calls.length = 0;
+assert.equal((await (await send('/releases/123')).json()).title, 'Cached');
+assert.deepEqual(calls, ['/api/discogs/releases/123?cacheonly=1'], 'a cache hit never reaches Discogs');
+
+cacheAnswer = () => new Response(null, { status: 204 });
+calls.length = 0;
+await send('/database/search?barcode=0769152437408&type=release');
+assert.equal(calls[0], '/api/discogs/database/search?barcode=0769152437408&type=release&cacheonly=1', 'a search keeps its own query');
+
+// With the direct route off, a public page goes through the proxy as before
+directRoute: {
+  resetDirect();
+  direct = () => new Response('', { status: 401 });
+  await send(collection); // turns the direct route off
+  assert.equal(directAvailable(), false);
+  calls.length = 0;
+  await send('/masters/9');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0], '/api/discogs/masters/9', 'no cache-only step once the direct route is off');
+  resetDirect();
+}
+globalThis.fetch = realFetch;
+direct = () => new Response('{"releases":[]}', { status: 200 });
 calls.length = 0;
 await send(collection, { method: 'POST' });
 assert.ok(calls[0].startsWith('/api/discogs/'), 'only reads go direct');

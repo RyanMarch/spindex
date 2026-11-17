@@ -59,14 +59,39 @@ const limiter = createLimiter({ pace: (res) => (res?.headers?.get('x-spindex-cac
 // signature from the server. Anything the shared cache can answer stays on the proxy. If the direct route fails for any
 // reason, this session goes back to the proxy and carries on.
 const DIRECT_PATH = /^\/users\/[^/?]+\/collection\//;
+// Pages that are the same for everyone: the shared cache answers these when it can, otherwise the browser asks Discogs
+const SHARED_PATH = /^\/(releases|masters|artists)\/\d+$|^\/database\/search\?barcode=/;
+
+// Marketplace figures change by the hour and Spindex never shows them, so they are never kept (the proxy strips them
+// before it caches anything; the same rule applies to what comes straight from Discogs)
+export async function withoutMarketplace(res) {
+  if (!res.ok) return res;
+  try {
+    const data = JSON.parse(await res.clone().text());
+    if (!data || typeof data !== 'object') return res;
+    delete data.lowest_price;
+    delete data.num_for_sale;
+    return new Response(JSON.stringify(data), { status: res.status, headers: res.headers });
+  } catch {
+    return res;
+  }
+}
 let directOff = false;
+const directRoute = new WeakSet(); // responses that came straight from Discogs, for the tally
 let directOffReason = '';
 export const directAvailable = () => !directOff;
 export const resetDirect = () => { directOff = false; directOffReason = ''; };
 
 async function sendDirect(path, init) {
-  if (directOff || init?.method || !DIRECT_PATH.test(path)) return null;
+  if (directOff || init?.method) return null;
+  const shared = SHARED_PATH.test(path);
+  if (!shared && !DIRECT_PATH.test(path)) return null;
   try {
+    if (shared) {
+      // Ask the shared cache first: an answer there costs nobody anything
+      const cached = await fetch(`/api/discogs${path}${path.includes('?') ? '&' : '?'}cacheonly=1`, { credentials: 'same-origin' });
+      if (cached.status !== 204) return cached;
+    }
     // Signed at the last moment: the signature carries a timestamp, and the queue may have made this request wait
     const signed = await fetch(`/api/discogs/sign?path=${encodeURIComponent(path)}`, { credentials: 'same-origin' });
     if (!signed.ok) return null; // not signed in, or not something we sign: the proxy will say why
@@ -79,7 +104,9 @@ async function sendDirect(path, init) {
       return null;
     }
     noteSource('Discogs direct', res.ok || res.status === 404 || res.status === 429, `answered ${res.status}`);
-    return res;
+    const out = shared ? await withoutMarketplace(res) : res;
+    directRoute.add(out);
+    return out;
   } catch {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('offline');
     directOff = true; // blocked by the browser, a content blocker or the network
@@ -112,9 +139,10 @@ export async function send(path, init) {
     throw new Error('Not connected to Discogs');
   }
 
-  const directRes = await sendDirect(path, init);
-  const res = directRes || (await fetch(`/api/discogs${path}`, { credentials: 'same-origin', ...init }));
-  const route = directRes ? 'direct' : res.headers.get('x-spindex-cache') === 'HIT' ? 'proxy-hit' : 'proxy-miss';
+  const answered = await sendDirect(path, init);
+  const res = answered || (await fetch(`/api/discogs${path}`, { credentials: 'same-origin', ...init }));
+  const fromDiscogs = directRoute.has(res);
+  const route = fromDiscogs ? 'direct' : res.headers.get('x-spindex-cache') === 'HIT' ? 'proxy-hit' : 'proxy-miss';
   reporter.note(route, pathKind(path), outcomeOf(res.status));
   if (res.status === 401) {
     // The connection is no longer valid (revoked, or the cookie expired): fall back and let the UI say so

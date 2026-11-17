@@ -44,6 +44,12 @@ export async function onRequestGet({ request, env, params, waitUntil }) {
     }
   }
 
+  // A cache-only lookup: the browser asked whether the shared cache already has this page. If it does not, say so
+  // instead of spending Discogs' budget on it. The browser then fetches it from Discogs itself, from its own address.
+  if (cachePath && new URL(request.url).searchParams.get('cacheonly') === '1') {
+    return new Response(null, { status: 204, headers: { 'Cache-Control': 'private, no-store', 'X-Spindex-Cache': 'MISS' } });
+  }
+
   let upstream;
   try {
     upstream = await apiRequest(env, session, upstreamPath);
