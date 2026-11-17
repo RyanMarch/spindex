@@ -3,6 +3,7 @@ import { configured, apiRequest } from '../../_lib/oauth.js';
 import { readSession, clearCookie, SESSION_COOKIE } from '../../_lib/session.js';
 import { allowedUpstream } from '../../_lib/proxy.js';
 import { json } from '../../_lib/http.js';
+import { buildEvent, recordEvent } from '../../_lib/telemetry.js';
 import { cacheablePath, cacheKey, ttlSeconds, stripMarketplace } from '../../_lib/cache.js';
 
 // Headers worth passing back: rate-limit accounting lets the app pace itself
@@ -57,6 +58,14 @@ export async function onRequestGet({ request, env, params, waitUntil }) {
   }
   // Discogs no longer accepts this token (the user revoked the app): drop the session so the UI can reconnect
   if (upstream.status === 401) headers.append('Set-Cookie', clearCookie(request, SESSION_COOKIE));
+
+  // A slow-down is kept for the admin page (no names, no releases: see telemetry.js)
+  const slowdown = buildEvent({ status: upstream.status, headers: upstream.headers, path: upstreamPath, colo: request.cf?.colo });
+  if (slowdown) {
+    const logged = recordEvent(env, slowdown);
+    if (waitUntil) waitUntil(logged);
+    else await logged;
+  }
 
   if ((cache || store) && upstream.ok) {
     headers.set('X-Spindex-Cache', 'MISS');
