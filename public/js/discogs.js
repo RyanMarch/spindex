@@ -5,7 +5,7 @@
 
 import { createLimiter } from './limiter.js';
 import { noteSource, noteSlowdown, pathKind } from './sourcestats.js';
-import { createReporter, detectPlatform, outcomeOf } from './reporter.js';
+import { createReporter, detectPlatform, outcomeOf, buildFrom } from './reporter.js';
 
 const state = {
   mode: 'none',
@@ -116,6 +116,9 @@ async function sendDirect(path, init) {
   }
 }
 
+let buildTag = 'unknown';
+if (typeof caches !== 'undefined') caches.keys().then((names) => { buildTag = buildFrom(names); }).catch(() => {});
+
 // The app tells the server how its requests went (see reporter.js), in batches and when it goes to the background
 const reporter = createReporter({
   send: (body) => {
@@ -125,6 +128,7 @@ const reporter = createReporter({
     fetch('/api/discogs/report', { method: 'POST', body: payload, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', keepalive: true }).catch(() => {});
   },
   directState: () => (directOff ? `off:${directOffReason}` : 'on'),
+  build: () => buildTag,
   platform: typeof navigator !== 'undefined' ? detectPlatform(navigator.userAgent, navigator.maxTouchPoints) : 'other',
   standalone: typeof window !== 'undefined' && Boolean(window.matchMedia?.('(display-mode: standalone)').matches || window.navigator?.standalone),
 });
