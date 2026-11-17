@@ -3677,7 +3677,31 @@ html {
 }
 
 .health-rows {
-  margin: 0 0 .8rem
+  margin: 0
+}
+
+.health-section {
+  margin-top: 1.2rem
+}
+
+.health-section:first-child {
+  margin-top: 0
+}
+
+.health-heading {
+  margin: 0 0 .25rem;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-muted)
+}
+
+.health-empty {
+  margin: 0;
+  padding: .3rem 0;
+  font-size: .82rem;
+  color: var(--text-muted)
 }
 
 .health-rows>div {
