@@ -470,6 +470,9 @@ npm test
    - Verify health check at `https://<your-domain>/api/health`.
    - Test Discogs connection, collection sync, album gatefold navigation, and share link generation.
 
+### Update notice
+`public/js/updates.js` shows "Updated. Tap to refresh" only when a *different* build takes over. Each page asks its service worker which build it is (`'build'` message, answered with the cache version such as `v57`) and compares the build it started under with the one that takes over, so a browser swapping in the same worker again (Safari's Empty Caches does it) stays quiet. Workers that cannot answer fall back to announcing, and a remembered "already reloaded into this build" mark stops repeats.
+
 ### Service Worker Cache Management
 - The Service Worker ([public/sw.js](file:///Users/ryan/Sites/spindex/public/sw.js)) uses a network-first strategy with cache fallback for static assets.
 - When deploying critical CSS/JS updates that must immediately reach existing visitors, increment `CACHE_NAME` in [public/sw.js](file:///Users/ryan/Sites/spindex/public/sw.js) and the cache busting query string (`?v=...`) in [public/index.html](file:///Users/ryan/Sites/spindex/public/index.html).
