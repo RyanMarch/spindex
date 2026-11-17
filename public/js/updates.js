@@ -40,17 +40,44 @@ export async function currentBuild() {
   }
 }
 
+// Ask a service worker which build it is ("v56"). Older workers do not answer, and a worker that does not answer in
+// time counts as unknown.
+export function askBuild(worker, waitMs = 1000) {
+  return new Promise((resolve) => {
+    if (!worker || typeof worker.postMessage !== 'function' || typeof MessageChannel === 'undefined') return resolve(null);
+    const channel = new MessageChannel();
+    const finish = (value) => {
+      clearTimeout(timer);
+      channel.port1.close();
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish(null), waitMs);
+    channel.port1.onmessage = (event) => finish(typeof event.data?.build === 'string' ? event.data.build : null);
+    try {
+      worker.postMessage('build', [channel.port2]);
+    } catch {
+      finish(null);
+    }
+  });
+}
+
 // container: navigator.serviceWorker. onReady runs once, when a newer version has taken over from the one this page loaded with.
 export function watchForUpdates({ container, onReady }) {
   if (!container) return null;
   let hadController = Boolean(container.controller); // the very first install also fires "controllerchange": that is not an update
   let ready = false;
+  // The build this page started under. A browser can swap in the same worker again (emptying its caches does it), and
+  // that is not an update: only a different build is.
+  const startedWith = container.controller ? askBuild(container.controller) : Promise.resolve(null);
 
-  container.addEventListener('controllerchange', () => {
+  container.addEventListener('controllerchange', async () => {
     if (!hadController) {
       hadController = true;
       return;
     }
+    if (ready) return;
+    const [before, now] = await Promise.all([startedWith, askBuild(container.controller)]);
+    if (before && now && before === now) return;
     if (ready) return;
     ready = true;
     onReady();

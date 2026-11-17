@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spindex-cache-v56';
+const CACHE_NAME = 'spindex-cache-v57';
 // Covers and photos live in their own cache: it outlives app updates, so browsing offline (and reopening the app) doesn't
 // fetch every sleeve again. Bounded, so it can't grow without limit.
 const IMAGE_CACHE = 'spindex-images-v1';
@@ -49,6 +49,11 @@ const ASSETS = [
   '/terms.html',
   '/manifest.webmanifest'
 ];
+
+// Pages ask which build this worker is, so they can tell a new version from the same one being swapped in again
+self.addEventListener('message', (event) => {
+  if (event.data === 'build') event.ports?.[0]?.postMessage({ build: CACHE_NAME.replace('spindex-cache-', '') });
+});
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
