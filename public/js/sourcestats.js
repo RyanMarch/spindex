@@ -50,9 +50,9 @@ export function readSlowdowns(storage = globalThis.localStorage) {
 }
 
 // "12 of 60 used" when Discogs said, otherwise what we know
-export function describeSlowdown({ kind = 'other', used = null, limit = null, retryAfter = null }) {
+export function describeSlowdown({ kind = 'other', via = 'proxy', used = null, limit = null, retryAfter = null }) {
   const budget = used == null || limit == null
     ? 'no budget reported'
     : used > limit ? `${used} counted, limit ${limit}` : `${used} of ${limit} used`;
-  return `${kind}, ${budget}${retryAfter ? `, wait ${retryAfter}s` : ''}`;
+  return `${kind}${via === 'direct' ? ' (direct)' : ''}, ${budget}${retryAfter ? `, wait ${retryAfter}s` : ''}`;
 }

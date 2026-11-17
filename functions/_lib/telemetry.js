@@ -22,6 +22,7 @@ export function buildEvent({ status, headers, path, colo, now = Date.now() }) {
   if (status !== 429) return null;
   return {
     at: now,
+    via: 'proxy',
     kind: pathKind(path),
     used: num(headers?.get?.('x-discogs-ratelimit-used')),
     limit: num(headers?.get?.('x-discogs-ratelimit')),
@@ -73,6 +74,7 @@ export function summarize(events) {
     total: events.length,
     byColo: count('colo'),
     byKind: count('kind'),
+    byVia: count('via'),
     medianUsed,
     reading: medianUsed === null
       ? 'Discogs has not reported its budget on these, so the cause is unknown.'
@@ -100,6 +102,140 @@ export async function egressInfo(fetcher = fetch) {
     const text = await res.text();
     const field = (name) => (text.match(new RegExp(`^${name}=(.*)$`, 'm')) || [])[1] || null;
     return { ip: field('ip'), colo: field('colo'), loc: field('loc') };
+  } catch {
+    return null;
+  }
+}
+
+// ---- what browsers report -----------------------------------------------------------------------------------------
+// Requests that go straight from the browser to Discogs never touch this server, so the app reports them: counts only,
+// grouped by route, kind of request and outcome, plus whether the direct route is working and a coarse device type.
+// Nothing here names a person, a release or a collection.
+
+export const STAT_PREFIX = 'stat:';
+const ROUTES = ['direct', 'proxy-hit', 'proxy-miss'];
+const KINDS = ['collection', 'release', 'master', 'artist', 'search', 'other'];
+const OUTCOMES = ['ok', 'throttled', 'failed'];
+const PLATFORMS = ['ios', 'android', 'desktop', 'other'];
+const MAX_COUNT = 5000;
+
+const whole = (n) => (Number.isInteger(n) && n > 0 && n <= MAX_COUNT ? n : 0);
+
+// Returns a clean report, or null when the body is not one we understand
+export function validateReport(body) {
+  if (!body || typeof body !== 'object' || typeof body.counts !== 'object' || body.counts === null) return null;
+  const counts = {};
+  for (const [key, value] of Object.entries(body.counts).slice(0, 60)) {
+    const [route, kind, outcome] = key.split('|');
+    if (ROUTES.includes(route) && KINDS.includes(kind) && OUTCOMES.includes(outcome) && whole(value)) counts[key] = value;
+  }
+  const throttles = (Array.isArray(body.throttles) ? body.throttles : []).slice(0, 5)
+    .filter((t) => t && ROUTES.includes(t.route) && KINDS.includes(t.kind))
+    .map((t) => ({ route: t.route, kind: t.kind }));
+  const direct = typeof body.direct === 'string' && /^(on|off(:[\w .-]{1,20})?)$/.test(body.direct) ? body.direct : 'unknown';
+  return {
+    counts,
+    throttles,
+    direct,
+    platform: PLATFORMS.includes(body.platform) ? body.platform : 'other',
+    standalone: body.standalone === true,
+  };
+}
+
+export const hourKey = (at) => `${STAT_PREFIX}${new Date(at).toISOString().slice(0, 13)}`;
+
+export function mergeBucket(bucket, report, now = Date.now()) {
+  const out = bucket && typeof bucket === 'object' ? bucket : { counts: {}, platforms: {}, direct: {}, reports: 0, lastAt: 0 };
+  out.counts = { ...out.counts };
+  for (const [key, value] of Object.entries(report.counts)) out.counts[key] = (out.counts[key] || 0) + value;
+  const device = `${report.platform}${report.standalone ? '-app' : '-browser'}`;
+  out.platforms = { ...out.platforms, [device]: ((out.platforms || {})[device] || 0) + 1 };
+  out.direct = { ...out.direct, [report.direct]: ((out.direct || {})[report.direct] || 0) + 1 };
+  out.reports = (out.reports || 0) + 1;
+  out.lastAt = now;
+  return out;
+}
+
+// Counts are approximate: two reports landing in the same moment can overwrite each other, which is fine for a trend
+export async function recordReport(env, report, now = Date.now()) {
+  if (!env?.DISCOGS_DATA) return false;
+  try {
+    const key = hourKey(now);
+    const saved = await env.DISCOGS_DATA.get(key, 'json').catch(() => null);
+    await env.DISCOGS_DATA.put(key, JSON.stringify(mergeBucket(saved, report, now)), { expirationTtl: KEEP_SECONDS });
+    for (const t of report.throttles) {
+      await recordEvent(env, { at: now, via: t.route, kind: t.kind, used: null, limit: null, retryAfter: null, colo: 'browser' });
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function readBuckets(env, hours = 48) {
+  if (!env?.DISCOGS_DATA) return [];
+  const page = await env.DISCOGS_DATA.list({ prefix: STAT_PREFIX, limit: 1000 });
+  const names = page.keys.map((k) => k.name).sort().slice(-hours);
+  const out = [];
+  for (const name of names) {
+    const bucket = await env.DISCOGS_DATA.get(name, 'json').catch(() => null);
+    if (bucket) out.push({ hour: name.slice(STAT_PREFIX.length), ...bucket });
+  }
+  return out;
+}
+
+// Totals and an hour-by-hour series, by route, kind and outcome
+export function summarizeRoutes(buckets) {
+  const split = (key) => key.split('|');
+  const totals = {};
+  const byKind = {};
+  const series = buckets.map((b) => {
+    const row = { hour: b.hour, requests: 0, throttled: 0, direct: 0 };
+    for (const [key, n] of Object.entries(b.counts || {})) {
+      const [route, kind, outcome] = split(key);
+      row.requests += n;
+      if (outcome === 'throttled') row.throttled += n;
+      if (route === 'direct') row.direct += n;
+      totals[`${route}|${outcome}`] = (totals[`${route}|${outcome}`] || 0) + n;
+      byKind[`${kind}|${route}`] = (byKind[`${kind}|${route}`] || 0) + n;
+    }
+    return row;
+  });
+  const sum = (obj, field) => buckets.reduce((acc, b) => { for (const [k, v] of Object.entries(b[field] || {})) acc[k] = (acc[k] || 0) + v; return acc; }, obj);
+  const direct = sum({}, 'direct');
+  const lastDirectOk = [...buckets].reverse().find((b) => Object.keys(b.counts || {}).some((k) => k.startsWith('direct|') && k.endsWith('|ok')));
+  return {
+    totals,
+    byKind,
+    series,
+    devices: sum({}, 'platforms'),
+    directState: direct,
+    lastDirectOkHour: lastDirectOk ? lastDirectOk.hour : null,
+    lastReportAt: buckets.reduce((latest, b) => Math.max(latest, b.lastAt || 0), 0) || null,
+  };
+}
+
+// ---- what is set up, and how loaded Discogs looks from here ------------------------------------------------------
+// Booleans and non-secret settings only: never a value that is a secret
+export function setupStatus(env, ttl) {
+  return {
+    discogsKey: Boolean(env.DISCOGS_CONSUMER_KEY),
+    discogsSecret: Boolean(env.DISCOGS_CONSUMER_SECRET),
+    sessionSecret: Boolean(env.SESSION_SECRET && env.SESSION_SECRET.length >= 24),
+    adminToken: Boolean(env.ADMIN_TOKEN),
+    sharesStore: Boolean(env.SHARES),
+    dataStore: Boolean(env.DISCOGS_DATA),
+    cacheSeconds: ttl,
+    apiBase: env.DISCOGS_API_BASE ? 'custom' : 'discogs.com',
+  };
+}
+
+// One unsigned request to Discogs' front door from this server: its budget headers say how busy this address is right now
+export async function probeDiscogs(apiBase, userAgent, fetcher = fetch) {
+  try {
+    const res = await fetcher(`${apiBase}/`, { headers: { 'User-Agent': userAgent }, signal: AbortSignal.timeout(3000) });
+    const n = (name) => { const v = res.headers.get(name); return v === null || v === '' ? null : Number(v); };
+    return { status: res.status, used: n('x-discogs-ratelimit-used'), limit: n('x-discogs-ratelimit'), remaining: n('x-discogs-ratelimit-remaining') };
   } catch {
     return null;
   }

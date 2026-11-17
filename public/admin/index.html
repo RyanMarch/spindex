@@ -6,32 +6,40 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Spindex admin</title>
   <style>
-    :root { color-scheme: dark; --bg: #0e0e12; --panel: #17171d; --line: #2a2a33; --text: #ececf1; --muted: #9a9aa6; --accent: #ff6a4d; }
+    :root { color-scheme: dark; --bg: #0e0e12; --panel: #17171d; --line: #2a2a33; --text: #ececf1; --muted: #9a9aa6; --accent: #ff6a4d; --ok: #5fd08a; --warn: #ffb454; --bad: #ff7a7a; }
     * { box-sizing: border-box; }
     body { margin: 0; padding: 24px 16px 64px; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, system-ui, sans-serif; }
-    main { max-width: 760px; margin: 0 auto; }
+    main { max-width: 820px; margin: 0 auto; }
     h1 { font-size: 1.5rem; margin: 0 0 4px; }
-    h2 { font-size: 1rem; margin: 28px 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+    h2 { font-size: .8rem; margin: 30px 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
     p { margin: 6px 0; color: var(--muted); }
     form { display: flex; gap: 8px; margin: 16px 0; }
     input { flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; }
-    button { padding: 10px 16px; border-radius: 10px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 600; }
+    button { padding: 10px 16px; border-radius: 10px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+    button.quiet { background: var(--panel); border: 1px solid var(--line); color: var(--text); }
     .reading { padding: 14px 16px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); color: var(--text); }
     dl { margin: 0; }
-    dl div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+    dl div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
     dt { color: var(--muted); }
     dd { margin: 0; text-align: right; }
-    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+    .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); }
     th { color: var(--muted); font-weight: 500; }
-    .error { color: #ff8a8a; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .bar { display: inline-block; height: 8px; border-radius: 4px; background: var(--accent); vertical-align: middle; min-width: 1px; }
+    .bar.direct { background: var(--ok); }
+    .bar.throttled { background: var(--bad); }
+    .scroll { overflow-x: auto; }
+    .actions { display: flex; gap: 8px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+    .error { color: var(--bad); }
     [hidden] { display: none; }
   </style>
 </head>
 <body>
 <main>
   <h1>Spindex admin</h1>
-  <p>Discogs slow-downs seen by the server over the past 30 days.</p>
+  <p>How Discogs requests are going, from the server and from the app itself.</p>
 
   <form id="login">
     <input id="token" type="password" placeholder="Admin token" autocomplete="off" aria-label="Admin token">
@@ -40,20 +48,46 @@
   <p id="message" class="error" hidden></p>
 
   <div id="report" hidden>
+    <div class="actions">
+      <button id="refresh" class="quiet" type="button">Refresh</button>
+      <button id="copy" type="button">Copy full report</button>
+      <span id="copied" hidden>Copied. Paste it into the chat.</span>
+    </div>
+
     <h2>What this suggests</h2>
     <p class="reading" id="reading"></p>
 
-    <h2>Summary</h2>
-    <dl id="summary"></dl>
+    <h2>Checks</h2>
+    <dl id="checks"></dl>
 
-    <h2>Where requests leave from</h2>
+    <h2>Requests by route, past 48 hours</h2>
+    <p>Direct goes from the browser to Discogs. Cached is answered by the server without asking Discogs. Via server is a request the server sent to Discogs.</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Route</th><th class="num">Ok</th><th class="num">Throttled</th><th class="num">Failed</th></tr></thead>
+      <tbody id="routes"></tbody>
+    </table></div>
+
+    <h2>By kind of request</h2>
+    <dl id="kinds"></dl>
+
+    <h2>Hour by hour</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Hour (UTC)</th><th class="num">Requests</th><th class="num">Direct</th><th class="num">Throttled</th><th></th></tr></thead>
+      <tbody id="hours"></tbody>
+    </table></div>
+    <p id="no-hours" hidden>No requests reported yet. The app reports when it goes to the background.</p>
+
+    <h2>Devices reporting</h2>
+    <dl id="devices"></dl>
+
+    <h2>Where server requests leave from</h2>
     <dl id="egress"></dl>
 
     <h2>Recent slow-downs</h2>
-    <table>
-      <thead><tr><th>When</th><th>Request</th><th>Budget used</th><th>Wait</th><th>Data centre</th></tr></thead>
+    <div class="scroll"><table>
+      <thead><tr><th>When</th><th>Route</th><th>Request</th><th>Budget used</th><th>Wait</th><th>Seen by</th></tr></thead>
       <tbody id="events"></tbody>
-    </table>
+    </table></div>
     <p id="empty" hidden>No slow-downs recorded yet.</p>
   </div>
 </main>
@@ -64,48 +98,106 @@
     get: () => { try { return sessionStorage.getItem(KEY) || ''; } catch { return ''; } },
     set: (v) => { try { sessionStorage.setItem(KEY, v); } catch { /* the token just is not remembered */ } },
   };
+  let latest = null;
 
-  function ago(at, now) {
+  const ago = (at, now) => {
     const minutes = Math.max(0, Math.floor((now - at) / 60000));
     if (minutes < 1) return 'just now';
     if (minutes < 60) return `${minutes} min ago`;
     const hours = Math.floor(minutes / 60);
     return hours < 48 ? `${hours} hr ago` : `${Math.floor(hours / 24)} days ago`;
-  }
+  };
 
-  function rows(target, pairs) {
-    target.replaceChildren(...pairs.map(([k, v]) => {
+  function cell(text, cls) {
+    const td = document.createElement('td');
+    td.textContent = text;
+    if (cls) td.className = cls;
+    return td;
+  }
+  function rowsOf(target, pairs) {
+    target.replaceChildren(...pairs.map(([k, v, tone]) => {
       const row = document.createElement('div');
       const dt = document.createElement('dt');
       const dd = document.createElement('dd');
       dt.textContent = k;
       dd.textContent = v;
+      if (tone) dd.className = tone;
       row.append(dt, dd);
       return row;
     }));
   }
-
   const tally = (counts) => Object.entries(counts || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ') || 'none';
+  const yesNo = (v, good = 'set', bad = 'missing') => [v ? good : bad, v ? 'ok' : 'bad'];
+
+  const ROUTE_LABELS = [['direct', 'Direct'], ['proxy-hit', 'Cached'], ['proxy-miss', 'Via server']];
 
   function show(data) {
-    $('reading').textContent = data.summary.total ? data.summary.reading : 'No slow-downs recorded yet, so there is nothing to read.';
-    rows($('summary'), [
-      ['Slow-downs recorded', data.summary.total],
-      ['Typical budget used when refused', data.summary.medianUsed === null ? 'not reported' : `${data.summary.medianUsed} of 60`],
-      ['By request', tally(data.summary.byKind)],
-      ['By data centre', tally(data.summary.byColo)],
-      ['Logging', data.logging ? 'on' : 'off (no DISCOGS_DATA store is bound)'],
+    latest = data;
+    const { setup, routes, summary, probe, egress } = data;
+    const t = routes.totals || {};
+    const total = (route, outcome) => t[`${route}|${outcome}`] || 0;
+    const directTotal = ['ok', 'throttled', 'failed'].reduce((n, o) => n + total('direct', o), 0);
+    const directStates = routes.directState || {};
+    const directOn = (directStates.on || 0) > 0;
+    const directOffStates = Object.keys(directStates).filter((k) => k.startsWith('off'));
+
+    $('reading').textContent = summary.total ? summary.reading : 'No slow-downs recorded yet, so there is nothing to read.';
+
+    const [dataText, dataTone] = yesNo(setup.dataStore, 'bound', 'not bound: no logging');
+    const [keyText, keyTone] = yesNo(setup.discogsKey && setup.discogsSecret, 'set', 'missing');
+    const [sessText, sessTone] = yesNo(setup.sessionSecret, 'set', 'missing or too short');
+    const [sharesText, sharesTone] = yesNo(setup.sharesStore, 'bound', 'not bound: sharing is off');
+    rowsOf($('checks'), [
+      ['Discogs key and secret', keyText, keyTone],
+      ['Session secret', sessText, sessTone],
+      ['Data store (cache and logs)', dataText, dataTone],
+      ['Share store', sharesText, sharesTone],
+      ['Cache lifetime', `${Math.round(setup.cacheSeconds / 86400)} days`],
+      ['Discogs address', setup.apiBase],
+      ['Direct route', routes.lastReportAt ? (directOn ? 'on' : directOffStates.length ? `off (${directOffStates.join(', ')})` : 'unknown') : 'no app has reported yet', directOn ? 'ok' : routes.lastReportAt ? 'warn' : 'warn'],
+      ['Last direct request that worked', routes.lastDirectOkHour ? `${routes.lastDirectOkHour}:00 UTC` : directTotal ? 'none succeeded' : 'none yet', routes.lastDirectOkHour ? 'ok' : 'warn'],
+      ['Last report from the app', routes.lastReportAt ? ago(routes.lastReportAt, data.now) : 'never', routes.lastReportAt ? '' : 'warn'],
+      ['Discogs load on this server now', probe ? (probe.used === null ? `answered ${probe.status}, no budget reported` : `${probe.used} counted of ${probe.limit ?? '?'} (${probe.remaining ?? '?'} left)`) : 'could not be read', probe && probe.used !== null && probe.limit && probe.used >= probe.limit ? 'bad' : ''],
     ]);
-    rows($('egress'), data.egress
-      ? [['Address Cloudflare sees', data.egress.ip || 'unknown'], ['Data centre', data.egress.colo || 'unknown'], ['Country', data.egress.loc || 'unknown']]
+
+    $('routes').replaceChildren(...ROUTE_LABELS.map(([route, label]) => {
+      const tr = document.createElement('tr');
+      tr.append(cell(label), cell(total(route, 'ok'), 'num'), cell(total(route, 'throttled'), `num${total(route, 'throttled') ? ' bad' : ''}`), cell(total(route, 'failed'), `num${total(route, 'failed') ? ' bad' : ''}`));
+      return tr;
+    }));
+
+    const kindPairs = {};
+    for (const [key, n] of Object.entries(routes.byKind || {})) {
+      const [kind, route] = key.split('|');
+      (kindPairs[kind] ||= {})[route] = n;
+    }
+    rowsOf($('kinds'), Object.entries(kindPairs).map(([kind, r]) => [kind, ROUTE_LABELS.filter(([k]) => r[k]).map(([k, l]) => `${l} ${r[k]}`).join(', ')]));
+
+    const series = (routes.series || []).slice(-24).reverse();
+    const peak = Math.max(1, ...series.map((r) => r.requests));
+    $('hours').replaceChildren(...series.map((r) => {
+      const tr = document.createElement('tr');
+      const bars = document.createElement('td');
+      for (const [cls, n] of [['direct', r.direct], ['', r.requests - r.direct - r.throttled], ['throttled', r.throttled]]) {
+        if (!n) continue;
+        const b = document.createElement('span');
+        b.className = `bar ${cls}`;
+        b.style.width = `${Math.max(2, Math.round((n / peak) * 120))}px`;
+        bars.append(b);
+      }
+      tr.append(cell(r.hour.replace('T', ' ') + ':00'), cell(r.requests, 'num'), cell(r.direct, 'num'), cell(r.throttled, `num${r.throttled ? ' bad' : ''}`), bars);
+      return tr;
+    }));
+    $('no-hours').hidden = series.length > 0;
+
+    rowsOf($('devices'), Object.entries(routes.devices || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k.replace('-', ' '), `${v} ${v === 1 ? 'report' : 'reports'}`]));
+    rowsOf($('egress'), egress
+      ? [['Address Cloudflare sees', egress.ip || 'unknown'], ['Data centre', egress.colo || 'unknown'], ['Country', egress.loc || 'unknown'], ['Slow-downs recorded', summary.total], ['Typical budget used when refused', summary.medianUsed === null ? 'not reported' : `${summary.medianUsed} of 60`], ['By data centre', tally(summary.byColo)]]
       : [['Address Cloudflare sees', 'could not be read']]);
+
     $('events').replaceChildren(...data.events.map((e) => {
       const tr = document.createElement('tr');
-      for (const text of [ago(e.at, data.now), e.kind, e.used === null ? 'not reported' : `${e.used} of ${e.limit ?? 60}`, e.retryAfter ? `${e.retryAfter}s` : 'none', e.colo]) {
-        const td = document.createElement('td');
-        td.textContent = text;
-        tr.append(td);
-      }
+      tr.append(cell(ago(e.at, data.now)), cell(e.via || 'proxy'), cell(e.kind), cell(e.used === null ? 'not reported' : `${e.used} of ${e.limit ?? 60}`), cell(e.retryAfter ? `${e.retryAfter}s` : 'none'), cell(e.colo));
       return tr;
     }));
     $('empty').hidden = data.events.length > 0;
@@ -131,6 +223,23 @@
     event.preventDefault();
     const token = $('token').value.trim();
     if (token) load(token);
+  });
+  $('refresh').addEventListener('click', () => store.get() && load(store.get()));
+  $('copy').addEventListener('click', async () => {
+    if (!latest) return;
+    const text = JSON.stringify({ copiedAt: new Date().toISOString(), ...latest }, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const area = document.createElement('textarea');
+      area.value = text;
+      document.body.append(area);
+      area.select();
+      document.execCommand('copy');
+      area.remove();
+    }
+    $('copied').hidden = false;
+    setTimeout(() => { $('copied').hidden = true; }, 3000);
   });
   if (store.get()) load(store.get());
 </script>

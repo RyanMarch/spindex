@@ -5,6 +5,7 @@
 
 import { createLimiter } from './limiter.js';
 import { noteSource, noteSlowdown, pathKind } from './sourcestats.js';
+import { createReporter, detectPlatform, outcomeOf } from './reporter.js';
 
 const state = {
   mode: 'none',
@@ -59,8 +60,9 @@ const limiter = createLimiter({ pace: (res) => (res?.headers?.get('x-spindex-cac
 // reason, this session goes back to the proxy and carries on.
 const DIRECT_PATH = /^\/users\/[^/?]+\/collection\//;
 let directOff = false;
+let directOffReason = '';
 export const directAvailable = () => !directOff;
-export const resetDirect = () => { directOff = false; };
+export const resetDirect = () => { directOff = false; directOffReason = ''; };
 
 async function sendDirect(path, init) {
   if (directOff || init?.method || !DIRECT_PATH.test(path)) return null;
@@ -72,6 +74,7 @@ async function sendDirect(path, init) {
     const res = await fetch(url, { headers: { Authorization: authorization, Accept: 'application/vnd.discogs.v2.discogs+json' } });
     if (res.status === 400 || res.status === 401 || res.status === 403) {
       directOff = true;
+      directOffReason = String(res.status);
       noteSource('Discogs direct', false, `answered ${res.status}`);
       return null;
     }
@@ -80,17 +83,39 @@ async function sendDirect(path, init) {
   } catch {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('offline');
     directOff = true; // blocked by the browser, a content blocker or the network
+    directOffReason = 'blocked';
     noteSource('Discogs direct', false, 'blocked');
     return null;
   }
 }
+
+// The app tells the server how its requests went (see reporter.js), in batches and when it goes to the background
+const reporter = createReporter({
+  send: (body) => {
+    if (state.mode !== 'oauth' || typeof navigator === 'undefined') return;
+    const payload = JSON.stringify(body);
+    if (navigator.sendBeacon?.('/api/discogs/report', new Blob([payload], { type: 'application/json' }))) return;
+    fetch('/api/discogs/report', { method: 'POST', body: payload, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', keepalive: true }).catch(() => {});
+  },
+  directState: () => (directOff ? `off:${directOffReason}` : 'on'),
+  platform: typeof navigator !== 'undefined' ? detectPlatform(navigator.userAgent, navigator.maxTouchPoints) : 'other',
+  standalone: typeof window !== 'undefined' && Boolean(window.matchMedia?.('(display-mode: standalone)').matches || window.navigator?.standalone),
+});
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') reporter.flush(); });
+  window.addEventListener('pagehide', () => reporter.flush());
+}
+export const flushReport = () => reporter.flush();
 
 export async function send(path, init) {
   if (state.mode !== 'oauth') {
     throw new Error('Not connected to Discogs');
   }
 
-  const res = (await sendDirect(path, init)) || (await fetch(`/api/discogs${path}`, { credentials: 'same-origin', ...init }));
+  const directRes = await sendDirect(path, init);
+  const res = directRes || (await fetch(`/api/discogs${path}`, { credentials: 'same-origin', ...init }));
+  const route = directRes ? 'direct' : res.headers.get('x-spindex-cache') === 'HIT' ? 'proxy-hit' : 'proxy-miss';
+  reporter.note(route, pathKind(path), outcomeOf(res.status));
   if (res.status === 401) {
     // The connection is no longer valid (revoked, or the cookie expired): fall back and let the UI say so
     await initDiscogs();
@@ -104,7 +129,7 @@ export async function send(path, init) {
   if (res.status === 429) {
     // Which budget ran out? Discogs counts by source IP, so a low 'used' means the proxy's address is shared
     const num = (name) => { const v = res.headers.get(name); return v === null || v === '' ? null : Number(v); };
-    noteSlowdown({ kind: pathKind(path), used: num('x-discogs-ratelimit-used'), limit: num('x-discogs-ratelimit'), retryAfter: num('retry-after') });
+    noteSlowdown({ kind: pathKind(path), via: route, used: num('x-discogs-ratelimit-used'), limit: num('x-discogs-ratelimit'), retryAfter: num('retry-after') });
   }
   return res;
 }
