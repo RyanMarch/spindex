@@ -85,7 +85,7 @@
 
     <h2>Recent slow-downs</h2>
     <div class="scroll"><table>
-      <thead><tr><th>When</th><th>Route</th><th>Request</th><th>Budget used</th><th>Wait</th><th>Seen by</th></tr></thead>
+      <thead><tr><th>When</th><th>Route</th><th>Request</th><th>Budget used</th><th>Wait</th><th>Seen by</th><th>Build</th></tr></thead>
       <tbody id="events"></tbody>
     </table></div>
     <p id="empty" hidden>No slow-downs recorded yet.</p>
@@ -156,6 +156,7 @@
       ['Discogs address', setup.apiBase],
       ['Direct route', routes.lastReportAt ? (directOn ? 'on' : directOffStates.length ? `off (${directOffStates.join(', ')})` : 'unknown') : 'no app has reported yet', directOn ? 'ok' : routes.lastReportAt ? 'warn' : 'warn'],
       ['Last direct request that worked', routes.lastDirectOkHour ? `${routes.lastDirectOkHour}:00 UTC` : directTotal ? 'none succeeded' : 'none yet', routes.lastDirectOkHour ? 'ok' : 'warn'],
+      ['App builds reporting', Object.entries(routes.builds || {}).sort((a, b) => b[0].localeCompare(a[0], undefined, { numeric: true })).map(([k, v]) => `${k} (${v})`).join(', ') || 'none yet', ''],
       ['Last report from the app', routes.lastReportAt ? ago(routes.lastReportAt, data.now) : 'never', routes.lastReportAt ? '' : 'warn'],
       ['Discogs load on this server now', probe ? (probe.used === null ? `answered ${probe.status}, no budget reported` : `${probe.used} counted of ${probe.limit ?? '?'} (${probe.remaining ?? '?'} left)`) : 'could not be read', probe && probe.used !== null && probe.limit && probe.used >= probe.limit ? 'bad' : ''],
     ]);
@@ -197,7 +198,7 @@
 
     $('events').replaceChildren(...data.events.map((e) => {
       const tr = document.createElement('tr');
-      tr.append(cell(ago(e.at, data.now)), cell(e.via || 'proxy'), cell(e.kind), cell(e.used === null ? 'not reported' : `${e.used} of ${e.limit ?? 60}`), cell(e.retryAfter ? `${e.retryAfter}s` : 'none'), cell(e.colo));
+      tr.append(cell(ago(e.at, data.now)), cell(e.via || 'proxy'), cell(e.kind), cell(e.used === null ? 'not reported' : `${e.used} of ${e.limit ?? 60}`), cell(e.retryAfter ? `${e.retryAfter}s` : 'none'), cell(e.colo), cell(e.build || ''));
       return tr;
     }));
     $('empty').hidden = data.events.length > 0;
