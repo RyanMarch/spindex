@@ -41,7 +41,8 @@ assert.equal(summary.total, 3);
 assert.deepEqual(summary.byColo, { EWR: 2, LHR: 1 });
 assert.equal(summary.medianUsed, 7);
 assert.match(summary.reading, /shared address/);
-assert.match(summarize([{ kind: 'release', used: 58, colo: 'EWR' }]).reading, /Spindex itself/);
+assert.match(summarize([{ kind: 'release', used: 58, colo: 'EWR' }]).reading, /Spindex may be using it/);
+assert.match(summarize([{ kind: 'collection', used: 94, colo: 'CMH' }]).reading, /other traffic/, 'over the limit is not Spindex alone');
 assert.match(summarize([{ kind: 'release', used: null, colo: 'EWR' }]).reading, /unknown/);
 
 assert.equal(sameSecret('abc', 'abc'), true);

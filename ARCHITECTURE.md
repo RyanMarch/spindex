@@ -306,7 +306,7 @@ A private view of Discogs slow-downs, kept outside the app itself.
 - The Discogs proxy records each upstream `429` in the `DISCOGS_DATA` namespace (`functions/_lib/telemetry.js`) for 30 days: time, kind of request, Cloudflare data centre and the budget Discogs reported. It never stores a username, release or cookie.
 - `/api/admin/throttles` returns the log with a summary and Cloudflare's view of where outgoing requests come from. It needs the `ADMIN_TOKEN` secret in an `Authorization: Bearer` header, and does not exist (404) while that secret is unset.
 - `/admin/` is a static page that asks for the token (kept for the tab only) and draws the report. It is `noindex` and disallowed in `robots.txt`.
-- A low typical "used" figure on refused requests means something other than Spindex spent the budget (a shared Cloudflare address); a high one means Spindex itself did.
+- A "used" figure on refused requests that is low, or above the 60 limit, means something other than Spindex spent the budget (traffic from other Workers sharing the address). A figure just under 60 is ambiguous.
 
 ---
 

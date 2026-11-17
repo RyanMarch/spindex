@@ -76,9 +76,11 @@ export function summarize(events) {
     medianUsed,
     reading: medianUsed === null
       ? 'Discogs has not reported its budget on these, so the cause is unknown.'
-      : medianUsed < 30
-        ? 'Discogs refused requests while few had been counted against the budget, which points to a shared address.'
-        : 'Discogs refused requests with the budget nearly spent, which points to Spindex itself.',
+      : medianUsed > 60
+        ? 'Discogs had counted more requests than the whole limit, far more than Spindex sends on its own. That points to other traffic on the same address.'
+        : medianUsed < 30
+          ? 'Discogs refused requests while few had been counted against the budget, which points to a shared address.'
+          : 'Discogs refused requests with the budget nearly spent. Spindex may be using it, so check how much it was sending.',
   };
 }
 
