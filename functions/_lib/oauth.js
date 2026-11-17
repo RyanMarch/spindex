@@ -37,6 +37,42 @@ export function oauthHeader(env, { token = '', tokenSecret = '', callback = '', 
   return `OAuth ${Object.entries(params).map(([k, v]) => `${k}="${k === 'oauth_signature' ? v : encode(v)}"`).join(', ')}`;
 }
 
+// ---- one-request signatures ------------------------------------------------------------------------------------------
+// PLAINTEXT puts the secrets themselves in the header, so it can only ever be used from here. HMAC-SHA1 (RFC 5849)
+// signs the method, address, parameters, time and a one-time nonce with the secrets and reveals none of them: the
+// result is good for that one request, so it can safely be handed to the browser.
+
+const utf8 = (text) => new TextEncoder().encode(text);
+
+export async function hmacSha1Base64(key, data) {
+  const imported = await crypto.subtle.importKey('raw', utf8(key), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+  const bytes = new Uint8Array(await crypto.subtle.sign('HMAC', imported, utf8(data)));
+  return btoa(String.fromCharCode(...bytes));
+}
+
+// The string that gets signed: method, address without its query, and every parameter sorted and encoded
+export function signatureBase(method, url, oauthParams) {
+  const parsed = new URL(url);
+  const pairs = [...parsed.searchParams, ...Object.entries(oauthParams)].map(([k, v]) => [encode(k), encode(v)]);
+  pairs.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0));
+  const paramString = pairs.map(([k, v]) => `${k}=${v}`).join('&');
+  return `${method.toUpperCase()}&${encode(`${parsed.origin}${parsed.pathname}`)}&${encode(paramString)}`;
+}
+
+// An Authorization header for a single GET of `url`, made with the signed-in user's token
+export async function signedHeader(env, session, url, { nonceValue = nonce(), timestamp = Math.floor(Date.now() / 1000) } = {}) {
+  const params = {
+    oauth_consumer_key: env.DISCOGS_CONSUMER_KEY,
+    oauth_nonce: nonceValue,
+    oauth_signature_method: 'HMAC-SHA1',
+    oauth_timestamp: String(timestamp),
+    oauth_token: session.t,
+    oauth_version: '1.0',
+  };
+  const signature = await hmacSha1Base64(`${encode(env.DISCOGS_CONSUMER_SECRET)}&${encode(session.s)}`, signatureBase('GET', url, params));
+  return `OAuth ${Object.entries({ ...params, oauth_signature: signature }).map(([k, v]) => `${k}="${encode(v)}"`).join(', ')}`;
+}
+
 const parseForm = (text) => Object.fromEntries(new URLSearchParams(text));
 
 // Step 1: ask Discogs for a temporary request token

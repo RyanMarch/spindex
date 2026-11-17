@@ -20,7 +20,7 @@ function boot({ network }) {
     };
   };
   const sandbox = {
-    self: { addEventListener: (type, fn) => { listeners[type] = fn; }, skipWaiting() {}, clients: { claim() {} } },
+    self: { addEventListener: (type, fn) => { listeners[type] = fn; }, skipWaiting() {}, clients: { claim() {} }, location: { origin: 'https://spindex.example' } },
     caches: {
       open: async (name) => makeCache(name),
       keys: async () => [...stores.keys()],
@@ -185,6 +185,17 @@ const opaque = () => ({ status: 0, type: 'opaque', clone() { return this; } });
   assert.equal(shouldAutoReload({ ready: true, hiddenMs: AUTO_RELOAD_AFTER_MS }), true, 'away long enough with an update waiting: reload');
   assert.equal(shouldAutoReload({ ready: true, hiddenMs: 10000 }), false, 'a quick glance away never reloads');
   assert.equal(shouldAutoReload({ ready: false, hiddenMs: AUTO_RELOAD_AFTER_MS * 10 }), false, 'nothing to reload into');
+}
+
+// Requests to other sites (Discogs, read directly) are left to the browser: not intercepted, not kept
+{
+  let calls = 0;
+  const { stores, fire } = boot({ network: async () => { calls++; return ok('private'); } });
+  const other = fetchEvent({ url: 'https://api.discogs.com/users/ann/collection/folders/0/releases', method: 'GET', destination: '', mode: 'cors' });
+  fire('fetch', other);
+  assert.equal(other.responded, null, 'the worker does not answer it');
+  assert.equal(calls, 0);
+  assert.ok(![...stores.keys()].length || [...stores.values()].every((m) => m.size === 0), 'and nothing is stored');
 }
 
 console.log('Service worker tests passed.');

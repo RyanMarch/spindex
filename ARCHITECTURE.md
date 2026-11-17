@@ -269,6 +269,15 @@ Proxies allowlisted requests to `api.discogs.com`: reads, plus one write (adding
 - Automatically attaches user OAuth credentials or server credentials.
 - Disallows every other method and any non-allowlisted path.
 
+### Direct collection reads (`/api/discogs/sign`)
+Discogs counts requests by the address they come from, and the proxy shares its address with other Cloudflare sites. So the signed-in person's own collection (private, never cached) is read straight from their browser:
+- `/api/discogs/sign?path=...` returns `{ url, authorization }` for one vetted `GET` under `/users/<you>/collection/`, using the same allow-list as the proxy. Anything else gets 403; public pages and searches stay on the cached proxy.
+- The header uses OAuth **HMAC-SHA1** (`signedHeader` in `functions/_lib/oauth.js`): it covers the method, address, parameters, time and a one-time nonce, and reveals neither the consumer secret nor the token secret. (The proxy's own PLAINTEXT signatures contain the secrets and must never leave the server.)
+- The client (`sendDirect` in `public/js/discogs.js`) signs at the last moment, then calls Discogs. A refused signature or a blocked request switches the rest of the session back to the proxy. A 429 is not a failure of the route: the queue retries it as usual.
+- Discogs does not expose its rate-limit headers to browser scripts, so direct answers carry none; the queue paces by its own default.
+- The service worker ignores requests to other origins (except pictures), so private Discogs answers are never stored by it.
+- Settings > Diagnostics lists "Discogs direct" under sources: its successes, and why it fell back.
+
 ### External Proxies & Relays
 
 #### External Metadata Relay (`/api/ext`)
@@ -306,7 +315,7 @@ A private view of Discogs slow-downs, kept outside the app itself.
 - The Discogs proxy records each upstream `429` in the `DISCOGS_DATA` namespace (`functions/_lib/telemetry.js`) for 30 days: time, kind of request, Cloudflare data centre and the budget Discogs reported. It never stores a username, release or cookie.
 - `/api/admin/throttles` returns the log with a summary and Cloudflare's view of where outgoing requests come from. It needs the `ADMIN_TOKEN` secret in an `Authorization: Bearer` header, and does not exist (404) while that secret is unset.
 - `/admin/` is a static page that asks for the token (kept for the tab only) and draws the report. It is `noindex` and disallowed in `robots.txt`.
-- A low typical "used" figure on refused requests means something other than Spindex spent the budget (a shared Cloudflare address); a high one means Spindex itself did.
+- A "used" figure on refused requests that is low, or above the 60 limit, means something other than Spindex spent the budget (traffic from other Workers sharing the address). A figure just under 60 is ambiguous.
 
 ---
 

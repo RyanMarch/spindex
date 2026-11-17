@@ -584,6 +584,7 @@ import { createLimiter, retryAfterMs } from '../public/js/limiter.js';
   assert.equal(pathKind('/releases/123'), 'release');
   assert.equal(describeSlowdown({ kind: 'master', used: 58, limit: 60 }), 'master, 58 of 60 used');
   assert.equal(describeSlowdown({ kind: 'release' }), 'release, no budget reported');
+  assert.equal(describeSlowdown({ kind: 'collection', used: 94, limit: 60 }), 'collection, 94 counted, limit 60', 'a count over the limit is not shown as "94 of 60"');
 }
 
 console.log('Discogs queue tests passed.');
@@ -1093,7 +1094,8 @@ import { noteSource, sourceSnapshot, resetSourceStats } from '../public/js/sourc
 
   const s = describeStorage({ usage: 5 * 1024 * 1024, quota: 2 * 1024 ** 3, persisted: true });
   assert.equal(s.used, '5.0 MB');
-  assert.equal(s.quota, '2048 MB');
+  assert.equal(s.quota, '2.0 GB', 'large sizes read in gigabytes');
+  assert.equal(describeStorage({ usage: 36 * 1024 ** 3, quota: 38.4 * 1024 ** 3 }).quota, '38.4 GB');
   assert.match(s.persisted, /Protected/);
   assert.match(describeStorage({ persisted: false }).persisted, /Not protected/);
   assert.equal(describeStorage({}).used, 'unknown');
