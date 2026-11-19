@@ -15,7 +15,7 @@ import { syncDiscogsCollection, enrichTracklistsInBackground, enrichGenresInBack
 import { sortYear } from './years.js';
 import { computeStats } from './stats.js';
 import { computeHealth, describeStorage, healthSummary } from './health.js';
-import { watchForUpdates, shouldAutoReload, shouldShowUpdate, markBuildSeen, currentBuild } from './updates.js';
+import { watchForUpdates, shouldAutoReload, shouldShowUpdate, markBuildSeen, currentBuild, noteUpdateReason, readUpdateReason } from './updates.js';
 import { trackSummary, pressingNotes } from './vinyl.js';
 import { timeAgo, readSyncMeta, needsAutoSync } from './syncplan.js';
 import { sourceSnapshot, readSlowdowns, describeSlowdown } from './sourcestats.js';
@@ -95,7 +95,8 @@ if ('serviceWorker' in navigator) {
     });
     window.spindexUpdates = watchForUpdates({
       container: navigator.serviceWorker,
-      onReady: async () => {
+      onReady: async (why) => {
+        noteUpdateReason(why || {});
         const build = await currentBuild();
         if (!shouldShowUpdate(build)) return; // already reloaded into this build
         const pill = document.getElementById('update-pill');
@@ -833,6 +834,7 @@ class App {
     const row = (k, v) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`;
     const sources = sourceSnapshot();
     const slowdowns = readSlowdowns();
+    const updateReason = readUpdateReason();
     const rows = (list) => `<dl class="health-rows">${list.join('')}</dl>`;
     const section = (title, body) => `<section class="health-section"><h4 class="health-heading">${title}</h4>${body}</section>`;
     const empty = (text) => `<p class="health-empty">${text}</p>`;
@@ -858,6 +860,7 @@ class App {
         row('Storage used', `${storage.used} of ${storage.quota}`),
         row('Protection', storage.persisted),
         row('Pictures kept offline', imageCount),
+        ...(updateReason ? [row('Last update notice', `${timeAgo(updateReason.at)}, ${updateReason.before} to ${updateReason.now}`)] : []),
       ]))}
       ${section('Outside sources this session', sources.length
         ? rows(sources.map((s) => row(s.name, `${s.ok} ok${failedNote(s)}`)))

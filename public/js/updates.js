@@ -31,6 +31,24 @@ export function markBuildSeen(build, storage = globalThis.localStorage) {
   }
 }
 
+// Why the last notice appeared, kept so Settings > Diagnostics can say (and so "it keeps coming back" has an answer)
+const REASON_KEY = 'spindex_update_reason';
+export function noteUpdateReason({ before, now }, at = Date.now(), storage = globalThis.localStorage) {
+  try {
+    storage.setItem(REASON_KEY, JSON.stringify({ before: before || 'unknown', now: now || 'unknown', at }));
+  } catch {
+    // Private mode: nothing to show later
+  }
+}
+export function readUpdateReason(storage = globalThis.localStorage) {
+  try {
+    const saved = JSON.parse(storage.getItem(REASON_KEY) || 'null');
+    return saved && typeof saved.at === 'number' ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
 // The newest build the service worker has installed, such as "v56"
 export async function currentBuild() {
   try {
@@ -61,26 +79,28 @@ export function askBuild(worker, waitMs = 1000) {
   });
 }
 
-// container: navigator.serviceWorker. onReady runs once, when a newer version has taken over from the one this page loaded with.
+// container: navigator.serviceWorker. onReady({ before, now }) runs once, when a newer version has taken over from the one this page loaded with.
 export function watchForUpdates({ container, onReady }) {
   if (!container) return null;
   let hadController = Boolean(container.controller); // the very first install also fires "controllerchange": that is not an update
   let ready = false;
-  // The build this page started under. A browser can swap in the same worker again (emptying its caches does it), and
-  // that is not an update: only a different build is.
-  const startedWith = container.controller ? askBuild(container.controller) : Promise.resolve(null);
+  // The build this page is running. A page that started without a worker takes its baseline from the first one that
+  // claims it. A browser can swap in the same worker again (emptying its caches does it, sometimes twice), and that is not
+  // an update: only a different build is.
+  let baseline = container.controller ? askBuild(container.controller) : Promise.resolve(null);
 
   container.addEventListener('controllerchange', async () => {
     if (!hadController) {
       hadController = true;
+      baseline = askBuild(container.controller);
       return;
     }
     if (ready) return;
-    const [before, now] = await Promise.all([startedWith, askBuild(container.controller)]);
+    const [before, now] = await Promise.all([baseline, askBuild(container.controller)]);
     if (before && now && before === now) return;
     if (ready) return;
     ready = true;
-    onReady();
+    onReady({ before, now });
   });
 
   return {
