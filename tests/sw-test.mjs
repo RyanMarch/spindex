@@ -204,6 +204,29 @@ const opaque = () => ({ status: 0, type: 'opaque', clone() { return this; } });
   await listeners2.controllerchange();
   assert.equal(announced, 2, 'a worker that cannot say which build it is falls back to announcing');
 
+  // A page that started with no worker: the first one to claim it sets the baseline, and the same build again is quiet
+  const { noteUpdateReason, readUpdateReason } = await import('../public/js/updates.js');
+  const l3 = {};
+  const fresh = { controller: null, addEventListener: (t, fn) => { l3[t] = fn; } };
+  let heard = 0;
+  watchForUpdates({ container: fresh, onReady: () => heard++ });
+  fresh.controller = worker('v57');
+  await l3.controllerchange(); // the first install claims the page
+  await l3.controllerchange(); // the same worker announced a second time
+  assert.equal(heard, 0, 'the same build announced twice is not an update');
+  fresh.controller = worker('v58');
+  await l3.controllerchange();
+  assert.equal(heard, 1, 'a real new build still is');
+
+  // The reason for a notice is kept for Diagnostics
+  const reasons = new Map();
+  const rstore = { getItem: (k) => reasons.get(k) ?? null, setItem: (k, v) => reasons.set(k, v) };
+  assert.equal(readUpdateReason(rstore), null);
+  noteUpdateReason({ before: 'v57', now: 'v58' }, 5000, rstore);
+  assert.deepEqual(readUpdateReason(rstore), { before: 'v57', now: 'v58', at: 5000 });
+  noteUpdateReason({ before: null, now: 'v58' }, 6000, rstore);
+  assert.equal(readUpdateReason(rstore).before, 'unknown', 'a build that could not be read says so');
+
   // The notice appears once per build: after reloading into it, a repeat announcement of the same build stays quiet
   const { shouldShowUpdate, markBuildSeen } = await import('../public/js/updates.js');
   const mem = new Map();
