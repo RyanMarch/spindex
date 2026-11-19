@@ -151,7 +151,7 @@ assert.ok(body.routes && Array.isArray(body.routes.series), 'route stats are inc
   assert.deepEqual(summarizeRoutes([]).series, []);
 
   const setup = setupStatus({ DISCOGS_CONSUMER_KEY: 'k', DISCOGS_CONSUMER_SECRET: 's', SESSION_SECRET: 'short', ADMIN_TOKEN: 'x' }, 86400);
-  assert.deepEqual(setup, { discogsKey: true, discogsSecret: true, sessionSecret: false, adminToken: true, sharesStore: false, dataStore: false, cacheSeconds: 86400, apiBase: 'discogs.com' });
+  assert.deepEqual(setup, { discogsKey: true, discogsSecret: true, sessionSecret: false, adminToken: true, adminUsers: 0, sharesStore: false, dataStore: false, cacheSeconds: 86400, apiBase: 'discogs.com' });
   assert.equal(await probeDiscogs('https://x', 'ua', async () => { throw new Error('down'); }), null);
 
   // The endpoint: needs a session, small strict bodies only
@@ -195,6 +195,39 @@ assert.ok(body.routes && Array.isArray(body.routes.series), 'route stats are inc
   reporter.flush();
   assert.equal(sent.length, 2, 'nothing pending, nothing sent');
   createReporter({ send: () => { throw new Error('offline'); } }).note('direct', 'release', 'throttled'); // never throws into the app
+}
+
+// ---- who may open the admin page --------------------------------------------------------------------------------
+{
+  const { checkAdmin, adminUsers } = await import('../functions/_lib/admin.js');
+  const base = { DISCOGS_CONSUMER_KEY: 'k', DISCOGS_CONSUMER_SECRET: 's', SESSION_SECRET: 'a-long-random-test-session-secret-value', DISCOGS_DATA: kv() };
+  const cookieFor = async (user, e) => `vc_session=${await seal(e, { t: 'T', s: 'S', u: user }, 3600)}`;
+  const req = (headers = {}) => new Request('https://x.test/api/admin/throttles', { headers });
+
+  assert.deepEqual(adminUsers({ ADMIN_USERS: ' Ann, bob ,,' }), ['ann', 'bob']);
+  assert.equal((await checkAdmin(req(), base)).status, 404, 'nothing set up: the route does not exist');
+
+  const withUsers = { ...base, ADMIN_USERS: 'admin_user' };
+  const none = await checkAdmin(req(), withUsers);
+  assert.deepEqual([none.ok, none.status, none.reason], [false, 401, 'signin'], 'not signed in: asked to sign in');
+  assert.equal((await checkAdmin(req({ Cookie: await cookieFor('Admin_User', withUsers) }), withUsers)).via, 'session', 'an allowed account gets in, whatever the case');
+  const other = await checkAdmin(req({ Cookie: await cookieFor('someone_else', withUsers) }), withUsers);
+  assert.deepEqual([other.ok, other.status, other.reason], [false, 403, 'not-admin'], 'another account is refused');
+
+  const both = { ...withUsers, ADMIN_TOKEN: 'secret-token' };
+  assert.equal((await checkAdmin(req({ Authorization: 'Bearer secret-token' }), both)).via, 'token', 'the token still works');
+  assert.equal((await checkAdmin(req({ Authorization: 'Bearer nope' }), both)).status, 401, 'a wrong token is refused even for a signed-in admin');
+  assert.equal((await checkAdmin(req({ Authorization: 'Bearer secret-token' }), withUsers)).status, 401, 'a token means nothing when none is set');
+  const tokenOnly = await checkAdmin(req(), { ...base, ADMIN_TOKEN: 'secret-token' });
+  assert.deepEqual([tokenOnly.status, tokenOnly.reason], [401, 'token'], 'token only: asked for the token');
+
+  // The route itself, signed in as an allowed account, with no token
+  const viaSession = await admin({ request: req({ Cookie: await cookieFor('admin_user', withUsers) }), env: withUsers });
+  assert.equal(viaSession.status, 200);
+  assert.equal((await viaSession.json()).via, 'session');
+  const denied = await admin({ request: req(), env: withUsers });
+  assert.equal(denied.status, 401);
+  assert.equal((await denied.json()).reason, 'signin', 'the page is told to offer sign-in');
 }
 
 console.log('Telemetry tests passed.');
