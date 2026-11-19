@@ -227,6 +227,7 @@ export function setupStatus(env, ttl) {
     discogsSecret: Boolean(env.DISCOGS_CONSUMER_SECRET),
     sessionSecret: Boolean(env.SESSION_SECRET && env.SESSION_SECRET.length >= 24),
     adminToken: Boolean(env.ADMIN_TOKEN),
+    adminUsers: String(env.ADMIN_USERS || '').split(',').map((n) => n.trim()).filter(Boolean).length,
     sharesStore: Boolean(env.SHARES),
     dataStore: Boolean(env.DISCOGS_DATA),
     cacheSeconds: ttl,
