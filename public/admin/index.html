@@ -156,6 +156,7 @@
       ['Discogs address', setup.apiBase],
       ['Direct route', routes.lastReportAt ? (directOn ? 'on' : directOffStates.length ? `off (${directOffStates.join(', ')})` : 'unknown') : 'no app has reported yet', directOn ? 'ok' : routes.lastReportAt ? 'warn' : 'warn'],
       ['Last direct request that worked', routes.lastDirectOkHour ? `${routes.lastDirectOkHour}:00 UTC` : directTotal ? 'none succeeded' : 'none yet', routes.lastDirectOkHour ? 'ok' : 'warn'],
+      ['Last slow-down', data.events.length ? ago(data.events[0].at, data.now) : 'none recorded', data.events.length && data.now - data.events[0].at < 3600000 ? 'bad' : 'ok'],
       ['App builds reporting', Object.entries(routes.builds || {}).sort((a, b) => b[0].localeCompare(a[0], undefined, { numeric: true })).map(([k, v]) => `${k} (${v})`).join(', ') || 'none yet', ''],
       ['Last report from the app', routes.lastReportAt ? ago(routes.lastReportAt, data.now) : 'never', routes.lastReportAt ? '' : 'warn'],
       ['Discogs load on this server now', probe ? (probe.used === null ? `answered ${probe.status}, no budget reported` : `${probe.used} counted of ${probe.limit ?? '?'} (${probe.remaining ?? '?'} left)`) : 'could not be read', probe && probe.used !== null && probe.limit && probe.used >= probe.limit ? 'bad' : ''],

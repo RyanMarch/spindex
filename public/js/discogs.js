@@ -6,6 +6,7 @@
 import { createLimiter } from './limiter.js';
 import { noteSource, noteSlowdown, pathKind } from './sourcestats.js';
 import { createReporter, detectPlatform, outcomeOf, buildFrom } from './reporter.js';
+import { askBuild } from './updates.js';
 
 const state = {
   mode: 'none',
@@ -117,7 +118,12 @@ async function sendDirect(path, init) {
 }
 
 let buildTag = 'unknown';
-if (typeof caches !== 'undefined') caches.keys().then((names) => { buildTag = buildFrom(names); }).catch(() => {});
+if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
+  // The worker knows its own build exactly; the cache names are only a fallback (emptying the caches removes them)
+  askBuild(navigator.serviceWorker.controller)
+    .then((build) => (build || (typeof caches !== 'undefined' ? caches.keys().then(buildFrom).catch(() => 'unknown') : 'unknown')))
+    .then((build) => { buildTag = build || 'unknown'; });
+}
 
 // The app tells the server how its requests went (see reporter.js), in batches and when it goes to the background
 const reporter = createReporter({
