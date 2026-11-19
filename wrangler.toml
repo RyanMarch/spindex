@@ -2,6 +2,8 @@ name = "spindex"
 compatibility_date = "2026-09-22"
 pages_build_output_dir = "public"
 
+# Secrets (DISCOGS_CONSUMER_SECRET, SESSION_SECRET, ADMIN_USERS, ADMIN_TOKEN) are set in Cloudflare, never in this file.
+
 [[kv_namespaces]]
 binding = "SHARES"
 id = "387782961e59471397243af59b7fec39"

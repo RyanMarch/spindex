@@ -314,8 +314,8 @@ Returns runtime diagnostics:
 ### Admin page (`/admin/` and `/api/admin/throttles`)
 A private view of Discogs slow-downs, kept outside the app itself.
 - The Discogs proxy records each upstream `429` in the `DISCOGS_DATA` namespace (`functions/_lib/telemetry.js`) for 30 days: time, kind of request, Cloudflare data centre and the budget Discogs reported. It never stores a username, release or cookie.
-- `/api/admin/throttles` returns the log with a summary and Cloudflare's view of where outgoing requests come from. It needs the `ADMIN_TOKEN` secret in an `Authorization: Bearer` header, and does not exist (404) while that secret is unset.
-- `/admin/` is a static page that asks for the token (kept for the tab only) and draws the report. It is `noindex` and disallowed in `robots.txt`.
+- `/api/admin/throttles` returns the log with a summary and Cloudflare's view of where outgoing requests come from. Two ways in (`functions/_lib/admin.js`): signing in to Spindex with a Discogs account named in `ADMIN_USERS` (a comma-separated list of usernames, kept as a secret), or the `ADMIN_TOKEN` secret as an `Authorization: Bearer` header. With neither set, the route does not exist (404).
+- `/admin/` is a static page. It opens straight away for an allowed signed-in account, offers "Sign in with Discogs" otherwise, and keeps the token as a fallback (kept for the tab only). It then draws the report. It is `noindex` and disallowed in `robots.txt`.
 - Requests that go straight from the browser to Discogs never touch the server, so the app reports them (`public/js/reporter.js` to `POST /api/discogs/report`): counts by route (`direct`, `proxy-hit`, `proxy-miss`), kind of request and outcome, whether the direct route is on, which build is running (the service worker's cache version, such as `v56`), and a coarse device type. Reports are checked strictly, need a signed-in session and are kept per hour for 30 days. A throttle is reported at once and also lands in the slow-down log.
 - The admin page also shows what is set up (booleans only, never a secret), a live probe of how loaded Discogs looks from the server's address, an hour-by-hour series, and a "Copy full report" button that puts everything on the clipboard as JSON.
 - A "used" figure on refused requests that is low, or above the 60 limit, means something other than Spindex spent the budget (traffic from other Workers sharing the address). A figure just under 60 is ambiguous.
@@ -459,7 +459,8 @@ npm test
    - `DISCOGS_CONSUMER_KEY`
    - `DISCOGS_CONSUMER_SECRET`
    - `SESSION_SECRET` (generate a unique 32-byte secret)
-   - `ADMIN_TOKEN` (optional; a long random string that unlocks `/admin/`)
+   - `ADMIN_USERS` (optional secret; your Discogs username, so signing in to Spindex unlocks `/admin/`. Kept out of `wrangler.toml` because the repository is public)
+   - `ADMIN_TOKEN` (optional secret; a long random string that also unlocks `/admin/`, for scripts)
 
 4. **Bind KV Namespace for Sharing**:
    - Create a KV namespace named `spindex-shares` (Workers & Pages > KV).
